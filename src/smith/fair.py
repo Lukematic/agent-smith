@@ -1,0 +1,336 @@
+"""FAIR documentation for every directory.
+
+FAIR is Findable, Accessible, Interoperable, Reusable. It was written for research
+data and it transfers directly to a codebase an agent has to navigate: a directory
+whose purpose is undocumented is not findable, and content whose format is
+unstated is not reusable.
+
+The concrete rule Smith enforces: **every meaningful directory carries a README.md
+that answers four questions.**
+
+| FAIR | Question the README must answer |
+| --- | --- |
+| Findable | What is in here, and what is deliberately not? |
+| Accessible | How do I read or run it, and does it require anything? |
+| Interoperable | What format is it in, and what consumes it? |
+| Reusable | Can I change it, is it generated, and what depends on it? |
+
+The failure this prevents is real and expensive: an agent opening an undocumented
+directory infers its purpose from filenames, guesses wrong, and writes something
+that looks plausible in the wrong place. A README is the cheapest possible guide,
+in Fowler's sense: it constrains the action space before the agent acts.
+
+Generated READMEs are marked as generated. A human-authored README is never
+overwritten, because judgement about a directory's purpose is exactly what a
+generator cannot supply.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from pathlib import Path
+
+GENERATED_MARKER = "<!-- smith:generated -->"
+STUB_MARKER = "<!-- smith:stub -->"
+
+REQUIRED_SECTIONS = ("Contents", "Usage", "Format", "Stability")
+
+# Directories that do not need documentation, and why.
+EXEMPT: dict[str, str] = {
+    ".git": "version control internals",
+    ".venv": "generated environment",
+    ".ruff_cache": "tool cache",
+    ".pytest_cache": "tool cache",
+    "__pycache__": "bytecode cache",
+    "node_modules": "vendored dependencies",
+    "cache": "disposable by design, documented by its parent",
+    "run": "append-only ledger, documented by its parent",
+    "site-packages": "vendored dependencies",
+}
+
+# What each known directory is for. Seed knowledge so generated stubs are useful
+# rather than templated noise: a stub saying "this directory contains files" is
+# worse than no stub, because it satisfies the gate while informing nobody.
+KNOWN: dict[str, tuple[str, str, str, str]] = {
+    "agents": (
+        "Agent persona definitions, one Markdown file per agent.",
+        "Installed to `~/.agents/agents/` by `install.ps1` or `smith link`. Not loaded from here.",
+        "Markdown with YAML frontmatter (`name`, `description`, `model`).",
+        "Edit freely. Validated by `smith validate agents`; a colon inside a description breaks discovery silently.",
+    ),
+    "skills": (
+        "Model-invoked skills, one directory per skill containing `SKILL.md`.",
+        "Loaded as `agent-smith:<name>` when Smith is installed as a plugin. List them with `smith skills`.",
+        "Markdown with YAML frontmatter. Required body sections: Failure Modes, Completion.",
+        "Edit freely. `smith validate skills` blocks a malformed skill. The index at `docs/skills.md` is generated.",
+    ),
+    "knowledge": (
+        "The knowledge index and its disposable cache. `REGISTRY.yaml` is the routing table.",
+        "`smith route` reads the index without spending budget; `smith fetch` populates `cache/`.",
+        "YAML for the registry and sources, JSON for the provenance manifest, Markdown in the cache.",
+        "Edit `REGISTRY.yaml` and `SOURCES.yaml`. Never edit `cache/` or `MANIFEST.json`: both are regenerated.",
+    ),
+    "memory": (
+        "Durable lessons and structured expertise records that survive across sessions.",
+        "Read at session start. `lessons.md` overrides Smith's defaults.",
+        "Markdown for lessons, JSON Lines for expertise records.",
+        "Append-only. To revise a lesson, mark the old line `[SUPERSEDED yyyy-mm-dd]` and add a new one below it.",
+    ),
+    "docs": (
+        "Long-form documentation for humans. One topic per file.",
+        "Every file here must be linked from the root `README.md`, which the `docs` gate enforces.",
+        "Markdown.",
+        "Edit freely, except `skills.md`, which `smith fix` regenerates from the filesystem.",
+    ),
+    "src": (
+        "The deterministic half of Smith: anything a script does reliably does not belong in a prompt.",
+        "Installed as the `smith` console script. Run `smith --help`.",
+        "Python 3.12, typed, formatted and linted by ruff.",
+        "Edit freely. `just check` must pass: lint, tests, and artifact validation.",
+    ),
+    "tests": (
+        "Tests that prove the gates actually block, not merely that the code runs.",
+        "`just test`, or `uv run pytest`.",
+        "pytest.",
+        "Add tests freely. Never weaken a test to make it pass; the `tests_not_weakened` gate reads the diff.",
+    ),
+    "hooks": (
+        "Lifecycle hooks that run as code rather than as instructions.",
+        "Discovered automatically by the agent harness from `hooks.json`.",
+        "JSON manifest pointing at commands. `${PLUGIN_ROOT}` resolves to the install directory.",
+        "Edit with care: hooks execute local commands on every session, so they are a trust boundary.",
+    ),
+    "templates": (
+        "Scaffolding for authored artifacts, with `{{PLACEHOLDER}}` slots.",
+        "Read by the authoring skills. Not executed.",
+        "Markdown with `{{UPPER_SNAKE}}` placeholders.",
+        "Edit to change the shape of every future artifact. Existing artifacts are unaffected.",
+    ),
+    "emitted": (
+        "Staging for authored artifacts awaiting human promotion.",
+        "Reviewed, then copied to a live skills or agents directory. Nothing here is active.",
+        "Same formats as `skills/` and `agents/`.",
+        "Disposable. Promote what is good and delete the rest.",
+    ),
+    "specs": (
+        "Approved specifications, written before implementation.",
+        "Read by the build stage of a plan-build-improve cycle.",
+        "Markdown.",
+        "A spec is a contract: change the spec before changing the work it describes.",
+    ),
+    "archive": (
+        "Clutter moved out of the way, in dated directories.",
+        "Nothing reads this. It exists so cleanup is reversible.",
+        "Whatever was archived, unchanged.",
+        "Safe to delete once you are sure. Archiving beats deleting because a wrong archive is recoverable.",
+    ),
+    "state": (
+        "Project-local run ledgers and project memory, kept out of Smith's shared knowledge.",
+        "Written by `smith gate`. Read by `smith gate status` and `smith plan`.",
+        "JSON for run metadata, JSON Lines for evidence.",
+        "`run/` is gitignored and disposable. Project lessons are worth keeping.",
+    ),
+    "expertise": (
+        "Structured records of patterns, conventions, decisions, and failures.",
+        "Loaded when working the matching domain.",
+        "JSON Lines: one record per line with `type`, `domain`, `description`, `classification`.",
+        "Append-only. Promote a record to `foundational` only after it recurs across sessions.",
+    ),
+}
+
+
+@dataclass(frozen=True)
+class DocStatus:
+    """Whether one directory is documented, and what is missing."""
+
+    directory: Path
+    exists: bool
+    generated: bool
+    missing_sections: tuple[str, ...]
+    exempt_reason: str | None = None
+
+    @property
+    def exempt(self) -> bool:
+        return self.exempt_reason is not None
+
+    @property
+    def ok(self) -> bool:
+        return self.exempt or (self.exists and not self.missing_sections)
+
+    @property
+    def problem(self) -> str:
+        if self.ok:
+            return ""
+        if not self.exists:
+            return "no README.md"
+        return f"README missing sections: {', '.join(self.missing_sections)}"
+
+
+# A directory whose contents already declare their own purpose does not need a
+# second document. Demanding a README beside a SKILL.md is over-documentation: it
+# creates two places to describe one thing, which is how they drift apart.
+SELF_DESCRIBING = ("SKILL.md", "plugin.json", "pyproject.toml")
+
+
+def is_exempt(directory: Path, root: Path) -> str | None:
+    try:
+        parts = directory.relative_to(root).parts
+    except ValueError:
+        return "outside the project"
+    for part in parts:
+        if part in EXEMPT:
+            return EXEMPT[part]
+    for manifest in SELF_DESCRIBING:
+        if (directory / manifest).is_file():
+            return f"described by its own {manifest}"
+    return None
+
+
+def documentable(root: Path) -> list[Path]:
+    """Directories that should carry a README.
+
+    A directory with no files of its own is a namespace, not a unit of meaning, so
+    it is skipped: documenting empty scaffolding is noise.
+    """
+    found: list[Path] = []
+    for directory in sorted(p for p in root.rglob("*") if p.is_dir()):
+        if is_exempt(directory, root):
+            continue
+        has_files = any(
+            child.is_file() and child.name not in {".gitkeep", ".gitignore"}
+            for child in directory.iterdir()
+        )
+        if has_files:
+            found.append(directory)
+    return found
+
+
+def inspect(directory: Path, root: Path) -> DocStatus:
+    exempt_reason = is_exempt(directory, root)
+    if exempt_reason:
+        return DocStatus(directory, False, False, (), exempt_reason)
+
+    readme = directory / "README.md"
+    if not readme.is_file():
+        return DocStatus(directory, False, False, tuple(REQUIRED_SECTIONS))
+
+    text = readme.read_text(encoding="utf-8")
+    missing = tuple(
+        section
+        for section in REQUIRED_SECTIONS
+        if not re.search(rf"^#{{1,4}}\s*{section}", text, re.MULTILINE | re.IGNORECASE)
+    )
+    return DocStatus(directory, True, GENERATED_MARKER in text, missing)
+
+
+def audit(root: Path) -> list[DocStatus]:
+    return [inspect(directory, root) for directory in documentable(root)]
+
+
+def _describe(directory: Path, root: Path) -> tuple[str, str, str, str]:
+    """Best available description: known directories get real content."""
+    name = directory.name
+    if name in KNOWN:
+        return KNOWN[name]
+
+    files = sorted(
+        child.name
+        for child in directory.iterdir()
+        if child.is_file() and child.name not in {".gitkeep", ".gitignore", "README.md"}
+    )
+    extensions = sorted({Path(f).suffix or "no extension" for f in files})
+    listing = ", ".join(f"`{f}`" for f in files[:6]) or "no files yet"
+    if len(files) > 6:
+        listing += f", and {len(files) - 6} more"
+
+    relative = directory.relative_to(root)
+    return (
+        f"{len(files)} file(s): {listing}",
+        f"TODO: state how to read or run the contents of `{relative}`.",
+        f"File types present: {', '.join(extensions)}. TODO: name the consumer.",
+        "TODO: state whether these files are edited by hand, generated, or depended on elsewhere.",
+    )
+
+
+def render(directory: Path, root: Path) -> str:
+    """Produce a FAIR README for a directory.
+
+    Known directories get real content. Unknown ones get a stub with explicit
+    TODOs, marked as a stub, because a generated guess stated confidently is worse
+    than an obvious gap.
+    """
+    name = directory.name
+    contents, usage, fmt, stability = _describe(directory, root)
+    known = name in KNOWN
+    relative = directory.relative_to(root).as_posix() or "."
+
+    header = [GENERATED_MARKER]
+    if not known:
+        header.append(STUB_MARKER)
+
+    lines = [
+        *header,
+        f"# `{relative}`",
+        "",
+        contents if known else "**Stub.** Replace the TODOs below with real answers.",
+        "",
+        "## Contents",
+        "",
+        contents,
+        "",
+        "## Usage",
+        "",
+        usage,
+        "",
+        "## Format",
+        "",
+        fmt,
+        "",
+        "## Stability",
+        "",
+        stability,
+        "",
+        "---",
+        "",
+        "Generated by `smith fix`. Edit freely: removing the marker at the top of this",
+        "file stops Smith from regenerating it.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def write_missing(root: Path, *, overwrite_generated: bool = True) -> tuple[list[Path], list[Path]]:
+    """Create READMEs where absent. Returns written and skipped paths.
+
+    Human-authored files are never touched. A generated file is refreshed only when
+    it still carries the marker, so a human who edits and removes the marker keeps
+    ownership permanently.
+    """
+    written: list[Path] = []
+    skipped: list[Path] = []
+    for status in audit(root):
+        if status.exempt:
+            continue
+        readme = status.directory / "README.md"
+        if status.exists and not status.generated:
+            skipped.append(readme)
+            continue
+        if status.exists and status.generated and not overwrite_generated:
+            skipped.append(readme)
+            continue
+        readme.write_text(render(status.directory, root), encoding="utf-8")
+        written.append(readme)
+    return written, skipped
+
+
+def stubs(root: Path) -> list[Path]:
+    """Generated READMEs still carrying TODOs, which need a human."""
+    found: list[Path] = []
+    for status in audit(root):
+        if status.exempt or not status.exists:
+            continue
+        readme = status.directory / "README.md"
+        if STUB_MARKER in readme.read_text(encoding="utf-8"):
+            found.append(readme)
+    return found

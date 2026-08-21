@@ -1,0 +1,87 @@
+# SOURCES.yaml — upstream knowledge sources for Agent Smith
+# Smith reads this to know WHERE knowledge lives. It never inlines the content.
+
+version: 1
+refresh_policy:
+  stale_after_days: 14
+  on_stale: warn_and_continue      # warn_and_continue | block | auto_refresh
+  fetch_budget_per_task: 3         # max knowledge files opened per task
+
+sources:
+  - id: book
+    name: Agentic Engineering Book
+    owner: jayminwest
+    repo: agentic-engineering-book
+    ref: main
+    role: primary
+    description: >
+      Living practitioner book on agentic engineering. Updated ~daily via a
+      sync bot. The canonical source for prompt/model/context/tool-use/harness/
+      pattern/practice/mental-model/toolkit/readiness/long-horizon-state material.
+    tree_api: https://api.github.com/repos/jayminwest/agentic-engineering-book/git/trees/main?recursive=1
+    raw_base: https://raw.githubusercontent.com/jayminwest/agentic-engineering-book/main/
+    index_files:
+      - TABLE_OF_CONTENTS.md
+      - CLAUDE.md
+      - STYLE_GUIDE.md
+      - RUBRIC.md
+      - CURRICULUM.md
+    content_globs:
+      - chapters/**/*.md
+      - appendices/**/*.md
+    reference_globs:                # patterns to imitate when authoring
+      - .claude/agents/**/*.md
+      - .claude/skills/**/SKILL.md
+      - .claude/commands/**/*.md
+
+  - id: overstory
+    name: Overstory swarm agents
+    owner: jayminwest
+    repo: overstory
+    ref: main
+    role: reference
+    description: >
+      Concrete agent definitions for a swarm system - orchestrator, coordinator,
+      lead, builder, reviewer, scout, merger, monitor. Source of the named
+      failure-mode vocabulary, propulsion principle, and completion protocols.
+    raw_base: https://raw.githubusercontent.com/jayminwest/overstory/main/
+    content_globs:
+      - agents/*.md
+
+  - id: warren
+    name: Warren agent composition
+    owner: jayminwest
+    repo: warren
+    ref: main
+    role: reference
+    description: >
+      Agent-as-workload infrastructure. Source of the four-sides-of-an-agent
+      model (mind / memory / worklist / body), envelope schema, per-agent tool
+      allow/deny lists, and cost accounting.
+    raw_base: https://raw.githubusercontent.com/jayminwest/warren/main/
+    content_globs:
+      - docs/design/*.md
+
+  - id: seeds
+    name: Seeds tracker
+    owner: jayminwest
+    repo: seeds
+    ref: main
+    role: tooling
+    description: Git-native issue tracker. Smith uses sd for all worklists.
+    raw_base: https://raw.githubusercontent.com/jayminwest/seeds/main/
+
+  - id: local_skills
+    name: Local skill library
+    kind: filesystem
+    path: $SMITH_SKILL_LIBRARY
+    role: reuse_first
+    description: >
+      Large existing local skill collection. Smith MUST search here before
+      authoring a new skill. Reuse beats creation.
+
+fetch:
+  cache_dir: knowledge/cache
+  manifest: knowledge/MANIFEST.json
+  stamp_fields: [path, source_id, sha, fetched_at, bytes]
+

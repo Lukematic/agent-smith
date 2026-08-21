@@ -1,0 +1,304 @@
+# REGISTRY.yaml — routing table for Agent Smith
+# Generated from the live git tree of jayminwest/agentic-engineering-book@main
+# generated_at: 2026-08-21   tree_sha: 686771cc9594c585570ba28b899b8295572a701b
+#
+# THIS FILE IS THE INDEX. It is always loadable.
+# Chapter BODIES are never preloaded — fetch on demand, max 3 per task.
+# Regenerate with: agent_smith/scripts/registry_build.ps1
+
+version: 1
+source: book
+raw_base: https://raw.githubusercontent.com/jayminwest/agentic-engineering-book/main/
+
+# ── Routing hints: symptom/question -> chapter keys ────────────────────────────
+routes:
+  "what is a harness":            [6.1, 6.2]
+  "agent keeps making same mistake": [6.5, 11.2]
+  "prompt vs structural fix":     [6.5, 11.1]
+  "context window blowing up":    [4.2, 4.3, 4.5]
+  "which model":                  [3.1, 3.4]
+  "agent picks wrong tool":       [5.2, 5.1]
+  "restrict what an agent can do": [5.3, 6.6]
+  "too many tools":               [5.4, 5.5]
+  "orchestrator does the work itself": [7.3, 5.3]
+  "multi agent coordination":     [7.9, 7.10, 7.11, 8.7]
+  "agent should improve itself":  [7.2, 8.6]
+  "how to evaluate":              [3.5, 8.2]
+  "cost too high":                [8.3]
+  "debugging an agent":           [8.1, 11.2]
+  "is my codebase agent ready":   [11.1, 11.3, 11.4, 11.5]
+  "state across sessions":        [12.1, 12.3]
+  "memory design":                [12.3, 4.1]
+  "spec workflow":                [7.1, 9.3]
+  "human approval gate":          [7.6]
+  "skills vs subagents vs commands": [5.5, 7.7, 10.1]
+  "claude code specifics":        [10.1]
+  "real config examples":         [appendix.examples]
+
+# ── Parts ─────────────────────────────────────────────────────────────────────
+parts:
+  1: Foundations
+  2: Craft
+  3: Perspectives
+  4: Appendices
+
+# ── Chapter index ─────────────────────────────────────────────────────────────
+chapters:
+
+  1:
+    title: Foundations
+    part: 1
+    dir: chapters/1-foundations/
+    files:
+      - {key: 1.0, path: chapters/1-foundations/_index.md, title: Chapter intro}
+      - {key: 1.1, path: chapters/1-foundations/1-twelve-leverage-points.md,
+         title: Twelve Leverage Points,
+         tags: [leverage, systems-thinking, prioritization],
+         use_when: deciding where effort actually moves agent performance}
+
+  2:
+    title: Prompt
+    part: 1
+    dir: chapters/2-prompt/
+    files:
+      - {key: 2.0, path: chapters/2-prompt/_index.md, title: Chapter intro,
+         tags: [model-invoked, user-invoked]}
+      - {key: 2.1, path: chapters/2-prompt/1-prompt-types.md, title: Prompt Types,
+         tags: [system-prompt, slash-command, skill], use_when: choosing invocation style}
+      - {key: 2.2, path: chapters/2-prompt/2-structuring.md, title: Structuring,
+         tags: [sections, xml-tags, ordering], use_when: laying out a long prompt}
+      - {key: 2.3, path: chapters/2-prompt/3-language.md, title: Language,
+         tags: [imperatives, negation, precision], use_when: wording matters}
+
+  3:
+    title: Model
+    part: 1
+    dir: chapters/3-model/
+    files:
+      - {key: 3.0, path: chapters/3-model/_index.md, title: Chapter intro}
+      - {key: 3.1, path: chapters/3-model/1-model-selection.md, title: Model Selection,
+         tags: [routing, cost-capability], use_when: picking a model per subagent}
+      - {key: 3.2, path: chapters/3-model/2-model-behavior.md, title: Model Behavior,
+         tags: [instruction-following, sycophancy]}
+      - {key: 3.3, path: chapters/3-model/3-model-limitations.md, title: Model Limitations,
+         tags: [hallucination, long-context-degradation]}
+      - {key: 3.4, path: chapters/3-model/4-multi-model-architectures.md,
+         title: Multi-Model Architectures, tags: [heterogeneous, provider-routing]}
+      - {key: 3.5, path: chapters/3-model/5-model-evaluation.md, title: Model Evaluation,
+         tags: [eval, benchmark], use_when: comparing models on your task}
+
+  4:
+    title: Context
+    part: 1
+    dir: chapters/4-context/
+    files:
+      - {key: 4.0, path: chapters/4-context/_index.md, title: Chapter intro}
+      - {key: 4.1, path: chapters/4-context/1-context-fundamentals.md,
+         title: Context Fundamentals, tags: [context-vs-memory, window, persistence],
+         use_when: distinguishing context from memory}
+      - {key: 4.2, path: chapters/4-context/2-context-strategies.md, title: Context Strategies,
+         tags: [compaction, caching, selection]}
+      - {key: 4.3, path: chapters/4-context/3-context-patterns.md, title: Context Patterns,
+         tags: [progressive-disclosure], use_when: designing just-in-time loading}
+      - {key: 4.4, path: chapters/4-context/4-multi-agent-context.md, title: Multi-Agent Context,
+         tags: [isolation, handoff, summarization]}
+      - {key: 4.5, path: chapters/4-context/5-context-management-architectures.md,
+         title: Context Management Architectures, tags: [tiering, paging]}
+      - {key: 4.6, path: chapters/4-context/6-context-at-codebase-scale.md,
+         title: Context at Codebase Scale, tags: [repo-context, indexing]}
+
+  5:
+    title: Tool Use
+    part: 1
+    dir: chapters/5-tool-use/
+    files:
+      - {key: 5.0, path: chapters/5-tool-use/_index.md, title: Chapter intro}
+      - {key: 5.1, path: chapters/5-tool-use/1-tool-design.md, title: Tool Design,
+         tags: [naming, schema, consolidation]}
+      - {key: 5.2, path: chapters/5-tool-use/2-tool-selection.md, title: Tool Selection,
+         tags: [misrouting, descriptions]}
+      - {key: 5.3, path: chapters/5-tool-use/3-tool-restrictions.md, title: Tool Restrictions,
+         tags: [least-privilege, security-boundary, forcing-function, mcp-naming],
+         use_when: locking down an agent role}
+      - {key: 5.4, path: chapters/5-tool-use/4-scaling-tools.md, title: Scaling Tools,
+         tags: [umbrella-dispatch, catalog-size]}
+      - {key: 5.5, path: chapters/5-tool-use/5-skills-and-meta-tools.md,
+         title: Skills and Meta-Tools, tags: [skills, progressive-disclosure, meta-tool]}
+
+  6:
+    title: Harnesses
+    part: 2
+    dir: chapters/6-harnesses/
+    files:
+      - {key: 6.0, path: chapters/6-harnesses/_index.md, title: Chapter intro}
+      - {key: 6.1, path: chapters/6-harnesses/1-what-is-a-harness.md, title: What Is a Harness,
+         tags: [harness, definition], use_when: the word harness is used}
+      - {key: 6.2, path: chapters/6-harnesses/2-harness-stack.md, title: The Harness Stack,
+         tags: [raschka, six-components, repo-context, session-memory],
+         use_when: auditing a coding agent end to end}
+      - {key: 6.3, path: chapters/6-harnesses/3-harness-categories.md, title: Harness Categories}
+      - {key: 6.4, path: chapters/6-harnesses/4-harness-as-control-system.md,
+         title: Harness as Control System, tags: [feedback, control-loop]}
+      - {key: 6.5, path: chapters/6-harnesses/5-harness-engineering.md,
+         title: Harness Engineering,
+         tags: [hashimoto, unrepeatable-mistakes, prompt-patching-antipattern],
+         use_when: an agent repeats a mistake - THE core doctrine file}
+      - {key: 6.6, path: chapters/6-harnesses/6-security-permissions-trust.md,
+         title: Security Permissions Trust, tags: [sandbox, permissions, defense-in-depth]}
+      - {key: 6.7, path: chapters/6-harnesses/7-designing-for-your-context.md,
+         title: Designing for Your Context}
+
+  7:
+    title: Patterns
+    part: 2
+    dir: chapters/7-patterns/
+    files:
+      - {key: 7.0, path: chapters/7-patterns/_index.md, title: Chapter intro}
+      - {key: 7.1, path: chapters/7-patterns/1-plan-build-review.md, title: Plan Build Review,
+         tags: [spec-as-contract, three-command], use_when: designing a workflow}
+      - {key: 7.2, path: chapters/7-patterns/2-self-improving-experts.md,
+         title: Self-Improving Experts,
+         tags: [expertise-yaml, improve-command, agent-registry],
+         use_when: building an agent that learns - core for Smith itself}
+      - {key: 7.3, path: chapters/7-patterns/3-orchestrator-pattern.md, title: Orchestrator Pattern,
+         tags: [capability-minimization, delegation], use_when: authoring a coordinator}
+      - {key: 7.4, path: chapters/7-patterns/4-autonomous-loops.md, title: Autonomous Loops,
+         tags: [unattended, stopping-condition]}
+      - {key: 7.5, path: chapters/7-patterns/5-react-pattern.md, title: ReAct Pattern}
+      - {key: 7.6, path: chapters/7-patterns/6-human-in-the-loop.md, title: Human in the Loop,
+         tags: [approval-gate, plan-approval]}
+      - {key: 7.7, path: chapters/7-patterns/7-progressive-disclosure.md,
+         title: Progressive Disclosure, tags: [three-tier-loading]}
+      - {key: 7.8, path: chapters/7-patterns/8-expert-swarm-pattern.md, title: Expert Swarm Pattern,
+         tags: [council, expertise-inheritance]}
+      - {key: 7.9, path: chapters/7-patterns/9-multi-agent-collaboration.md,
+         title: Multi-Agent Collaboration}
+      - {key: 7.10, path: chapters/7-patterns/10-multi-agent-landscape.md,
+         title: Multi-Agent Landscape}
+      - {key: 7.11, path: chapters/7-patterns/11-production-multi-agent-systems.md,
+         title: Production Multi-Agent Systems, tags: [production, reliability]}
+
+  8:
+    title: Practices
+    part: 2
+    dir: chapters/8-practices/
+    files:
+      - {key: 8.0, path: chapters/8-practices/_index.md, title: Chapter intro}
+      - {key: 8.1, path: chapters/8-practices/1-debugging-agents.md, title: Debugging Agents,
+         tags: [observability, traces]}
+      - {key: 8.2, path: chapters/8-practices/2-evaluation.md, title: Evaluation,
+         tags: [eval-harness, regression]}
+      - {key: 8.3, path: chapters/8-practices/3-cost-and-latency.md, title: Cost and Latency,
+         tags: [token-economics, caching], use_when: budgeting a multi-agent design}
+      - {key: 8.4, path: chapters/8-practices/4-production-concerns.md, title: Production Concerns}
+      - {key: 8.5, path: chapters/8-practices/5-workflow-coordination.md,
+         title: Workflow Coordination}
+      - {key: 8.6, path: chapters/8-practices/6-knowledge-evolution.md, title: Knowledge Evolution,
+         tags: [memory, curation, capture], use_when: designing a learning loop}
+      - {key: 8.7, path: chapters/8-practices/7-operating-agent-swarms.md,
+         title: Operating Agent Swarms, tags: [swarm-ops, monitoring]}
+
+  9:
+    title: Mental Models
+    part: 3
+    dir: chapters/9-mental-models/
+    files:
+      - {key: 9.0, path: chapters/9-mental-models/_index.md, title: Chapter intro}
+      - {key: 9.1, path: chapters/9-mental-models/1-pit-of-success.md, title: Pit of Success,
+         tags: [defaults, invalid-states]}
+      - {key: 9.2, path: chapters/9-mental-models/2-prompt-maturity-model.md,
+         title: Prompt Maturity Model}
+      - {key: 9.3, path: chapters/9-mental-models/3-specs-as-source-code.md,
+         title: Specs as Source Code, tags: [spec-first]}
+      - {key: 9.4, path: chapters/9-mental-models/4-context-as-code.md, title: Context as Code,
+         tags: [versioned-context]}
+      - {key: 9.5, path: chapters/9-mental-models/5-execution-topologies.md,
+         title: Execution Topologies, tags: [flat, hierarchical, swarm]}
+      - {key: 9.6, path: chapters/9-mental-models/6-design-as-bottleneck.md,
+         title: Design as Bottleneck}
+      - {key: 9.7, path: chapters/9-mental-models/7-software-factories.md,
+         title: Software Factories}
+      - {key: 9.8, path: chapters/9-mental-models/8-loop-engineering.md, title: Loop Engineering,
+         tags: [iteration, feedback]}
+
+  10:
+    title: Practitioner Toolkit
+    part: 3
+    dir: chapters/10-practitioner-toolkit/
+    files:
+      - {key: 10.0, path: chapters/10-practitioner-toolkit/_index.md, title: Chapter intro}
+      - {key: 10.1, path: chapters/10-practitioner-toolkit/1-claude-code.md, title: Claude Code,
+         tags: [subagents, skills, hooks, agent-teams, session-memory, rules, sandbox],
+         use_when: any question about Claude Code features - LARGE file so quote sparingly}
+      - {key: 10.2, path: chapters/10-practitioner-toolkit/2-google-adk.md, title: Google ADK}
+      - {key: 10.3, path: chapters/10-practitioner-toolkit/3-ide-integrations.md,
+         title: IDE Integrations}
+      - {key: 10.4, path: chapters/10-practitioner-toolkit/4-agent-frameworks.md,
+         title: Agent Frameworks}
+      - {key: 10.5, path: chapters/10-practitioner-toolkit/5-multi-agent-workspace-managers.md,
+         title: Multi-Agent Workspace Managers, tags: [worktrees, warren, overstory]}
+      - {key: 10.6, path: chapters/10-practitioner-toolkit/6-enterprise-context-tools.md,
+         title: Enterprise Context Tools}
+
+  11:
+    title: Agent Readiness
+    part: 3
+    dir: chapters/11-agent-readiness/
+    files:
+      - {key: 11.0, path: chapters/11-agent-readiness/_index.md, title: Chapter intro}
+      - {key: 11.1, path: chapters/11-agent-readiness/1-the-four-surfaces.md,
+         title: The Four Surfaces, tags: [prompt, model, context, tools],
+         use_when: localizing a failure to a surface}
+      - {key: 11.2, path: chapters/11-agent-readiness/2-failure-modes.md, title: Failure Modes,
+         tags: [diagnosis, vocabulary, triage],
+         use_when: a vague complaint that the agent is bad - THE triage file}
+      - {key: 11.3, path: chapters/11-agent-readiness/3-readiness-principles.md,
+         title: Readiness Principles}
+      - {key: 11.4, path: chapters/11-agent-readiness/4-maturity-ladders.md,
+         title: Maturity Ladders, tags: [assessment, staging]}
+      - {key: 11.5, path: chapters/11-agent-readiness/5-ratcheting-legacy.md,
+         title: Ratcheting Legacy, tags: [legacy, incremental]}
+      - {key: 11.6, path: chapters/11-agent-readiness/6-software-ecology.md,
+         title: Software Ecology}
+
+  12:
+    title: Long-Horizon Agent State
+    part: 3
+    dir: chapters/12-long-horizon-agent-state/
+    files:
+      - {key: 12.0, path: chapters/12-long-horizon-agent-state/_index.md, title: Chapter intro}
+      - {key: 12.1, path: chapters/12-long-horizon-agent-state/1-five-layer-model.md,
+         title: Five-Layer Model, tags: [state-layers]}
+      - {key: 12.2, path: chapters/12-long-horizon-agent-state/2-composition-loop.md,
+         title: Composition Loop}
+      - {key: 12.3, path: chapters/12-long-horizon-agent-state/3-memory-and-intent.md,
+         title: Memory and Intent, tags: [memory, intent, persistence],
+         use_when: designing agent memory}
+      - {key: 12.4, path: chapters/12-long-horizon-agent-state/4-coordination-and-orchestration.md,
+         title: Coordination and Orchestration}
+      - {key: 12.5, path: chapters/12-long-horizon-agent-state/5-factory-to-institution.md,
+         title: Factory to Institution}
+
+# ── Non-chapter references ────────────────────────────────────────────────────
+meta_docs:
+  - {key: meta.style, path: STYLE_GUIDE.md, use_when: authoring content in book voice}
+  - {key: meta.rubric, path: RUBRIC.md, use_when: grading an entry or an agent design}
+  - {key: meta.claude, path: CLAUDE.md, use_when: mirroring the book's own config conventions}
+  - {key: meta.toc, path: TABLE_OF_CONTENTS.md, use_when: verifying registry drift}
+  - {key: meta.curriculum, path: CURRICULUM.md, use_when: designing a learning path}
+
+reference_configs:
+  - {key: ref.meta-agent, path: .claude/agents/meta-agent.md,
+     use_when: authoring an agent that authors agents}
+  - {key: ref.scout, path: .claude/agents/scout-agent.md, use_when: authoring a read-only explorer}
+  - {key: ref.docs-scraper, path: .claude/agents/docs-scraper.md,
+     use_when: authoring a fetch/ingest agent}
+  - {key: ref.expert-4pack, path: .claude/agents/experts/agent-authoring/,
+     use_when: building a plan/build/improve/question expert quad}
+  - {key: ref.meta-skill, path: .claude/skills/meta-skill/SKILL.md,
+     use_when: authoring a skill}
+  - {key: ref.knowledge-workflow, path: .claude/skills/orchestrating-knowledge-workflows/SKILL.md,
+     use_when: running plan-build-improve}
+  - {key: appendix.examples, path: appendices/examples/_index.md,
+     use_when: you want a real production config}
+

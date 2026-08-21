@@ -1,0 +1,5 @@
+{
+  "name": "agent-smith",
+  "version": "0.2.0",
+  "description": "Agentic-engineering expert and agent factory. Consults a live knowledge registry, triages agent failures to named modes, runs RPI and Ralph loops, and authors agents, skills, and tools."
+}
