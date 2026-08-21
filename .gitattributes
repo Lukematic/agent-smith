@@ -1,0 +1,17 @@
+# Line endings.
+#
+# Shell scripts must be LF even when checked out on Windows. A .sh file with CRLF
+# endings fails on Linux and macOS with "bad interpreter: /usr/bin/env bash^M",
+# which is a confusing failure mode for a recipient whose only mistake was
+# cloning on the wrong platform.
+*.sh text eol=lf
+justfile text eol=lf
+
+# PowerShell is Windows-first and tolerates either, so keep it native.
+*.ps1 text eol=crlf
+
+# Everything else: normalise in the repository, native in the working copy.
+* text=auto
+
+# Lockfiles are generated; do not diff them by hand.
+uv.lock linguist-generated=true

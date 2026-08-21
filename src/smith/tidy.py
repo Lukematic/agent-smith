@@ -32,6 +32,7 @@ ROOT_ALLOWED = frozenset(
         "plugin.json",
         "pyproject.toml",
         "uv.lock",
+        ".gitattributes",
         ".gitignore",
         ".python-version",
     }
@@ -225,3 +226,4 @@ class Tidier:
                 item.path.unlink(missing_ok=True)
             removed.append(item.path)
         return removed
+
