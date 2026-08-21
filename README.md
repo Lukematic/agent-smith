@@ -253,6 +253,7 @@ One rule: **docs live in `docs/`, code in `src/`, nothing loose at the root.**
 
 | [docs/skills.md](docs/skills.md) | Skills |
 | [docs/harness.md](docs/harness.md) | The Harness |
+| [docs/api-keys.md](docs/api-keys.md) | API Keys and Custom Gateways |
 ---
 
 ## Principles

@@ -51,6 +51,7 @@ ROOT_ALLOWED_DIRS = frozenset(
         "dist",
         "docs",
         "emitted",
+        "assignments",
         "hooks",
         "knowledge",
         "memory",

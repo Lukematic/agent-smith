@@ -1105,6 +1105,47 @@ def limits_command(
     _echo("Absent means claiming it is UNGROUNDED_CAPABILITY.")
 
 
+@app.command("heal")
+def heal_command(
+    command: str = typer.Argument(..., help="The command that failed"),
+    attempts: int = typer.Option(3, "--attempts", help="Maximum diagnose-heal-retry cycles"),
+    timeout: int = typer.Option(900, "--timeout", help="Seconds per attempt"),
+) -> None:
+    """Diagnose a failing command, apply a known remedy, and retry.
+
+    This is real self-healing, not a claim of it: each failure is matched to a
+    named signature, and only remedies that are idempotent and require no
+    judgement run automatically. A credential problem or a missing test target is
+    reported with the human action, never guessed at.
+    """
+    from smith import healing
+
+    workspace = _workspace()
+    run = healing.run_with_healing(
+        command, workspace.project.root, max_attempts=attempts, timeout=timeout
+    )
+
+    _echo(f"command: {command}")
+    for attempt in run.attempts:
+        marker = "HEALED " if attempt.healed else "BLOCKED"
+        _echo(f"  attempt {attempt.attempt}  {marker}  {attempt.diagnosis.report}")
+        if attempt.detail:
+            _echo(f"           {attempt.detail[:200]}")
+
+    _echo("")
+    if run.succeeded:
+        _echo(f"SUCCEEDED  {run.summary()}")
+        return
+
+    _echo(f"{'BLOCKED' if run.blocked_on_human else 'EXHAUSTED'}  {run.summary()}")
+    if run.final_output:
+        _echo("")
+        _echo("last output:")
+        for line in run.final_output.splitlines()[-10:]:
+            _echo(f"  | {line}")
+    raise typer.Exit(1)
+
+
 @app.command("delegate")
 def delegate_command(
     plan_file: Path = typer.Argument(..., help="JSON file describing the assignments"),
@@ -1188,6 +1229,17 @@ def delegate_command(
             if result.output_tail and result.outcome not in {"PLANNED"}:
                 for line in result.output_tail.splitlines()[-4:]:
                     _echo(f"      | {line}")
+            if result.outcome in {"FAILED", "TIMEOUT"}:
+                # A failed spawn is diagnosed here rather than only reported, so a
+                # credential problem reads as "run claude /login" instead of an
+                # unexplained FAILED that leaves you guessing.
+                from smith import healing
+
+                diagnosis = healing.diagnose(result.output_tail, result.exit_code)
+                if diagnosis.self_healable:
+                    _echo(f"      diagnosis: {diagnosis.report}")
+                else:
+                    _echo(f"      diagnosis: {diagnosis.failure} -> {diagnosis.human_action}")
 
     trusted = [r for r in results if r.trustworthy]
     _echo("")

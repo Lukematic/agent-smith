@@ -438,3 +438,34 @@ You start any new project as a newcomer. `smith mission` reads what the project 
 for; `smith context` reads what it is built with; `memory/lessons.md` accumulates
 what went wrong. That is how you become useful here — by recording, not by
 asserting expertise you have not earned in this codebase.
+
+---
+
+## 16. Self-healing
+
+A failure that gets reported and re-hit next session was not handled — it was
+witnessed. Diagnose it, apply a known remedy, and retry:
+
+```bash
+smith heal "<the failing command>"     # diagnose -> remedy -> retry, max 3 attempts
+smith delegate plan.json                # spawn failures are diagnosed inline
+```
+
+Grounded, not improvised:
+
+- `chapters/6-harnesses/5-harness-engineering.md` — Hashimoto's principle:
+  "anytime an agent makes a mistake, engineer a solution such that it never makes
+  that mistake again." `smith heal` is that principle as code: each named failure
+  class gets a structural remedy once, in `src/smith/healing.py`, and every future
+  occurrence of the same signature is handled without rediscovering it.
+- `chapters/9-mental-models/8-loop-engineering.md` — "verification becomes the
+  binding constraint on how far the loop can run unattended." This is why healing
+  stops after three attempts, and why a remedy that reports success but the
+  identical failure recurs is treated as a dead end rather than a reason to retry
+  a fourth time.
+
+Only remedies that are **idempotent** and require **no judgement** run
+automatically: re-syncing an environment, removing a stale lock. A missing
+credential, a missing test target, or a permission problem is diagnosed and
+reported with the exact human action — Smith does not touch your credentials and
+does not guess at a decision.
