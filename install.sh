@@ -73,29 +73,21 @@ step "Regenerating derived files"
 uv run smith fix --no-check | sed 's/^/  /'
 
 # ── 5. harness installation ──────────────────────────────────────────────────
+# Delegated to `smith install`, which detects Claude Code, Goose, Kilo, and Cursor
+# and adapts to each one's layout. Duplicating that logic in shell would mean two
+# implementations drifting apart, and the shell copy would be the stale one.
 if [ "$NO_LINK" -eq 1 ]; then
     step "Skipping harness install (--no-link)"
 else
-    step "Installing into the agent harness"
-    if [ "$SCOPE" = "global" ]; then BASE="$HOME/.agents"; else BASE="$PWD/.agents"; fi
-    mkdir -p "$BASE/plugins" "$BASE/agents" "$BASE/skills"
+    step "Installing into every detected agent harness"
+    INSTALL_SCOPE=""
+    [ "$SCOPE" = "local" ] && INSTALL_SCOPE="--scope project"
 
-    PLUGIN_LINK="$BASE/plugins/agent-smith"
-    # A symlink means a git pull updates the install with no re-run.
-    if [ -e "$PLUGIN_LINK" ] && [ "$FORCE" -eq 0 ]; then
-        ok "plugin already present at $PLUGIN_LINK"
+    if uv run smith install $INSTALL_SCOPE 2>&1 | sed 's/^/  /'; then
+        ok "persona and skills installed"
     else
-        rm -rf "$PLUGIN_LINK"
-        ln -s "$SMITH_ROOT" "$PLUGIN_LINK"
-        ok "plugin symlinked, a git pull now updates it automatically"
-    fi
-
-    # The persona is a separate artifact: plugins carry skills and hooks only.
-    if [ -f "$SMITH_ROOT/agents/agent-smith.md" ]; then
-        cp "$SMITH_ROOT/agents/agent-smith.md" "$BASE/agents/agent-smith.md"
-        ok "persona installed to $BASE/agents/agent-smith.md"
-    else
-        bad "agents/agent-smith.md is missing from the repo"
+        warn "no supported harness directory found"
+        echo "  Name one explicitly, for example:  uv run smith install --harness claude"
     fi
 fi
 

@@ -94,56 +94,26 @@ Write-Step "Regenerating derived files"
 uv run smith fix --no-check | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
 
 # ── 5. harness installation ──────────────────────────────────────────────────
+# Delegated to `smith install`, which detects Claude Code, Goose, Kilo, and Cursor
+# and adapts to each one's layout. Duplicating that logic in shell would mean two
+# implementations drifting apart, and the shell copy would be the stale one.
 if ($NoLink) {
     Write-Step "Skipping harness install (-NoLink)"
 } else {
-    Write-Step "Installing into the agent harness"
+    Write-Step "Installing into every detected agent harness"
 
-    $base = if ($Scope -eq 'global') { Join-Path $HOME ".agents" } else { Join-Path (Get-Location) ".agents" }
-    $pluginDir = Join-Path $base "plugins"
-    $agentDir  = Join-Path $base "agents"
-    $skillDir  = Join-Path $base "skills"
-    New-Item -ItemType Directory -Force -Path $pluginDir, $agentDir, $skillDir | Out-Null
+    $installArgs = @('install')
+    if ($Scope -eq 'local') { $installArgs += @('--scope', 'project') }
 
-    $pluginLink = Join-Path $pluginDir "agent-smith"
+    $output = & uv run smith @installArgs 2>&1
+    $installOk = $LASTEXITCODE -eq 0
+    $output | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
 
-    # A symlink means a git pull updates the install with no re-run. That is the
-    # whole reason to prefer it over copying.
-    $linked = $false
-    if ((Test-Path $pluginLink) -and -not $Force) {
-        Write-Ok "plugin already present at $pluginLink"
-        $linked = $true
+    if ($installOk) {
+        Write-Ok "persona and skills installed"
     } else {
-        if (Test-Path $pluginLink) { Remove-Item $pluginLink -Recurse -Force }
-        try {
-            New-Item -ItemType SymbolicLink -Path $pluginLink -Target $smithRoot -ErrorAction Stop | Out-Null
-            Write-Ok "plugin symlinked, a git pull now updates it automatically"
-            $linked = $true
-        } catch {
-            Write-Warn2 "symlink needs Developer Mode or an elevated shell, falling back to a junction"
-            try {
-                New-Item -ItemType Junction -Path $pluginLink -Target $smithRoot -ErrorAction Stop | Out-Null
-                Write-Ok "plugin junctioned"
-                $linked = $true
-            } catch {
-                Write-Bad "could not link the plugin: $_"
-                Write-Host "  Enable Developer Mode, or run this shell as Administrator." -ForegroundColor Yellow
-            }
-        }
-    }
-
-    # The persona is a separate artifact: plugins carry skills and hooks only.
-    $personaSource = Join-Path $smithRoot "agents\agent-smith.md"
-    $personaTarget = Join-Path $agentDir "agent-smith.md"
-    if (Test-Path $personaSource) {
-        Copy-Item $personaSource $personaTarget -Force
-        Write-Ok "persona installed to $personaTarget"
-    } else {
-        Write-Bad "agents/agent-smith.md is missing from the repo"
-    }
-
-    if (-not $linked) {
-        Write-Warn2 "skills will not load until the plugin link succeeds"
+        Write-Warn2 "no supported harness directory found"
+        Write-Host "  Name one explicitly, for example:  uv run smith install --harness claude" -ForegroundColor Yellow
     }
 }
 
