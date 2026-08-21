@@ -15,7 +15,7 @@ from pathlib import Path
 
 import typer
 
-from smith import fix, harness, health, mission, models, modes, seeds
+from smith import capability, fix, harness, health, mission, models, modes, seeds, spawn
 from smith.enforce import (
     CONTRACTS,
     Gate,
@@ -27,7 +27,7 @@ from smith.enforce import (
 )
 from smith.knowledge import BudgetExceeded, KnowledgeStore
 from smith.paths import SmithPaths, Workspace
-from smith.tidy import Tidier
+from smith.tidy import Finding, Tidier
 from smith.toolchain import Toolchain
 from smith.validate import BROKEN_SELFTEST, Status, discover, validate_file, validate_text
 
@@ -253,8 +253,16 @@ def validate(
 @app.command()
 def tidy(
     dry_run: bool = typer.Option(False, "--dry-run", help="Report clutter without moving anything"),
+    strict: bool = typer.Option(
+        False, "--strict", help="Also fail on regenerable caches, not just real clutter"
+    ),
 ) -> None:
-    """Find clutter and archive it. Archiving is reversible; deleting is not."""
+    """Find clutter and archive it. Archiving is reversible; deleting is not.
+
+    Regenerable caches are reported but do not fail by default. A ship gate that
+    fails because `__pycache__` exists trains you to ignore it, which is worse than
+    having no gate at all.
+    """
     paths = _paths()
     store = KnowledgeStore(paths)
     tidier = Tidier(paths)
@@ -264,6 +272,10 @@ def tidy(
         _echo("CLEAN  no clutter found")
         return
 
+    regenerable = {Finding.DISPOSABLE, Finding.EMPTY_DIR, Finding.ORPHANED_CACHE}
+    real = [i for i in items if i.kind not in regenerable]
+    caches = [i for i in items if i.kind in regenerable]
+
     for item in items:
         rel = item.path.relative_to(paths.root) if paths.root in item.path.parents else item.path
         action = "archive" if item.archivable else "delete via 'just clean'"
@@ -271,8 +283,15 @@ def tidy(
 
     if dry_run:
         _echo("")
-        _echo(f"DRY_RUN  {len(items)} findings. Run 'just tidy' to archive.")
-        raise typer.Exit(1)
+        if real:
+            _echo(
+                f"DRY_RUN  {len(real)} real finding(s), {len(caches)} regenerable. Run 'just tidy'."
+            )
+            raise typer.Exit(1)
+        _echo(f"CLEAN  {len(caches)} regenerable artifact(s) only. Run 'just clean' to remove.")
+        if strict:
+            raise typer.Exit(1)
+        return
 
     destination, moved = tidier.archive(items)
     _echo("")
@@ -1037,6 +1056,150 @@ def mission_command(
         _echo(f"  - {item}")
 
 
+@app.command("limits")
+def limits_command(
+    claims: bool = typer.Option(False, "--claims", help="Audit documented claims against reality"),
+    strict: bool = typer.Option(
+        False, "--strict", help="Exit nonzero if any documented claim is false"
+    ),
+) -> None:
+    """Report what Smith can actually do, probed rather than claimed.
+
+    This exists because of a real failure: the persona said Smith "spawns scoped
+    subagents" and a skill described how, while no spawn code existed. Prose
+    describing a capability is indistinguishable from prose describing an
+    aspiration, so capabilities are probed at call time and the probe wins.
+    """
+    caps = capability.assess()
+
+    if claims:
+        rows = capability.audit_claims()
+        false_claims = [(c, cap) for c, cap in rows if not cap.state.claimable]
+        for claim, cap in rows:
+            mark = (
+                "OK" if cap.state.claimable else ("CAVEAT" if cap.state.needs_caveat else "FALSE")
+            )
+            _echo(f'  {mark:<7} "{claim}"')
+            _echo(f"          {cap.honest_claim}")
+        _echo("")
+        _echo(f"CLAIMS  {len(rows) - len(false_claims)}/{len(rows)} supported by a passing probe")
+        if false_claims and strict:
+            _echo("")
+            _echo("UNGROUNDED_CAPABILITY: change the document or write the code.")
+            raise typer.Exit(1)
+        return
+
+    width = max(len(c.name) for c in caps)
+    for cap in caps:
+        _echo(f"  {cap.state:<9} {cap.name:<{width}}  {cap.detail}")
+        if cap.limit:
+            _echo(f"  {'':<9} {'':<{width}}  LIMIT: {cap.limit}")
+
+    counts = capability.summary(caps)
+    _echo("")
+    _echo(
+        f"CAPABILITY  real={counts['real']}  degraded={counts['degraded']}  absent={counts['absent']}"
+    )
+    _echo("")
+    _echo("Degraded means usable with the stated limit attached to any claim.")
+    _echo("Absent means claiming it is UNGROUNDED_CAPABILITY.")
+
+
+@app.command("delegate")
+def delegate_command(
+    plan_file: Path = typer.Argument(..., help="JSON file describing the assignments"),
+    runner: str = typer.Option(None, "--runner", help="claude, goose, or codex"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Write prompts and plan waves, spawn nothing"
+    ),
+    timeout: int = typer.Option(900, "--timeout", help="Seconds per subagent"),
+) -> None:
+    """Spawn scoped subagents, refusing any plan that would destroy work.
+
+    Refusals are the feature: no overlapping file ownership, no assignment without
+    a verification command, no nesting, and no trusting a completion claim without
+    re-running the check.
+    """
+    workspace = _workspace()
+    payload = json.loads(plan_file.read_text(encoding="utf-8"))
+    assignments = [
+        spawn.Assignment(
+            agent_id=item["id"],
+            role=spawn.Role(item.get("role", "builder")),
+            objective=item["objective"],
+            file_scope=item.get("scope", []),
+            context_paths=item.get("context", []),
+            verification=item.get("verify", ""),
+            depends_on=item.get("depends_on", []),
+        )
+        for item in payload["assignments"]
+    ]
+
+    invalid = [(a.agent_id, a.problems()) for a in assignments if a.problems()]
+    if invalid:
+        for agent_id, problems in invalid:
+            _echo(f"  REFUSED  {agent_id}: {'; '.join(problems)}")
+        _echo("")
+        _echo(
+            "Every assignment needs an objective, a verification command, and a scope if it writes."
+        )
+        raise typer.Exit(1)
+
+    conflicts = spawn.check_ownership(assignments)
+    if conflicts:
+        for conflict in conflicts:
+            _echo(f"  CONFLICT  {conflict}")
+        _echo("")
+        _echo("REFUSED  two subagents writing one file overwrite each other silently.")
+        raise typer.Exit(1)
+
+    chosen, reason = spawn.detect_runner(runner)
+    waves = spawn.plan_waves(assignments)
+    _echo(f"runner: {chosen} ({reason})")
+    _echo(f"waves:  {len(waves)}")
+    for index, wave in enumerate(waves, start=1):
+        _echo(f"  wave {index}: {', '.join(a.agent_id for a in wave)}")
+    _echo("")
+
+    results: list[spawn.SpawnResult] = []
+    for index, wave in enumerate(waves, start=1):
+        _echo(f"WAVE {index}")
+        for assignment in wave:
+            result = spawn.spawn_one(
+                assignment,
+                workspace.home.root,
+                workspace.project.root,
+                chosen,
+                timeout=timeout,
+                dry_run=dry_run,
+            )
+            if result.outcome in {"CLAIMED", "NO_SIGNAL"}:
+                # A claim is not evidence. Re-run the check ourselves.
+                result = spawn.verify(result, assignment, workspace.project.root)
+            results.append(result)
+            verdict = (
+                "verified"
+                if result.trustworthy
+                else ("unverified" if result.verified is None else "FAILED CHECK")
+            )
+            _echo(
+                f"  {result.outcome:<10} {assignment.agent_id:<18} {result.duration_ms}ms  {verdict}"
+            )
+            if result.output_tail and result.outcome not in {"PLANNED"}:
+                for line in result.output_tail.splitlines()[-4:]:
+                    _echo(f"      | {line}")
+
+    trusted = [r for r in results if r.trustworthy]
+    _echo("")
+    _echo(f"DELEGATION  {len(trusted)}/{len(results)} independently verified")
+    if dry_run:
+        _echo("DRY_RUN  prompts written to .smith/assignments/, nothing spawned")
+        return
+    if len(trusted) != len(results):
+        _echo("Unverified work is not complete work.")
+        raise typer.Exit(1)
+
+
 @app.command()
 def context() -> None:
     """Show what Smith considers home, what it considers the project, and the toolchain.
@@ -1360,4 +1523,3 @@ def gate_contracts() -> None:
 
 if __name__ == "__main__":
     app()
-

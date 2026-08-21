@@ -51,8 +51,15 @@ test-cov:
     uv run pytest --cov=smith --cov-report=term-missing
 
 # The single gate. Nothing ships unless this passes.
-check: lint test validate tidy-check
+# `lint` already covers formatting; tidy-check runs last because it is advisory
+# about caches and must not block on regenerable artifacts.
+check: lint test validate selftest tidy-check
     @echo "ALL GATES PASSED"
+
+# Prove the validator still blocks a deliberately broken artifact. A validator
+# verified only against passing input is untested.
+selftest:
+    uv run smith validate --selftest
 
 # Everything the doctor checks plus the slow quality gates
 verify:
@@ -134,5 +141,6 @@ link:
 [private]
 help:
     @just --list
+
 
 

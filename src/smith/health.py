@@ -346,6 +346,36 @@ def check_folder_docs(paths: SmithPaths) -> Result:
     return _ok("folder_docs", f"{len(statuses)} directories documented, FAIR sections present")
 
 
+def check_capability_claims(paths: SmithPaths) -> Result:
+    """Every documented capability claim must be backed by a passing probe.
+
+    This is the check that was missing when the persona claimed Smith "spawns
+    scoped subagents" while no spawn code existed. Prose describing a capability is
+    indistinguishable from prose describing an aspiration, so the claim is checked
+    against a probe and the probe wins.
+    """
+    from smith import capability
+
+    rows = capability.audit_claims(paths)
+    false_claims = [(claim, cap) for claim, cap in rows if cap.state is capability.State.ABSENT]
+    if false_claims:
+        names = ", ".join(claim for claim, _ in false_claims)
+        return _fail(
+            "capability_claims",
+            f"{len(false_claims)} documented claim(s) unsupported: {names}",
+            "write the code or change the document, then re-run smith limits --claims",
+        )
+
+    caveated = [c for _, c in rows if c.state is capability.State.DEGRADED]
+    if caveated:
+        return _warn(
+            "capability_claims",
+            f"{len(rows)} claims probed, {len(caveated)} need a stated limit",
+            "state the limit whenever making these claims",
+        )
+    return _ok("capability_claims", f"{len(rows)} documented claims all backed by a passing probe")
+
+
 def check_seeds(paths: SmithPaths) -> Result:
     """A worklist should exist and must not be duplicated.
 
@@ -457,6 +487,7 @@ FAST_CHECKS: tuple[Callable[[SmithPaths], Result], ...] = (
     check_docs,
     check_skill_registry,
     check_folder_docs,
+    check_capability_claims,
     check_artifacts,
     check_seeds,
     check_memory,
