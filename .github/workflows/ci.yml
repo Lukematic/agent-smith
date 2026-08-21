@@ -1,0 +1,90 @@
+# Run every gate on push and pull request.
+#
+# The same gates the publish workflow runs, so a release never discovers a failure
+# for the first time. Cross-platform because the installers and path resolution are
+# platform-sensitive: a symlink that works on Linux may need a junction on Windows.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: ${{ matrix.os }} / py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python }}
+        run: uv python install ${{ matrix.python }}
+
+      - name: Install dependencies
+        run: uv sync --all-groups --frozen
+
+      - name: Lint
+        run: uv run ruff check src tests
+
+      - name: Format check
+        run: uv run ruff format --check src tests
+
+      - name: Tests
+        run: uv run pytest -q
+
+      - name: Validate authored artifacts
+        run: uv run smith validate skills agents
+
+      - name: Validator selftest
+        run: uv run smith validate --selftest
+
+      - name: Project health
+        # --fast skips lint and tests, which the steps above already ran.
+        run: uv run smith doctor --fast
+
+  install:
+    name: Fresh install on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Run the installer, as a new user would
+        # The installer is the first thing a recipient touches, so a break here is
+        # the most expensive kind: it fails before anyone can use the tool at all.
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            pwsh -File ./install.ps1
+          else
+            chmod +x ./install.sh && ./install.sh
+          fi
+
+      - name: Confirm the install is usable
+        shell: bash
+        run: |
+          uv run smith context
+          uv run smith install-status
+          uv run smith mode-status

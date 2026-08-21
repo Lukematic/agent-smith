@@ -33,6 +33,7 @@ ROOT_ALLOWED = frozenset(
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
+        "LICENSE",
         ".gitignore",
         ".python-version",
     }
@@ -40,12 +41,14 @@ ROOT_ALLOWED = frozenset(
 ROOT_ALLOWED_DIRS = frozenset(
     {
         ".git",
+        ".github",
         ".venv",
         ".ruff_cache",
         ".pytest_cache",
         ".smith",
         "agents",
         "archive",
+        "dist",
         "docs",
         "emitted",
         "hooks",
@@ -61,7 +64,9 @@ ROOT_ALLOWED_DIRS = frozenset(
 )
 # Directories Smith never inspects. The venv is not our clutter, and walking it
 # turns a hygiene check into 49 findings of noise, which trains you to ignore it.
-IGNORED_TREES = frozenset({".git", ".venv", "node_modules", "archive", "site-packages"})
+IGNORED_TREES = frozenset(
+    {".git", ".github", ".venv", "node_modules", "archive", "dist", "site-packages"}
+)
 DISPOSABLE_DIRS = ("__pycache__", ".pytest_cache", ".ruff_cache")
 
 
@@ -226,4 +231,5 @@ class Tidier:
                 item.path.unlink(missing_ok=True)
             removed.append(item.path)
         return removed
+
 

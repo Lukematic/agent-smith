@@ -15,7 +15,7 @@ from pathlib import Path
 
 import typer
 
-from smith import fix, harness, health, mission, models, seeds
+from smith import fix, harness, health, mission, models, modes, seeds
 from smith.enforce import (
     CONTRACTS,
     Gate,
@@ -412,6 +412,101 @@ def install_command(
     _echo("")
     _echo("Verify with:  smith install-status")
     _echo("Then ask your agent:  what is a harness?")
+
+
+@app.command("install-mode")
+def install_mode_command(
+    editor: str = typer.Option(None, "--editor", help="kilo, roo, or zoo. Default: all detected."),
+    scope: str = typer.Option("global", "--scope", help="global or project"),
+    project: bool = typer.Option(False, "--project", help="Shorthand for --scope project"),
+    force: bool = typer.Option(False, "--force", help="Overwrite an existing Smith mode"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would happen"),
+    emit_json: bool = typer.Option(False, "--json", help="Print the mode definitions instead"),
+) -> None:
+    """Install Smith as a selectable mode in Kilo, Roo, or a fork.
+
+    A mode is not a persona file. It appears in the mode selector, replaces the
+    system prompt, and declares which tool groups it may use, so the restriction is
+    enforced by the editor rather than requested in prose.
+
+    Three modes are installed, split by capability rather than by topic:
+    the full agent, a read-only consult, and a Markdown-only planner.
+    """
+    workspace = _workspace()
+    smith_home = workspace.home.root
+
+    if emit_json:
+        _echo(modes.as_json(smith_home))
+        return
+
+    scope_wanted = "project" if project else scope
+    targets = [
+        t
+        for t in modes.discover(workspace.project.root)
+        if t.scope == scope_wanted and (editor is None or t.editor == editor)
+    ]
+    available = [t for t in targets if t.exists or t.parent_exists]
+    chosen = available or ([t for t in targets if editor] if editor else [])
+
+    _echo(f"smith home: {smith_home}")
+    _echo("")
+
+    if not chosen:
+        _echo(f"No {scope_wanted} editor found. Candidates:")
+        for target in targets:
+            _echo(f"  {target.describe()}")
+        _echo("")
+        _echo("Name one explicitly:  smith install-mode --editor kilo")
+        raise typer.Exit(1)
+
+    built = modes.build_modes(smith_home)
+    invalid = [(m.slug, m.validate()) for m in built if m.validate()]
+    if invalid:
+        for slug, problems in invalid:
+            _echo(f"INVALID  {slug}: {'; '.join(problems)}")
+        raise typer.Exit(1)
+
+    for target in chosen:
+        _echo(f"TARGET  {target.describe()}")
+        for mode in built:
+            if dry_run:
+                _echo(f"  would add  {mode.slug:<22} groups={mode.groups}")
+                continue
+            outcome, detail = modes.install(mode, target, force=force)
+            _echo(f"  {outcome:<10} {mode.slug:<22} {detail}")
+
+    if dry_run:
+        _echo("")
+        _echo("DRY_RUN  nothing changed")
+        return
+
+    _echo("")
+    _echo("Reload the editor window, then pick the mode from the selector.")
+    _echo("Verify with:  smith mode-status")
+
+
+@app.command("mode-status")
+def mode_status_command() -> None:
+    """Show where the Smith modes are installed."""
+    workspace = _workspace()
+    rows = modes.status(workspace.project.root, "agent-smith")
+    installed = [t for t, present in rows if present]
+
+    if installed:
+        _echo("INSTALLED")
+        for target in installed:
+            _echo(f"  {target.label:<14} {target.scope:<8} {target.path}")
+    else:
+        _echo("No Smith mode installed. Run: smith install-mode")
+
+    absent = [t for t, present in rows if not present and (t.exists or t.parent_exists)]
+    if absent:
+        _echo("")
+        _echo("EDITOR PRESENT BUT MODE ABSENT")
+        for target in absent:
+            _echo(f"  {target.label:<14} {target.scope:<8} {target.path}")
+        _echo("")
+        _echo("  smith install-mode")
 
 
 @app.command("install-status")
@@ -1255,5 +1350,3 @@ def gate_contracts() -> None:
 
 if __name__ == "__main__":
     app()
-
-

@@ -284,4 +284,3 @@ Smith. Its home is `{smith_home}`.
 - Project purpose and calibration: `smith mission`
 - Project-local conventions live in this repository, never in Smith's home
 """
-

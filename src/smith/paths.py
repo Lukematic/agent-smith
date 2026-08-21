@@ -43,9 +43,14 @@ class SmithPaths:
         Resolution order, most explicit first:
 
         1. ``SMITH_HOME`` if set, so a caller can always be unambiguous.
-        2. Walking upward from ``start``, which succeeds when invoked inside Smith.
-        3. The package's own location, which succeeds when Smith is installed as a
-           plugin and invoked from an unrelated project.
+        2. Walking upward from ``start``, which succeeds when invoked inside a clone.
+        3. The package's own parent, which succeeds when running from a source tree.
+        4. The bundled data inside an installed wheel, which is the only option when
+           Smith was installed with pip or uv tool and no clone exists.
+
+        The bundle fallback matters because a wheel install has no repository. Without
+        it the CLI would import fine and then fail on the first command that needs the
+        knowledge registry, which is a confusing failure for a correct installation.
         """
         override = os.environ.get("SMITH_HOME")
         if override:
@@ -59,7 +64,36 @@ class SmithPaths:
                 return cls(root=candidate)
 
         # src/smith/paths.py -> src/smith -> src -> home
-        return cls(root=Path(__file__).resolve().parents[2])
+        source_tree = Path(__file__).resolve().parents[2]
+        if cls._is_home(source_tree):
+            return cls(root=source_tree)
+
+        bundle = Path(__file__).resolve().parent / "_bundle"
+        if bundle.is_dir():
+            return cls(root=bundle)
+
+        return cls(root=source_tree)
+
+    @property
+    def is_bundled(self) -> bool:
+        """Whether this is a read-only wheel bundle rather than a writable clone.
+
+        It matters for anything that writes: a bundle lives in site-packages, so
+        lessons written there are lost on the next upgrade. Writable state belongs
+        under the user's config directory instead.
+        """
+        return self.root.name == "_bundle"
+
+    @property
+    def writable_home(self) -> Path:
+        """Where Smith may write when installed as a wheel.
+
+        A clone writes in place. A bundle cannot, so durable memory is redirected to
+        ``~/.smith`` rather than silently written into site-packages.
+        """
+        if not self.is_bundled:
+            return self.root
+        return Path.home() / ".smith"
 
     @staticmethod
     def _is_home(candidate: Path) -> bool:

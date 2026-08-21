@@ -21,27 +21,70 @@ Agents do not report done. They run a gate that decides whether they may.
 
 ## Install
 
-Requires [uv](https://docs.astral.sh/uv/) and [just](https://github.com/casey/just).
+**One line.** Installs `uv` if missing, builds an isolated environment, and wires
+Smith into every agent harness it finds.
+
+```powershell
+irm https://raw.githubusercontent.com/Lukematic/agent-smith/main/bootstrap.ps1 | iex
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Lukematic/agent-smith/main/bootstrap.sh | sh
+```
+
+Or clone and run the installer yourself:
 
 ```bash
 git clone https://github.com/Lukematic/agent-smith.git
 cd agent-smith
-just install
-just doctor
+./install.sh          # or ./install.ps1 on Windows
 ```
 
-Wire it into your agent harness as a global plugin plus a persona:
+`git` is the only thing you must already have. The installer provides `uv` and does
+not touch your system Python. `just` is optional convenience: every recipe also
+runs as `uv run smith ...`.
+
+The installer detects your editors and installs where each one looks:
+
+| Harness | Persona | Skills |
+| --- | --- | --- |
+| Claude Code | `~/.claude/agents/` | `~/.claude/skills/` |
+| Goose | `~/.agents/agents/` | `~/.agents/plugins/` |
+| Kilo, Roo | `~/.kilo/agent/` plus a selectable **mode** | `~/.kilo/skills/` |
+| Cursor | `.cursor/rules/`, frontmatter adapted | not supported |
+
+Verify, and see what it found:
 
 ```bash
-just link
+smith install-status     # persona and skills, per harness
+smith mode-status        # Kilo and Roo modes
+smith doctor             # every project gate
 ```
 
-That symlinks the repo to `~/.agents/plugins/agent-smith/` (skills and hooks) and
-installs `~/.agents/agents/agent-smith.md` (the persona). Skills load namespaced
-as `agent-smith:smith-consult` and so on.
+### Modes, for Kilo and Roo
 
-Per-project you add **three lines** to `.goosehints`, never a copy of this repo.
-See [docs/deployment.md](docs/deployment.md) for why copying causes
+Three modes appear in the mode selector, split by **capability** rather than topic,
+so the restriction is enforced by the editor instead of requested in prose:
+
+| Mode | Tools | Cannot |
+| --- | --- | --- |
+| 🕶️ Agent Smith | read, edit, command, mcp | — |
+| 🕶️ Smith Consult | read, mcp | edit anything, so a consult stays a consult |
+| 🕶️ Smith Plan | read, **Markdown-only** edit, command, mcp | start implementing |
+
+```bash
+smith install-mode                  # every detected editor
+smith install-mode --editor kilo    # just one
+```
+
+Per-project you add **three lines** to `AGENTS.md`, never a copy of this repo:
+
+```bash
+smith pointer
+```
+
+See [docs/install.md](docs/install.md) for pointing any other tool at the persona,
+and [docs/deployment.md](docs/deployment.md) for why copying causes
 `KNOWLEDGE_FORK`.
 
 ---

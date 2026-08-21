@@ -1,0 +1,111 @@
+# Publish to PyPI on release, using Trusted Publishing.
+#
+# Trusted Publishing (OIDC) means no API token is stored in this repository. PyPI
+# verifies the workflow's identity directly, so there is no long-lived secret to
+# leak or rotate. Configure it once at
+# https://pypi.org/manage/project/smith-harness/settings/publishing/
+#
+# The gates run before the build on purpose. Publishing an artifact that fails its
+# own test suite is the exact PREMATURE_COMPLETION this project exists to prevent,
+# and a released version cannot be unreleased.
+
+name: Publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build and verify without publishing"
+        type: boolean
+        default: true
+
+jobs:
+  gate:
+    name: Gates must pass before anything is built
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-groups --frozen
+
+      - name: Lint
+        run: uv run ruff check src tests
+
+      - name: Format check
+        run: uv run ruff format --check src tests
+
+      - name: Tests
+        run: uv run pytest -q
+
+      - name: Validate authored artifacts
+        run: uv run smith validate skills agents
+
+      - name: Prove the validator still blocks bad input
+        run: uv run smith validate --selftest
+
+      - name: Project health
+        run: uv run smith doctor --fast
+
+  build:
+    name: Build and verify the distribution
+    needs: gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      - name: Verify the wheel actually carries its knowledge base
+        # A wheel with only the CLI installs a tool whose registry and skills are
+        # missing, which fails on first use. Asserting the contents here is cheaper
+        # than discovering it after release.
+        run: |
+          uv tool install --from dist/*.whl smith-harness
+          cd "$(mktemp -d)"
+          smith route "what is a harness" | tee routed.txt
+          grep -q "6-harnesses" routed.txt
+          test "$(smith skills --paths | wc -l)" -ge 10
+          echo "wheel is self-sufficient"
+
+      - name: Check distribution metadata
+        run: uvx twine check dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' || inputs.dry_run == false
+    environment:
+      name: pypi
+      url: https://pypi.org/p/smith-harness
+    permissions:
+      # Required for Trusted Publishing. No PyPI token lives in this repository.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1

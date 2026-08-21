@@ -1,14 +1,42 @@
 [project]
-name = "agent-smith"
+name = "smith-harness"
 version = "0.3.0"
-description = "Agentic-engineering expert and agent factory with a just-in-time knowledge registry"
+description = "Agentic-engineering expert and agent factory with a just-in-time knowledge registry and a gate ledger"
 readme = "README.md"
 requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Luke Awino" }]
+keywords = [
+    "agent",
+    "agentic-engineering",
+    "harness",
+    "llm",
+    "claude",
+    "verification",
+    "prompt-engineering",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+    "Typing :: Typed",
+]
 dependencies = [
     "httpx>=0.27",
     "pyyaml>=6.0",
     "typer>=0.12",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Lukematic/agent-smith"
+Repository = "https://github.com/Lukematic/agent-smith"
+Issues = "https://github.com/Lukematic/agent-smith/issues"
+Documentation = "https://github.com/Lukematic/agent-smith/tree/main/docs"
 
 [project.scripts]
 smith = "smith.cli:app"
@@ -26,6 +54,47 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/smith"]
+
+# The knowledge registry, skills, persona, and constitution are not Python, but
+# they are what Smith *is*. A wheel carrying only the CLI installs a tool whose
+# knowledge base is missing, so `smith route` and every skill fail immediately.
+#
+# force-include maps repository paths to package-relative paths, so the data ships
+# inside `smith/_bundle/` and `smith.paths` can find it when no git clone exists.
+[tool.hatch.build.targets.wheel.force-include]
+"AGENT_SMITH.md" = "smith/_bundle/AGENT_SMITH.md"
+"plugin.json" = "smith/_bundle/plugin.json"
+"knowledge/REGISTRY.yaml" = "smith/_bundle/knowledge/REGISTRY.yaml"
+"knowledge/SOURCES.yaml" = "smith/_bundle/knowledge/SOURCES.yaml"
+"skills" = "smith/_bundle/skills"
+"agents" = "smith/_bundle/agents"
+"hooks" = "smith/_bundle/hooks"
+"templates" = "smith/_bundle/templates"
+"memory/lessons.md" = "smith/_bundle/memory/lessons.md"
+
+[tool.hatch.build.targets.sdist]
+# The sdist is the reproducible source of truth, so it carries everything a clone
+# would, minus disposable state.
+include = [
+    "src",
+    "tests",
+    "skills",
+    "agents",
+    "hooks",
+    "templates",
+    "docs",
+    "knowledge/REGISTRY.yaml",
+    "knowledge/SOURCES.yaml",
+    "memory/lessons.md",
+    "AGENT_SMITH.md",
+    "README.md",
+    "justfile",
+    "plugin.json",
+    "install.ps1",
+    "install.sh",
+    "bootstrap.ps1",
+    "bootstrap.sh",
+]
 
 # ── ruff: lint and format in one tool ────────────────────────────────────────
 [tool.ruff]
