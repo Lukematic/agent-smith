@@ -1231,6 +1231,8 @@ def gate_check(
             ["git", "diff", diff_base, "--"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(root),
             check=False,
         ).stdout
@@ -1238,6 +1240,8 @@ def gate_check(
             ["git", "diff", "--name-only", diff_base, "--"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(root),
             check=False,
         ).stdout.split()
@@ -1356,3 +1360,4 @@ def gate_contracts() -> None:
 
 if __name__ == "__main__":
     app()
+

@@ -11,6 +11,9 @@
 
 name: Publish
 
+env:
+  UV_LINK_MODE: copy
+
 on:
   release:
     types: [published]
@@ -109,3 +112,4 @@ jobs:
 
       - name: Publish
         uses: pypa/gh-action-pypi-publish@release/v1
+

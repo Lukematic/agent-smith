@@ -76,7 +76,12 @@ if (Get-Command uv -ErrorAction SilentlyContinue) {
 Write-Step "Syncing the project environment"
 Push-Location $smithRoot
 try {
-    uv sync --all-groups | Out-Null
+    # Hardlinking fails on OneDrive, network shares, Docker volumes, and any
+    # filesystem where the uv cache and the project sit on different backing
+    # stores. Copy mode is slower on first run and works everywhere, which is the
+    # right trade for an installer a stranger runs once.
+    if (-not $env:UV_LINK_MODE) { $env:UV_LINK_MODE = 'copy' }
+    uv sync --all-groups 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "uv sync exited $LASTEXITCODE" }
     Write-Ok "dependencies installed into .venv"
 } catch {

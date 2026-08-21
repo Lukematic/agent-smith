@@ -17,6 +17,9 @@
 
 set -euo pipefail
 
+# Copy mode works on network shares and Docker volumes where hardlinking fails.
+export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
+
 REPO="${SMITH_REPO:-https://github.com/Lukematic/agent-smith.git}"
 DIR="${SMITH_DIR:-$HOME/dev/agent-smith}"
 REF="${SMITH_REF:-main}"
@@ -96,4 +99,5 @@ echo "  smith context     what Smith thinks home and project are"
 echo "  smith mission     what Smith thinks the project is for"
 echo "  smith doctor      health, with remedies"
 echo
+
 

@@ -59,6 +59,11 @@ fi
 # ── 2. environment ───────────────────────────────────────────────────────────
 step "Syncing the project environment"
 cd "$SMITH_ROOT"
+# Hardlinking fails on network shares, Docker volumes, and any filesystem where
+# the uv cache and the project sit on different backing stores. Copy mode is
+# slower on first run and works everywhere, which is the right trade for an
+# installer a stranger runs once.
+export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
 uv sync --all-groups >/dev/null
 ok "dependencies installed into .venv"
 
@@ -189,5 +194,6 @@ echo "  Health check:         uv run smith doctor"
 echo "  Available skills:     uv run smith skills"
 echo "  Open a gated run:     uv run smith gate open code-change \"objective\" --scope path"
 echo
+
 
 

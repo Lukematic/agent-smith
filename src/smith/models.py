@@ -64,6 +64,12 @@ class Rung(IntEnum):
 
 # Signals that a request is really about a higher rung than its wording suggests.
 # The point of detection is that people describe loop problems as prompt problems.
+#
+# Order matters, and it is not simply "highest rung first". Context is checked
+# before harness because "the context window keeps overflowing" contains a
+# repetition signal but is unambiguously a context problem: the fix is what the
+# agent sees, not the environment it runs in. A greedy harness rule would swallow
+# it and send effort to the wrong surface.
 RUNG_SIGNALS: tuple[tuple[Rung, re.Pattern[str], str], ...] = (
     (
         Rung.FACTORY,
@@ -76,27 +82,46 @@ RUNG_SIGNALS: tuple[tuple[Rung, re.Pattern[str], str], ...] = (
         Rung.LOOP,
         re.compile(
             r"\b(every (day|night|morning|hour)|nightly|on a (timer|schedule)|cron|unattended"
-            r"|keeps? happening|recurring|automatically (find|fix|triage)|without me)\b",
+            r"|automatically (find|fix|triage)|without me|while I sleep|in the background)\b",
             re.I,
         ),
         "recurs on a trigger rather than on a human prompt",
     ),
     (
-        Rung.HARNESS,
-        re.compile(
-            r"\b(keeps? (doing|writing|forgetting|ignoring)|never follows|always (forgets|skips)"
-            r"|every time|repeatedly|permissions?|hooks?|sandbox|tool access)\b",
-            re.I,
-        ),
-        "a repeated behaviour, which is an environment property",
-    ),
-    (
         Rung.CONTEXT,
         re.compile(
-            r"\b(context|window|too (long|much)|truncat\w+|forgets? mid|compact\w*|retriev\w+)\b",
+            r"\b(context (window|length|limit)|too (long|much) (context|history)|truncat\w+"
+            r"|compact\w*|forgets? (mid|halfway|earlier)|lost in the middle|retriev\w+"
+            r"|window (overflow|blow)\w*)\b",
             re.I,
         ),
         "concerns what the agent sees",
+    ),
+    (
+        Rung.HARNESS,
+        re.compile(
+            # Two independent signals, because practitioners phrase this many ways.
+            #
+            # 1. Repetition: "keeps <verb>ing", "always", "every time". The verb is
+            #    open-ended on purpose. An earlier version listed verbs explicitly
+            #    and missed "keeps citing", which is the same failure as "keeps
+            #    writing" and needs the same structural fix.
+            # 2. Instruction-defiance: the prompt says one thing and the agent does
+            #    another. That is the definition of a harness problem: the
+            #    instruction exists and is not binding, so wording it harder cannot
+            #    help.
+            r"\b(keeps?|kept)\s+\w+ing\b"
+            r"|\bnever (follows|listens|respects|obeys|does)\b"
+            r"|\balways (forgets|skips|ignores|fails)\b"
+            r"|\bevery (single )?time\b"
+            r"|\brepeatedly\b"
+            r"|\beven though (the|my|our) (prompt|instruction|rule|spec)"
+            r"|\b(prompt|instruction|rule) (says|forbids|requires|tells)\b.*\b(but|yet|anyway|still)\b"
+            r"|\b(ignores|violates|disregards) (the|my|our) (prompt|instruction|rule)"
+            r"|\bpermissions?\b|\bhooks?\b|\bsandbox\b|\btool access\b",
+            re.I,
+        ),
+        "a repeated behaviour or an unenforced instruction, which is an environment property",
     ),
 )
 

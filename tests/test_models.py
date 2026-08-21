@@ -347,14 +347,67 @@ class TestComposedPlan:
         assert plan.next_action.startswith("Reframe first")
 
     def test_anti_patterns_preempt_proceeding(self) -> None:
-        plan = build_plan
-        result = plan(
-            "keep improving the code",
+        # The request must be rung-aligned to isolate what this asserts: an earlier
+        # fixture said "keep improving the code", which now correctly reads as a
+        # harness problem, and the ladder short-circuited before anti-patterns.
+        result = build_plan(
+            "add a retry helper to the client",
             task_class=TaskClass.CODE_CHANGE,
             evidence=code_change_evidence(executed=False),
             understood=True,
             interfaces_settled=True,
             units_disjoint=True,
         )
+        assert not result.rung.misaligned
         assert result.anti_patterns
         assert "Fix" in result.next_action
+
+
+class TestRealWorldPhrasing:
+    """Rung detection against phrasings taken from actual user requests.
+
+    An earlier version listed harness verbs explicitly ("keeps doing", "keeps
+    writing") and missed "keeps citing", which is the same failure needing the same
+    structural fix. Every case here traces to a real request that was misrouted.
+    """
+
+    @pytest.mark.parametrize(
+        ("request_text", "expected"),
+        [
+            # Instruction-defiance: the rule exists and is not binding, so wording
+            # it harder cannot help. This is the definition of a harness problem.
+            (
+                "the QA agent keeps citing dates from filenames even though the prompt forbids it",
+                Rung.HARNESS,
+            ),
+            ("the prompt says never use external knowledge but it still does", Rung.HARNESS),
+            ("it ignores the rule about entity locking", Rung.HARNESS),
+            ("the agent violates our instruction about citations", Rung.HARNESS),
+            # Open-ended repetition, not an enumerated verb list.
+            ("it keeps hallucinating company names", Rung.HARNESS),
+            ("it keeps skipping the lint step", Rung.HARNESS),
+            # Triggers, not repetition.
+            ("automatically triage failures without me", Rung.LOOP),
+            ("check the pipeline while I sleep", Rung.LOOP),
+            # Context wins over the repetition signal it also contains.
+            ("the context window keeps overflowing", Rung.CONTEXT),
+            ("it forgets earlier instructions in long sessions", Rung.CONTEXT),
+            # Ordinary bounded work stays at prompt.
+            ("audit the anti-hallucination rules in prompts.py", Rung.PROMPT),
+            ("write a docstring for this function", Rung.PROMPT),
+        ],
+    )
+    def test_real_request_routes_correctly(self, request_text: str, expected: Rung) -> None:
+        assert detect_rung(request_text).actual is expected
+
+    def test_context_beats_harness_when_both_signals_present(self) -> None:
+        # "keeps overflowing" is a repetition signal, but the fix is what the agent
+        # sees, not the environment. A greedy harness rule would send effort to the
+        # wrong surface.
+        verdict = detect_rung("the context window keeps overflowing every time")
+        assert verdict.actual is Rung.CONTEXT
+
+    def test_harness_advice_names_the_environment(self) -> None:
+        verdict = detect_rung("it keeps citing filenames even though the prompt forbids it")
+        assert verdict.misaligned
+        assert "environment" in verdict.reason

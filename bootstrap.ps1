@@ -40,6 +40,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Copy mode works on OneDrive, network shares, and Docker volumes where
+# hardlinking fails. Set before any uv invocation.
+if (-not $env:UV_LINK_MODE) { $env:UV_LINK_MODE = 'copy' }
+
 function Step { param([string]$m) Write-Host "==> $m" -ForegroundColor Cyan }
 function Ok   { param([string]$m) Write-Host "  OK    $m" -ForegroundColor Green }
 function Warn { param([string]$m) Write-Host "  WARN  $m" -ForegroundColor Yellow }
@@ -163,4 +167,5 @@ Write-Host "  smith context     what Smith thinks home and project are"
 Write-Host "  smith mission     what Smith thinks the project is for"
 Write-Host "  smith doctor      health, with remedies"
 Write-Host ""
+
 

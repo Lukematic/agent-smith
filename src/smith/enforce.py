@@ -228,6 +228,8 @@ class Ledger:
             shell=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(cwd) if cwd else None,
         )
         duration_ms = int((time.monotonic() - started) * 1000)

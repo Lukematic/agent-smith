@@ -213,10 +213,15 @@ class Seeds:
                 ["sd", *args],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 cwd=str(self.root),
                 check=False,
             )
-        except OSError as exc:
+        except (OSError, UnicodeError) as exc:
+            # A tracker containing characters the console codec cannot represent
+            # must degrade to "unavailable", not crash the whole command. Windows
+            # defaults to cp1252 here, which fails on any emoji or smart quote.
             return SeedsResult(False, " ".join(args), str(exc))
         output = (done.stdout or "") + (done.stderr or "")
         return SeedsResult(done.returncode == 0, " ".join(args), output.strip())

@@ -16,6 +16,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Runners sometimes place the uv cache on a different mount than the workspace,
+  # where hardlinking fails. Copy mode is slower and always works.
+  UV_LINK_MODE: copy
+
 jobs:
   gates:
     name: ${{ matrix.os }} / py${{ matrix.python }}
@@ -88,3 +93,4 @@ jobs:
           uv run smith context
           uv run smith install-status
           uv run smith mode-status
+
