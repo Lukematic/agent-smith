@@ -21,8 +21,7 @@ Agents do not report done. They run a gate that decides whether they may.
 
 ## Install
 
-**One line.** Installs `uv` if missing, builds an isolated environment, and wires
-Smith into every agent harness it finds.
+**One line.** Everything needed is installed for you.
 
 ```powershell
 irm https://raw.githubusercontent.com/Lukematic/agent-smith/main/bootstrap.ps1 | iex
@@ -32,28 +31,60 @@ irm https://raw.githubusercontent.com/Lukematic/agent-smith/main/bootstrap.ps1 |
 curl -fsSL https://raw.githubusercontent.com/Lukematic/agent-smith/main/bootstrap.sh | sh
 ```
 
-Or clone and run the installer yourself:
+Or clone first, if you prefer to read before you run:
 
 ```bash
 git clone https://github.com/Lukematic/agent-smith.git
 cd agent-smith
-./install.sh          # or ./install.ps1 on Windows
+./install.sh          # or  .\install.ps1  on Windows
 ```
 
-`git` is the only thing you must already have. The installer provides `uv` and does
-not touch your system Python. `just` is optional convenience: every recipe also
-runs as `uv run smith ...`.
+### What you need, and what gets handled for you
+
+| Tool | Needed | If missing |
+| --- | --- | --- |
+| `git` | **yes** | you install it: `winget install Git.Git`, `brew install git` |
+| `uv` | yes | **installed automatically** from astral.sh |
+| Python 3.12 | yes | **installed automatically** by uv, isolated in `.venv` |
+| `just` | no | **installed automatically** via winget, scoop, brew, cargo, apt, dnf, or pacman |
+| `sd` (seeds) | no | **installed automatically** when bun or npm already exists |
+
+`git` is the only thing you must have first: it cannot be installed silently, and
+nothing else can run before the clone.
+
+Nothing touches your system Python. Optional tools never block the install: if
+`just` cannot be installed, every recipe still runs as `uv run smith ...`. Seeds is
+only installed when a JavaScript runtime is already present, because pulling in a
+runtime to get an optional tracker would be a large uninvited change.
+
+To skip optional tooling entirely, on a locked-down machine or in CI:
+
+```bash
+./install.sh --no-tools        #  .\install.ps1 -NoTools
+```
+
+### Where it goes
 
 The installer detects your editors and installs where each one looks:
 
-| Harness | Persona | Skills |
-| --- | --- | --- |
-| Claude Code | `~/.claude/agents/` | `~/.claude/skills/` |
-| Goose | `~/.agents/agents/` | `~/.agents/plugins/` |
-| Kilo, Roo | `~/.kilo/agent/` plus a selectable **mode** | `~/.kilo/skills/` |
-| Cursor | `.cursor/rules/`, frontmatter adapted | not supported |
+| Harness | Persona lands at | Skills | Selectable as |
+| --- | --- | --- | --- |
+| Claude Code | `~/.claude/agents/` | `~/.claude/skills/` | a subagent |
+| Kilo | `~/.config/kilo/agents/` | `~/.config/kilo/skills/` | **a mode, via `mode: primary`** |
+| Roo | `custom_modes.yaml` or `.roomodes` | via modes | **a mode in the selector** |
+| GitHub Copilot | `<VS Code prompts>/agent-smith.chatmode.md` | not supported | a chat mode |
+| Goose | `~/.agents/agents/` | `~/.agents/plugins/` | an agent |
+| Cursor | `.cursor/rules/agent-smith.mdc` | not supported | always-on context |
 
-Verify, and see what it found:
+Frontmatter is **rebuilt per harness**, never copied. Each tool validates a
+different shape, and an unexpected or missing field is not always ignored: a Kilo
+agent without `mode: primary` installs as a subagent and never appears in the
+selector, which looks exactly like a failed install.
+
+Skills are **linked**, not copied, so `git pull` updates the live install with
+nothing else to run. Re-running the installer is safe and idempotent.
+
+### Verify
 
 ```bash
 smith install-status     # persona and skills, per harness
@@ -63,21 +94,25 @@ smith doctor             # every project gate
 
 ### Modes, for Kilo and Roo
 
-Three modes appear in the mode selector, split by **capability** rather than topic,
-so the restriction is enforced by the editor instead of requested in prose:
+Three modes appear in the selector, split by **capability** rather than topic, so
+the restriction is enforced by the editor instead of requested in prose:
 
-| Mode | Tools | Cannot |
+| Mode | Tools | Structurally cannot |
 | --- | --- | --- |
 | 🕶️ Agent Smith | read, edit, command, mcp | — |
-| 🕶️ Smith Consult | read, mcp | edit anything, so a consult stays a consult |
-| 🕶️ Smith Plan | read, **Markdown-only** edit, command, mcp | start implementing |
+| 🕶️ Smith Consult | read, mcp | edit, so a consult stays a consult |
+| 🕶️ Smith Plan | read, **Markdown-only** edit, command, mcp | become an implementation session |
 
 ```bash
 smith install-mode                  # every detected editor
 smith install-mode --editor kilo    # just one
 ```
 
-Per-project you add **three lines** to `AGENTS.md`, never a copy of this repo:
+Reload the editor window and they appear in the mode dropdown.
+
+### Per project
+
+Add **three lines** to `AGENTS.md`, never a copy of this repo:
 
 ```bash
 smith pointer
@@ -86,6 +121,19 @@ smith pointer
 See [docs/install.md](docs/install.md) for pointing any other tool at the persona,
 and [docs/deployment.md](docs/deployment.md) for why copying causes
 `KNOWLEDGE_FORK`.
+
+### First five minutes
+
+```bash
+smith context     # what Smith thinks home and project are
+smith mission     # what Smith thinks this project is for
+smith doctor      # health, with a remedy per finding
+smith work        # tracked work, if a tracker exists
+```
+
+Run `smith context` **first in every new repository.** Every gate command Smith
+records comes from that resolution, so a wrong answer there makes every later green
+gate meaningless.
 
 ---
 
@@ -217,6 +265,7 @@ One rule: **docs live in `docs/`, code in `src/`, nothing loose at the root.**
   Stop and escalate with what was tried.
 - **Cite or mark inferred.** Every knowledge claim carries a chapter path.
 - **Archive, do not delete.** A wrong archive is recoverable.
+
 
 
 

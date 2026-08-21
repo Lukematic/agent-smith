@@ -1,28 +1,30 @@
-"""Harness installation: put the persona and skills where each tool looks.
+"""Harness installation: put the persona where each tool actually looks.
 
-Smith's persona is one Markdown file, but every harness expects it somewhere
-different, under a different filename, sometimes with different frontmatter. So
-installation is detection plus adaptation rather than one hardcoded path.
+Smith's persona is one Markdown body, but every harness expects a different
+location, filename, and frontmatter shape. Getting any of the three wrong fails
+*silently*: the file lands on disk, nothing errors, and the agent never appears.
+So each target is verified against a real installation rather than assumed.
 
-| Harness | Persona | Skills |
+| Harness | Location | Selectable by |
 | --- | --- | --- |
-| Claude Code | `.claude/agents/<name>.md` | `.claude/skills/<name>/SKILL.md` |
-| Goose / open agents | `.agents/agents/<name>.md` | `.agents/plugins/<name>/` |
-| Kilo | `.kilo/agent/<name>.md` | `.kilo/skills/<name>/SKILL.md` |
-| Cursor | `.cursor/rules/<name>.mdc` | not supported |
-| Generic | `AGENTS.md` pointer | referenced by path |
+| Claude Code | `~/.claude/agents/<name>.md` | frontmatter needs `tools` |
+| Kilo | `~/.config/kilo/agents/<name>.md` | **`mode: primary`** |
+| Roo | project `.roomodes`, or `custom_modes.yaml` | see `modes.py` |
+| Copilot | `<prompts>/<name>.chatmode.md` | `description` plus `tools` |
+| Goose | `~/.agents/agents/<name>.md` | plugin at `~/.agents/plugins/` |
+| Cursor | `.cursor/rules/<name>.mdc` | `alwaysApply` |
 
-Two placements, each with a different lifetime:
+The two bugs this file exists to prevent, both found on a real machine:
 
-- **Global** (`~/.claude/`, `~/.agents/`) makes Smith available in every project.
-  Correct default: one shared Smith avoids forking its knowledge base.
-- **Project** (`./.claude/`, `./.kilo/`) pins Smith to one repository, for a team
-  that must share an exact version.
+- A Kilo agent without `mode: primary` installs as a *subagent*. It is invocable
+  by another agent but never appears in the mode selector, which looks identical
+  to "the install did not work".
+- `~/.kilo/` is not where Kilo reads global agents. It is `~/.config/kilo/`.
 
-Skills are **symlinked** where the harness allows it, so a `git pull` updates the
-live install with nothing else to run. The persona is copied, because harnesses
-read it once at startup and a stale copy is easier to reason about than a symlink
-that silently changes mid-session.
+Skills are **linked** where the harness allows it, so `git pull` updates the live
+install with nothing else to run. The persona is copied, because harnesses read it
+once at startup and a stable copy is easier to reason about than a file that
+changes mid-session.
 """
 
 from __future__ import annotations
@@ -39,6 +41,7 @@ class Harness(StrEnum):
     AGENTS = "agents"
     KILO = "kilo"
     CURSOR = "cursor"
+    COPILOT = "copilot"
 
     @property
     def label(self) -> str:
@@ -47,39 +50,70 @@ class Harness(StrEnum):
             Harness.AGENTS: "Goose / open agents",
             Harness.KILO: "Kilo",
             Harness.CURSOR: "Cursor",
+            Harness.COPILOT: "GitHub Copilot",
         }[self]
 
     @property
-    def root_name(self) -> str:
-        return f".{self}"
+    def global_root(self) -> Path:
+        """Where this harness keeps user-level configuration.
+
+        Kilo uses `~/.config/kilo`, not `~/.kilo`. Copilot uses the VS Code user
+        prompts directory. Both were wrong in an earlier version and produced
+        installs that looked successful and did nothing.
+        """
+        home = Path.home()
+        if self is Harness.KILO:
+            return home / ".config" / "kilo"
+        if self is Harness.COPILOT:
+            if os.name == "nt":
+                return home / "AppData" / "Roaming" / "Code" / "User" / "prompts"
+            if os.uname().sysname == "Darwin":  # type: ignore[attr-defined]
+                return home / "Library" / "Application Support" / "Code" / "User" / "prompts"
+            return home / ".config" / "Code" / "User" / "prompts"
+        return home / f".{self}"
+
+    def project_root(self, project: Path) -> Path:
+        if self is Harness.COPILOT:
+            return project / ".github" / "chatmodes"
+        if self is Harness.KILO:
+            return project / ".kilo"
+        return project / f".{self}"
 
     @property
     def persona_dir(self) -> str:
-        """Subdirectory holding agent personas. Kilo uses the singular form."""
+        """Subdirectory holding personas, relative to the harness root."""
         return {
             Harness.CLAUDE: "agents",
             Harness.AGENTS: "agents",
-            Harness.KILO: "agent",
+            Harness.KILO: "agents",
             Harness.CURSOR: "rules",
+            Harness.COPILOT: "",
         }[self]
 
     @property
-    def persona_suffix(self) -> str:
-        return ".mdc" if self is Harness.CURSOR else ".md"
+    def persona_filename(self) -> str:
+        """Copilot encodes the artifact type in the filename suffix."""
+        return {
+            Harness.CLAUDE: "agent-smith.md",
+            Harness.AGENTS: "agent-smith.md",
+            Harness.KILO: "agent-smith.md",
+            Harness.CURSOR: "agent-smith.mdc",
+            Harness.COPILOT: "agent-smith.chatmode.md",
+        }[self]
 
     @property
     def supports_skills(self) -> bool:
-        """Cursor rules are always-on context, not model-invoked skills."""
-        return self is not Harness.CURSOR
-
-    @property
-    def skills_dir(self) -> str:
-        return "skills"
+        """Cursor rules and Copilot chat modes are context, not model-invoked skills."""
+        return self in {Harness.CLAUDE, Harness.AGENTS, Harness.KILO}
 
     @property
     def uses_plugins(self) -> bool:
         """Whether the harness loads a whole plugin directory rather than files."""
         return self is Harness.AGENTS
+
+    @property
+    def skills_subdir(self) -> str:
+        return "skills"
 
 
 @dataclass(frozen=True)
@@ -96,11 +130,12 @@ class Target:
 
     @property
     def persona_path(self) -> Path:
-        return self.root / self.harness.persona_dir / f"agent-smith{self.harness.persona_suffix}"
+        parent = self.root / self.harness.persona_dir if self.harness.persona_dir else self.root
+        return parent / self.harness.persona_filename
 
     @property
     def skills_root(self) -> Path:
-        return self.root / self.harness.skills_dir
+        return self.root / self.harness.skills_subdir
 
     @property
     def plugin_path(self) -> Path:
@@ -132,11 +167,10 @@ def discover(project: Path) -> list[Target]:
     fork its own knowledge base, which is the failure that copying per project
     guarantees.
     """
-    home = Path.home()
     found: list[Target] = []
     for harness in Harness:
-        found.append(Target(harness, home / harness.root_name, "global"))
-        found.append(Target(harness, project / harness.root_name, "project"))
+        found.append(Target(harness, harness.global_root, "global"))
+        found.append(Target(harness, harness.project_root(project), "project"))
     return found
 
 
@@ -145,17 +179,56 @@ def detected(project: Path) -> list[Target]:
     return [t for t in discover(project) if t.exists]
 
 
-def _link_or_copy(source: Path, destination: Path) -> tuple[str, str]:
+def _already_linked(destination: Path, source: Path) -> bool:
+    """Whether the destination already points at the source.
+
+    Windows junctions do not report as symlinks, so `is_symlink()` alone misses
+    them and a reinstall tries to recreate a link that already exists. Comparing
+    resolved paths covers symlinks, junctions, and bind mounts uniformly.
+    """
+    if not destination.exists() and not destination.is_symlink():
+        return False
+    try:
+        return destination.resolve() == source.resolve()
+    except OSError:
+        return False
+
+
+def _unlink_any(path: Path) -> None:
+    """Remove a file, directory, symlink, or Windows junction.
+
+    Junctions need care: they are directories with a reparse point, so
+    ``shutil.rmtree`` follows them and would delete the *target's* contents. Only
+    ``os.rmdir`` removes the link itself, which is why this is not a one-liner.
+    """
+    if path.is_symlink() or path.is_file():
+        path.unlink()
+        return
+    if not path.is_dir():
+        return
+    if os.name == "nt" and os.path.isjunction(path):
+        path.rmdir()
+        return
+    shutil.rmtree(path)
+
+
+def _link_or_copy(source: Path, destination: Path, *, overwrite: bool = False) -> tuple[str, str]:
     """Symlink when the platform allows it, otherwise copy.
 
-    Windows needs Developer Mode or elevation for symlinks, so a copy is the
-    documented fallback. The difference matters: a symlink updates on git pull, a
-    copy needs reinstalling.
+    Windows needs Developer Mode or elevation for symlinks, so a junction and then
+    a copy are the documented fallbacks. The difference matters: a link updates on
+    git pull, a copy needs reinstalling.
     """
+    if not overwrite and _already_linked(destination, source):
+        return "SKIPPED", "already linked, git pull keeps it current"
+
     if destination.exists() or destination.is_symlink():
-        if destination.is_symlink():
-            return "SKIPPED", "already linked"
-        shutil.rmtree(destination, ignore_errors=True)
+        # A real directory, or a link pointing somewhere else. Replace it: the
+        # alternative is a stale install that silently disagrees with the clone.
+        try:
+            _unlink_any(destination)
+        except OSError as exc:
+            return "FAILED", f"could not replace existing path: {exc}"
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -165,49 +238,104 @@ def _link_or_copy(source: Path, destination: Path) -> tuple[str, str]:
     else:
         return "LINKED", "updates automatically on git pull"
 
-    try:
-        if os.name == "nt":
-            import subprocess
+    if os.name == "nt":
+        import subprocess
 
-            result = subprocess.run(
-                ["cmd", "/c", "mklink", "/J", str(destination), str(source)],
-                capture_output=True,
-                check=False,
-            )
-            if result.returncode == 0:
-                return "LINKED", "junction, updates automatically on git pull"
+        result = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(destination), str(source)],
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            return "LINKED", "junction, updates automatically on git pull"
+
+    try:
         shutil.copytree(source, destination)
     except OSError as exc:
         return "FAILED", str(exc)
     return "COPIED", "re-run install after a git pull to refresh"
 
 
-def _persona_for(harness: Harness, source: Path) -> str:
-    """Adapt persona frontmatter to the harness that will read it.
+def _split_frontmatter(text: str) -> tuple[dict[str, str], str]:
+    """Return frontmatter fields and the body, tolerating an absent block."""
+    if not text.startswith("---"):
+        return {}, text
+    closing = text.find("\n---", 3)
+    if closing == -1:
+        return {}, text
+    fields: dict[str, str] = {}
+    for line in text[3:closing].splitlines():
+        if ":" in line and not line.lstrip().startswith("#"):
+            key, _, value = line.partition(":")
+            fields[key.strip()] = value.strip()
+    return fields, text[closing + 4 :].lstrip("\n")
 
-    Cursor rules need `.mdc` frontmatter with an `alwaysApply` flag rather than
-    agent metadata, so the body is preserved and the header replaced.
+
+def _persona_for(harness: Harness, source: Path) -> str:
+    """Rebuild the frontmatter for the harness that will read it.
+
+    Every field here was verified against a working installation. Omitting the
+    right one does not raise: the file simply never surfaces, which is the most
+    expensive kind of failure because it looks like success.
     """
     text = source.read_text(encoding="utf-8")
-    if harness is not Harness.CURSOR:
-        return text
+    fields, body = _split_frontmatter(text)
+    name = fields.get("name", "agent-smith")
+    description = fields.get("description", "Agentic-engineering expert and agent factory")
+    model = fields.get("model")
 
-    body = text
-    if text.startswith("---"):
-        closing = text.find("\n---", 3)
-        if closing != -1:
-            body = text[closing + 4 :].lstrip("\n")
-    header = (
-        "---\n"
-        "description: Agentic-engineering expert and agent factory\n"
-        "alwaysApply: false\n"
-        "---\n\n"
-    )
-    return header + body
+    if harness is Harness.CURSOR:
+        # Cursor rules are always-on context, not agents, so agent metadata is
+        # meaningless and alwaysApply is required.
+        return f"---\ndescription: {description}\nalwaysApply: false\n---\n\n{body}"
+
+    if harness is Harness.COPILOT:
+        # Copilot chat modes quote the description and expect a tools array. An
+        # empty array means "inherit whatever the session has".
+        quoted = description.replace("'", "''")
+        return f"---\ndescription: '{quoted}'\ntools: []\n---\n\n{body}"
+
+    if harness is Harness.KILO:
+        # `mode: primary` is what makes an agent appear in the mode selector.
+        # Without it Kilo installs a subagent: invocable by another agent, but
+        # invisible to the user. That was the actual bug behind "it is not a mode".
+        header = [
+            "---",
+            "mode: primary",
+            f"description: {description}",
+            "options:",
+            "  displayName: Agent Smith",
+            f"  id: {name}",
+        ]
+        if model:
+            header.append(f"model: {model}")
+        header.append("---")
+        return "\n".join(header) + "\n\n" + body
+
+    if harness is Harness.CLAUDE:
+        # Claude Code agents declare a tool list. Smith needs to read, search,
+        # write, and run its own CLI, so the set is deliberate rather than
+        # inherited.
+        tools = "Read, Write, Edit, Grep, Glob, Bash, Task, TodoWrite, WebFetch"
+        header = ["---", f"name: {name}", f"description: {description}", f"tools: {tools}"]
+        if model:
+            header.append(f"model: {model}")
+        header.append("---")
+        return "\n".join(header) + "\n\n" + body
+
+    # Goose reads the file as written.
+    return text
 
 
-def install(smith_home: Path, target: Target, *, skills: bool = True) -> list[Action]:
-    """Install the persona, and skills where the harness supports them."""
+def install(
+    smith_home: Path, target: Target, *, skills: bool = True, overwrite: bool = False
+) -> list[Action]:
+    """Install the persona, and skills where the harness supports them.
+
+    ``overwrite`` forces a relink even when the destination already points at the
+    source. Useful after moving the clone, when the existing link is correct by
+    path but stale by intent.
+    """
     actions: list[Action] = []
     label = f"{target.harness}/{target.scope}"
 
@@ -233,14 +361,16 @@ def install(smith_home: Path, target: Target, *, skills: bool = True) -> list[Ac
         return actions
 
     if target.harness.uses_plugins:
-        outcome, detail = _link_or_copy(smith_home, target.plugin_path)
+        outcome, detail = _link_or_copy(smith_home, target.plugin_path, overwrite=overwrite)
         actions.append(Action(label, target.plugin_path, outcome, f"plugin, {detail}"))
         return actions
 
     # File-based harnesses read one directory per skill.
     source_skills = smith_home / "skills"
     for skill in sorted(source_skills.glob("*/SKILL.md")):
-        outcome, detail = _link_or_copy(skill.parent, target.skills_root / skill.parent.name)
+        outcome, detail = _link_or_copy(
+            skill.parent, target.skills_root / skill.parent.name, overwrite=overwrite
+        )
         actions.append(Action(label, target.skills_root / skill.parent.name, outcome, detail))
     return actions
 

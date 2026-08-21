@@ -19,6 +19,10 @@
 .PARAMETER NoLink
     Set up the environment but skip harness installation.
 
+.PARAMETER NoTools
+    Do not auto-install optional tools (just, seeds). Use in CI or on a locked-down
+    machine where installing global tooling is not permitted.
+
 .EXAMPLE
     ./install.ps1
     ./install.ps1 -Scope local
@@ -27,6 +31,7 @@
 param(
     [ValidateSet('global', 'local')][string]$Scope = 'global',
     [switch]$NoLink,
+    [switch]$NoTools,
     [switch]$Force
 )
 
@@ -80,13 +85,75 @@ try {
     exit 1
 } 
 
-# ── 3. optional but recommended: just ────────────────────────────────────────
-Write-Step "Checking just (optional task runner)"
+# ── 3. just, installed automatically when a package manager is available ─────
+# `just` is convenience rather than a requirement, so a failed install is a warning
+# and never blocks. Every recipe also runs as `uv run smith ...`.
+Write-Step "Checking just (task runner)"
 if (Get-Command just -ErrorAction SilentlyContinue) {
     Write-Ok "just present"
+} elseif ($NoTools) {
+    Write-Warn2 "just not found, skipped by -NoTools. Use 'uv run smith ...' instead"
 } else {
-    Write-Warn2 "just not found. Recipes still run via 'uv run smith ...'"
-    Write-Host "  Install: winget install --id Casey.Just  (or cargo install just)" -ForegroundColor DarkGray
+    # winget first: it is present on current Windows and needs no toolchain.
+    # cargo is the fallback for machines that have Rust but not winget.
+    $installers = @(
+        @{ Name = 'winget'; Args = @('install', '--id', 'Casey.Just', '--source', 'winget',
+                                     '--accept-package-agreements', '--accept-source-agreements',
+                                     '--disable-interactivity') },
+        @{ Name = 'scoop';  Args = @('install', 'just') },
+        @{ Name = 'cargo';  Args = @('install', 'just') }
+    )
+    $installed = $false
+    foreach ($candidate in $installers) {
+        if (-not (Get-Command $candidate.Name -ErrorAction SilentlyContinue)) { continue }
+        Write-Warn2 "just not found, installing with $($candidate.Name)"
+        try {
+            & $candidate.Name @($candidate.Args) 2>&1 | Out-Null
+        } catch {
+            Write-Warn2 "$($candidate.Name) failed: $_"
+            continue
+        }
+        # winget updates PATH for future sessions only, so re-read it now.
+        $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' +
+                    [Environment]::GetEnvironmentVariable('PATH', 'User')
+        if (Get-Command just -ErrorAction SilentlyContinue) {
+            Write-Ok "just installed with $($candidate.Name)"
+            $installed = $true
+            break
+        }
+        Write-Warn2 "$($candidate.Name) reported success but just is not yet on PATH"
+    }
+    if (-not $installed) {
+        Write-Warn2 "could not install just automatically. Optional: 'uv run smith ...' works without it"
+    }
+}
+
+# ── 4. seeds, only when a JavaScript runtime already exists ──────────────────
+# Seeds is an optional issue tracker. Installing a runtime to get it would be a
+# large uninvited change, so this only runs when bun or npm is already present.
+Write-Step "Checking seeds (optional issue tracker)"
+if (Get-Command sd -ErrorAction SilentlyContinue) {
+    Write-Ok "seeds present"
+} elseif ($NoTools) {
+    Write-Warn2 "seeds not found, skipped by -NoTools"
+} else {
+    $runtime = @('bun', 'npm') | Where-Object { Get-Command $_ -ErrorAction SilentlyContinue } | Select-Object -First 1
+    if (-not $runtime) {
+        Write-Warn2 "seeds not installed and no bun or npm found. Optional, Smith works without it"
+    } else {
+        Write-Warn2 "seeds not found, installing with $runtime"
+        try {
+            if ($runtime -eq 'bun') { bun install -g '@os-eco/seeds-cli' 2>&1 | Out-Null }
+            else { npm install -g '@os-eco/seeds-cli' 2>&1 | Out-Null }
+        } catch {
+            Write-Warn2 "$runtime failed: $_"
+        }
+        if (Get-Command sd -ErrorAction SilentlyContinue) {
+            Write-Ok "seeds installed with $runtime"
+        } else {
+            Write-Warn2 "could not install seeds automatically. Optional, Smith works without it"
+        }
+    }
 }
 
 # ── 4. self-repair, so a fresh clone is coherent ─────────────────────────────
@@ -114,6 +181,23 @@ if ($NoLink) {
     } else {
         Write-Warn2 "no supported harness directory found"
         Write-Host "  Name one explicitly, for example:  uv run smith install --harness claude" -ForegroundColor Yellow
+    }
+
+    # ── 5b. selectable modes for Kilo and Roo ────────────────────────────────
+    # A mode is a separate mechanism from a persona: it appears in the mode
+    # selector and declares tool groups the editor enforces. Skipping this step
+    # left a fresh clone with no modes at all, which is the bug this fixes.
+    Write-Step "Installing selectable modes (Kilo, Roo)"
+    $modeArgs = @('install-mode', '--force')
+    if ($Scope -eq 'local') { $modeArgs += @('--scope', 'project') }
+
+    $modeOut = & uv run smith @modeArgs 2>&1
+    $modeOk = $LASTEXITCODE -eq 0
+    $modeOut | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+    if ($modeOk) {
+        Write-Ok "modes installed, reload the editor window to see them"
+    } else {
+        Write-Warn2 "no Kilo or Roo installation found, skipping modes"
     }
 }
 

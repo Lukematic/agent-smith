@@ -36,7 +36,9 @@ class TestSchema:
         assert any("slug" in p for p in mode.validate())
 
     def test_missing_role_definition_is_rejected(self) -> None:
-        assert any("roleDefinition" in p for p in Mode(slug="x", name="X", role_definition="").validate())
+        assert any(
+            "roleDefinition" in p for p in Mode(slug="x", name="X", role_definition="").validate()
+        )
 
     def test_unknown_tool_group_is_rejected(self) -> None:
         mode = Mode(slug="x", name="X", role_definition="Y", groups=["read", "telepathy"])
@@ -82,7 +84,13 @@ class TestInstall:
         # The critical case: a tool that installs itself must not delete the modes
         # its user wrote.
         target.path.write_text(
-            yaml.safe_dump({"customModes": [{"slug": "mine", "name": "Mine", "roleDefinition": "R", "groups": ["read"]}]}),
+            yaml.safe_dump(
+                {
+                    "customModes": [
+                        {"slug": "mine", "name": "Mine", "roleDefinition": "R", "groups": ["read"]}
+                    ]
+                }
+            ),
             encoding="utf-8",
         )
         install(Mode(slug="thing", name="Thing", role_definition="Y"), target)
@@ -98,7 +106,9 @@ class TestInstall:
 
     def test_force_updates_in_place_without_duplicating(self, target: ModeTarget) -> None:
         install(Mode(slug="thing", name="Old", role_definition="Y"), target)
-        outcome, _ = install(Mode(slug="thing", name="New", role_definition="Y"), target, force=True)
+        outcome, _ = install(
+            Mode(slug="thing", name="New", role_definition="Y"), target, force=True
+        )
         assert outcome == "UPDATED"
         entries = read_modes(target.path)
         assert len(entries) == 1
@@ -138,7 +148,9 @@ class TestDiscovery:
     def test_status_reports_absence_for_project_scope(self, tmp_path: Path) -> None:
         # Only project targets are asserted: global targets legitimately reflect a
         # real install on the machine running the tests.
-        project = [(t, present) for t, present in status(tmp_path, "agent-smith") if t.scope == "project"]
+        project = [
+            (t, present) for t, present in status(tmp_path, "agent-smith") if t.scope == "project"
+        ]
         assert project
         assert all(not present for _, present in project)
 
@@ -185,3 +197,124 @@ class TestSmithModes:
     def test_home_path_is_embedded_so_files_are_findable(self) -> None:
         modes = build_modes(Path("/opt/custom-smith"))
         assert all("/opt/custom-smith" in m.role_definition for m in modes)
+
+
+class TestIdempotentLinking:
+    """A reinstall must not fail on links it created itself.
+
+    Windows junctions do not report as symlinks, so an is_symlink() check alone
+    missed them and a second install produced 21 FAILED lines. Reinstalling after a
+    git pull is the normal path, so it must be quiet.
+    """
+
+    def test_relinking_the_same_source_is_skipped(self, tmp_path: Path) -> None:
+        from smith.harness import _link_or_copy
+
+        source = tmp_path / "src"
+        source.mkdir()
+        (source / "SKILL.md").write_text("x", encoding="utf-8")
+        destination = tmp_path / "dst"
+
+        first, _ = _link_or_copy(source, destination)
+        assert first in {"LINKED", "COPIED"}
+
+        second, detail = _link_or_copy(source, destination)
+        if first == "LINKED":
+            assert second == "SKIPPED"
+            assert "git pull" in detail
+        else:
+            # A copy cannot be detected as current, so it is refreshed instead.
+            assert second == "COPIED"
+
+    def test_link_pointing_elsewhere_is_replaced(self, tmp_path: Path) -> None:
+        from smith.harness import _link_or_copy
+
+        old = tmp_path / "old"
+        old.mkdir()
+        (old / "marker-old").write_text("x", encoding="utf-8")
+        new = tmp_path / "new"
+        new.mkdir()
+        (new / "marker-new").write_text("x", encoding="utf-8")
+        destination = tmp_path / "dst"
+
+        _link_or_copy(old, destination)
+        outcome, _ = _link_or_copy(new, destination)
+        assert outcome in {"LINKED", "COPIED"}
+        assert (destination / "marker-new").exists()
+        assert not (destination / "marker-old").exists()
+
+
+class TestHarnessFrontmatter:
+    """Each harness needs a different frontmatter shape, and getting it wrong
+    fails silently: the file lands on disk, nothing errors, and the agent never
+    appears. Every assertion here was verified against a real installation.
+    """
+
+    def _persona(self, harness, tmp_path: Path) -> str:
+        from smith.harness import _persona_for
+
+        source = tmp_path / "agent-smith.md"
+        source.write_text(
+            "---\nname: agent-smith\ndescription: Does agentic engineering\n"
+            "model: claude-sonnet-4-5\n---\n\nBody text here.\n",
+            encoding="utf-8",
+        )
+        return _persona_for(harness, source)
+
+    def test_kilo_requires_mode_primary_to_be_selectable(self, tmp_path: Path) -> None:
+        # Without `mode: primary` Kilo installs a subagent: invocable by another
+        # agent but invisible in the mode selector. That was the real bug behind
+        # "it is not a mode".
+        from smith.harness import Harness
+
+        rendered = self._persona(Harness.KILO, tmp_path)
+        assert "mode: primary" in rendered
+        assert "displayName: Agent Smith" in rendered
+
+    def test_claude_declares_tools(self, tmp_path: Path) -> None:
+        from smith.harness import Harness
+
+        rendered = self._persona(Harness.CLAUDE, tmp_path)
+        assert "tools:" in rendered
+        assert "Read" in rendered
+
+    def test_copilot_quotes_description_and_declares_tools(self, tmp_path: Path) -> None:
+        from smith.harness import Harness
+
+        rendered = self._persona(Harness.COPILOT, tmp_path)
+        assert "description: '" in rendered
+        assert "tools: []" in rendered
+
+    def test_cursor_uses_always_apply(self, tmp_path: Path) -> None:
+        from smith.harness import Harness
+
+        rendered = self._persona(Harness.CURSOR, tmp_path)
+        assert "alwaysApply:" in rendered
+        assert "mode:" not in rendered
+
+    def test_body_survives_every_adaptation(self, tmp_path: Path) -> None:
+        from smith.harness import Harness
+
+        for harness in Harness:
+            assert "Body text here." in self._persona(harness, tmp_path)
+
+    def test_kilo_global_root_is_config_kilo(self) -> None:
+        # ~/.kilo is not where Kilo reads global agents. It is ~/.config/kilo, and
+        # the earlier wrong path produced an install that looked successful and
+        # did nothing.
+        from smith.harness import Harness
+
+        assert Harness.KILO.global_root.parts[-2:] == (".config", "kilo")
+
+    def test_copilot_filename_encodes_the_artifact_type(self) -> None:
+        from smith.harness import Harness
+
+        assert Harness.COPILOT.persona_filename.endswith(".chatmode.md")
+
+    def test_only_real_skill_harnesses_claim_skill_support(self) -> None:
+        from smith.harness import Harness
+
+        assert Harness.CLAUDE.supports_skills
+        assert Harness.KILO.supports_skills
+        assert not Harness.CURSOR.supports_skills
+        assert not Harness.COPILOT.supports_skills

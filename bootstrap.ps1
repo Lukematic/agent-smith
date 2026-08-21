@@ -17,15 +17,25 @@
 .NOTES
     Environment overrides:
         SMITH_REPO   repository URL, for a fork
-        SMITH_DIR    clone location, default ~/dev/agent-smith
+        SMITH_DIR    clone location, overrides the default below
         SMITH_REF    branch or tag to check out, default main
+
+    Where it clones, in order:
+        1. -Dir or SMITH_DIR, if given
+        2. ./agent-smith in the current directory, when that is a sensible place
+        3. ~/dev/agent-smith, when the current directory is a home or system root
+
+    Cloning into the current directory is the least surprising default: you ran the
+    command from somewhere deliberately. The fallback exists because dropping a
+    clone into a home directory root or C:\ is not what anyone means.
 #>
 [CmdletBinding()]
 param(
     [string]$Repo = $(if ($env:SMITH_REPO) { $env:SMITH_REPO } else { "https://github.com/Lukematic/agent-smith.git" }),
-    [string]$Dir  = $(if ($env:SMITH_DIR)  { $env:SMITH_DIR }  else { Join-Path $HOME "dev\agent-smith" }),
+    [string]$Dir  = "",
     [string]$Ref  = $(if ($env:SMITH_REF)  { $env:SMITH_REF }  else { "main" }),
-    [switch]$Local
+    [switch]$Local,
+    [switch]$NoTools
 )
 
 $ErrorActionPreference = 'Stop'
@@ -34,6 +44,40 @@ function Step { param([string]$m) Write-Host "==> $m" -ForegroundColor Cyan }
 function Ok   { param([string]$m) Write-Host "  OK    $m" -ForegroundColor Green }
 function Warn { param([string]$m) Write-Host "  WARN  $m" -ForegroundColor Yellow }
 function Bad  { param([string]$m) Write-Host "  FAIL  $m" -ForegroundColor Red }
+
+# ── decide where to clone ────────────────────────────────────────────────────
+function Resolve-CloneDir {
+    param([string]$Requested)
+
+    if ($Requested) { return $Requested }
+    if ($env:SMITH_DIR) { return $env:SMITH_DIR }
+
+    $here = (Get-Location).Path
+
+    # Refuse a few places where a stray clone would be genuinely unwelcome.
+    $unsuitable = @(
+        $HOME,
+        [Environment]::GetFolderPath('MyDocuments'),
+        [Environment]::GetFolderPath('Desktop'),
+        [Environment]::GetFolderPath('UserProfile'),
+        $env:SystemDrive + '\',
+        $env:WINDIR
+    ) | Where-Object { $_ }
+
+    foreach ($bad in $unsuitable) {
+        if ($here.TrimEnd('\') -ieq $bad.TrimEnd('\')) {
+            $fallback = Join-Path $HOME "dev\agent-smith"
+            Warn "current directory is $here, which is not a good place for a clone"
+            Write-Host "  Using $fallback instead. Pass -Dir to choose your own." -ForegroundColor DarkGray
+            return $fallback
+        }
+    }
+
+    return (Join-Path $here "agent-smith")
+}
+
+$Dir = Resolve-CloneDir -Requested $Dir
+
 
 Write-Host ""
 Write-Host "Agent Smith bootstrap" -ForegroundColor White

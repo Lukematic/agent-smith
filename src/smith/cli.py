@@ -340,6 +340,12 @@ def install_command(
     scope: str = typer.Option("global", "--scope", help="global or project"),
     project: bool = typer.Option(False, "--project", help="Shorthand for --scope project"),
     pointer: bool = typer.Option(False, "--pointer", help="Also write an AGENTS.md pointer block"),
+    overwrite: bool = typer.Option(
+        False,
+        "--overwrite",
+        "--force",
+        help="Replace existing links and skills rather than skipping",
+    ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would happen"),
 ) -> None:
     """Install the persona and skills into every harness found on this machine.
@@ -381,7 +387,7 @@ def install_command(
                 where = target.plugin_path if target.harness.uses_plugins else target.skills_root
                 _echo(f"  would link   {where}")
             continue
-        for action in harness.install(smith_home, target):
+        for action in harness.install(smith_home, target, overwrite=overwrite):
             _echo(f"  {action.outcome:<10} {action.path.name}  {action.detail}")
 
     if pointer and not dry_run:

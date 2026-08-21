@@ -231,5 +231,3 @@ class Tidier:
                 item.path.unlink(missing_ok=True)
             removed.append(item.path)
         return removed
-
-

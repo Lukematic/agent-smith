@@ -6,7 +6,7 @@
 
 ## Contents
 
-15 file(s): `__init__.py`, `cli.py`, `enforce.py`, `fair.py`, `fix.py`, `harness.py`, and 9 more
+16 file(s): `__init__.py`, `cli.py`, `enforce.py`, `fair.py`, `fix.py`, `harness.py`, and 10 more
 
 ## Usage
 
