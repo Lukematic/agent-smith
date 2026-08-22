@@ -4,7 +4,7 @@
 #
 # THIS FILE IS THE INDEX. It is always loadable.
 # Chapter BODIES are never preloaded — fetch on demand, max 3 per task.
-# Regenerate with: agent_smith/scripts/registry_build.ps1
+# Refresh and report drift with: smith update
 
 version: 1
 source: book

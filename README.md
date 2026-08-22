@@ -122,6 +122,11 @@ See [docs/install.md](docs/install.md) for pointing any other tool at the person
 and [docs/deployment.md](docs/deployment.md) for why copying causes
 `KNOWLEDGE_FORK`.
 
+If your harness is not detected, open `agents/agent-smith.md` from the clone and
+paste its body into that product's **system prompt**, **custom mode**, or **agent
+instructions** field. The Markdown body is portable; only frontmatter and tool
+permissions are harness-specific. `docs/install.md` lists the known destinations.
+
 ### First five minutes
 
 ```bash
@@ -254,6 +259,7 @@ One rule: **docs live in `docs/`, code in `src/`, nothing loose at the root.**
 | [docs/skills.md](docs/skills.md) | Skills |
 | [docs/harness.md](docs/harness.md) | The Harness |
 | [docs/api-keys.md](docs/api-keys.md) | API Keys and Custom Gateways |
+| [docs/walkthrough-nuclear-engineer.md](docs/walkthrough-nuclear-engineer.md) | How Smith supports a nuclear engineer without pretending to be one |
 ---
 
 ## Principles

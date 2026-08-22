@@ -81,8 +81,9 @@ installs or initializes it without being asked.
 ~/.claude/skills/smith-*/        skills, junctioned to the clone
 ~/.agents/agents/agent-smith.md  persona, if Goose is present
 ~/.agents/plugins/agent-smith/   the whole plugin, linked
-~/.kilo/agent/agent-smith.md     persona, if Kilo is present
-~/.kilo/skills/smith-*/          skills, linked
+~/.config/kilo/agents/agent-smith.md  Kilo primary persona
+~/.config/kilo/skills/smith-*/        Kilo skills, linked
+<VS Code prompts>/agent-smith.chatmode.md  GitHub Copilot chat mode
 ```
 
 Skills are **linked**, not copied, so `git pull` updates the live install with
@@ -107,7 +108,8 @@ by hand.
 ```bash
 smith install --harness claude      # ~/.claude/
 smith install --harness agents      # ~/.agents/
-smith install --harness kilo        # ~/.kilo/
+smith install --harness kilo        # ~/.config/kilo/
+smith install --harness copilot     # VS Code user prompts directory
 smith install --harness cursor      # ~/.cursor/rules/, frontmatter adapted
 ```
 

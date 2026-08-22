@@ -86,8 +86,9 @@ valid outcome — report the resume path.
 ### Step 4: Emit to staging after approval
 
 Write to `.smith/emitted/<agent-name>.md` using
-`.smith/templates/agent.md.tmpl`. Never write directly to `.kilo/agent/` —
-the human promotes.
+`.smith/templates/agent.md.tmpl`. Never write directly into a live harness —
+the human promotes it with `smith install`, which adapts the frontmatter and
+destination for Claude, Kilo, Goose, Cursor, or Copilot.
 
 Frontmatter, exactly:
 
@@ -134,7 +135,9 @@ Paste the output. Any FAIL blocks completion.
 | staged at | .smith/emitted/<name>.md |
 | lint | PASS (n checks) |
 
-**Promote with:** copy to `.kilo/agent/<name>.md`
+**Promote with:** `smith install --harness <target>` after adding the staged
+persona to Smith's source registry. For Kilo, the live global directory is
+`~/.config/kilo/agents/`, not `~/.kilo/agent/`.
 **Grounded in:** chapters/...
 ```
 
