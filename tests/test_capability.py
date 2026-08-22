@@ -38,16 +38,16 @@ class TestProbesAreReal:
     """A probe that cannot fail is not a probe."""
 
     def test_probe_catches_a_missing_capability(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        # The exact scenario that shipped a lie: no agent CLI, but the document
-        # says Smith spawns subagents.
+        # The implementation exists, but a clean CI machine has no runner. That is
+        # a configuration prerequisite, not an absent product capability.
         real = shutil.which
         monkeypatch.setattr(
             shutil, "which", lambda n: None if n in {"claude", "goose", "codex"} else real(n)
         )
         cap = capability.probe_spawn(SmithPaths.discover())
-        assert cap.state is State.ABSENT
+        assert cap.state is State.DEGRADED
         assert not cap.state.claimable
-        assert "cannot spawn" in cap.honest_claim
+        assert "install and authenticate" in cap.limit
 
     def test_probe_confirms_a_present_capability(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(shutil, "which", lambda n: f"/usr/bin/{n}")
@@ -295,14 +295,32 @@ class TestClaimsGate:
     def test_gate_blocks_on_an_unsupported_claim(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from smith import health
 
+        monkeypatch.setitem(
+            capability.CLAIMED_IN_DOCS,
+            "imaginary capability",
+            lambda _paths: capability.Capability(
+                "imaginary capability", State.ABSENT, "no implementation exists"
+            ),
+        )
+        result = health.check_capability_claims(SmithPaths.discover())
+        assert result.blocking
+        assert "imaginary capability" in result.detail
+        assert result.remedy
+
+    def test_missing_optional_runner_warns_but_does_not_fail_ci(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from smith import health
+        from smith.health import Health
+
         real = shutil.which
         monkeypatch.setattr(
             shutil, "which", lambda n: None if n in {"claude", "goose", "codex"} else real(n)
         )
         result = health.check_capability_claims(SmithPaths.discover())
-        assert result.blocking
-        assert "spawns scoped subagents" in result.detail
-        assert result.remedy
+        assert not result.blocking
+        assert result.health is Health.WARN
+        assert "stated limit" in result.detail
 
     def test_gate_passes_when_every_claim_is_backed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from smith import health

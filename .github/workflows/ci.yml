@@ -51,7 +51,17 @@ jobs:
         run: uv run ruff format --check src tests
 
       - name: Tests
-        run: uv run pytest -q
+        # Keep the complete output as an artifact. Public check annotations only
+        # say "exit code 1"; without the report, a failure cannot be diagnosed
+        # from the GitHub UI when job logs require authentication.
+        run: uv run pytest -q --junitxml=test-results-${{ matrix.os }}-py${{ matrix.python }}.xml
+
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}-py${{ matrix.python }}
+          path: test-results-${{ matrix.os }}-py${{ matrix.python }}.xml
 
       - name: Validate authored artifacts
         run: uv run smith validate skills agents
@@ -82,15 +92,16 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
-            pwsh -File ./install.ps1
+            pwsh -File ./install.ps1 -NoLink -NoTools
           else
-            chmod +x ./install.sh && ./install.sh
+            chmod +x ./install.sh && ./install.sh --no-link --no-tools
           fi
 
       - name: Confirm the install is usable
         shell: bash
         run: |
           uv run smith context
-          uv run smith install-status
-          uv run smith mode-status
+          uv run smith route "what is a harness"
+          test "$(uv run smith skills --paths | wc -l)" -ge 10
+          uv run smith limits --claims
 

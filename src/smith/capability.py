@@ -108,13 +108,28 @@ def probe_gate(_paths: SmithPaths) -> Capability:
 
 
 def probe_spawn(_paths: SmithPaths) -> Capability:
-    """The probe that would have caught the original lie."""
+    """Probe the implementation separately from optional runtime readiness.
+
+    ``spawn.py`` is part of Smith and is testable on every machine. The external
+    runner is an adapter selected at runtime. Treating a missing Claude/Goose/Codex
+    executable as an absent *product capability* made the repository fail its own
+    CI on every clean GitHub runner, even though the implementation and its tests
+    were present. That confused "not configured here" with "not implemented".
+
+    A configured runner is REAL. An implemented adapter with no local runner is
+    DEGRADED and must state the prerequisite. ABSENT is reserved for capability
+    code that genuinely does not exist.
+    """
     from smith.spawn import detect_runner
 
     runner, reason = detect_runner()
     if runner.available:
         return _real("spawn scoped subagents", f"via {runner}: {reason}")
-    return _absent("spawn scoped subagents", reason)
+    return _degraded(
+        "spawn scoped subagents",
+        "the scoped delegation implementation is installed",
+        f"{reason}; install and authenticate one runner before spawning",
+    )
 
 
 def probe_self_repair(_paths: SmithPaths) -> Capability:
