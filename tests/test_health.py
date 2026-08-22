@@ -172,7 +172,9 @@ class TestProjectAwareSeeds:
         project.mkdir()
         result = check_seeds(blank, project)
         assert result.health is Health.WARN
-        assert "no .seeds" in result.detail or "not installed" in result.detail
+        assert any(
+            phrase in result.detail for phrase in ("no .seeds", "not installed", "not on PATH")
+        )
 
     def test_legacy_markdown_tracker_warns_instead_of_demanding_deletion(
         self, blank: SmithPaths, tmp_path: Path, monkeypatch
