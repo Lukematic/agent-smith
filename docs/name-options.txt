@@ -1,0 +1,165 @@
+A.W.I.N.O. NAME OPTIONS
+=======================
+
+Purpose
+-------
+Rename the user-facing Agent Smith identity to something original that reflects
+what this project is becoming: a mission-aware working partner that learns the
+user's project, chooses an appropriate workflow, coordinates tools and agents,
+keeps work grounded, and requires evidence before completion.
+
+Recommendation
+--------------
+
+A.W.I.N.O.
+Agentic Workflow Intelligence & Navigation Orchestrator
+
+Why this is the strongest option:
+- Agentic: it can use tools, skills, gates, and scoped subagents.
+- Workflow: it helps move work from idea through discovery, planning, execution,
+  verification, memory, and follow-up.
+- Intelligence: it applies the living engineering registry and project context.
+- Navigation: it identifies the current constraint and chooses the next useful
+  mode instead of forcing one workflow onto every problem.
+- Orchestrator: it coordinates specialists while preserving user control and
+  independent verification.
+
+Short description:
+"A mission-aware workflow partner that helps you understand, plan, execute, and
+verify complex work without losing your intent or overstating its capabilities."
+
+Suggested mode names:
+- A.W.I.N.O.                 Full working partner
+- A.W.I.N.O. Discover        Mission and requirements discovery
+- A.W.I.N.O. Consult         Read-only expert consultation and failure diagnosis
+- A.W.I.N.O. Plan            Research and planning with no implementation access
+- A.W.I.N.O. Research        Evidence, citations, and reproducibility
+
+Other viable expansions
+-----------------------
+
+1. Adaptive Workflow Intelligence & Navigation Operator
+   Tone: practical and adaptive.
+   Strength: emphasizes molding around the user's mission and environment.
+   Weakness: "operator" sounds less collaborative than "orchestrator."
+
+2. Augmented Work Intelligence, Navigation & Orchestration
+   Tone: human augmentation rather than autonomy.
+   Strength: clearly positions the user as decision owner.
+   Weakness: reads more like a platform category than a named partner.
+
+3. Agentic Workbench for Intelligence, Navigation & Orchestration
+   Tone: product/workbench.
+   Strength: fits a future UI with tasks, evidence, artifacts, status, and modes.
+   Weakness: less personal; implies a UI that is not yet the core product.
+
+4. Adaptive Workflows, Insight, Navigation & Outcomes
+   Tone: outcome-focused partner.
+   Strength: emphasizes usefulness to the user rather than agent internals.
+   Weakness: does not communicate delegation or orchestration.
+
+5. Agentic Workflow Interface for Navigation & Operations
+   Tone: infrastructure/tooling.
+   Strength: works if the product becomes a stable interface across harnesses.
+   Weakness: undersells reasoning, evidence, and project learning.
+
+6. Assisted Work Intelligence for Navigation & Optimization
+   Tone: assistant and improvement coach.
+   Strength: aligns with helping the user offload work and improve their process.
+   Weakness: loses explicit agentic workflow coordination.
+
+Recommended migration strategy
+------------------------------
+
+Do not rename every internal path in one large change. That risks breaking working
+installers, modes, commands, links, and existing user configurations.
+
+Phase 1 - Brand only:
+- User-facing name becomes A.W.I.N.O.
+- Repository may remain agent-smith temporarily.
+- Existing `smith` CLI remains operational.
+- Add `awino` as a CLI alias rather than removing `smith`.
+- Mode display names change while old mode slugs remain compatible.
+
+Phase 2 - Compatibility release:
+- New project-local directory can become `.awino/`.
+- Read existing `.smith/` state and migrate only after confirmation.
+- Preserve aliases for `smith`, old mode slugs, and old install paths.
+- Add migration tests on Windows, Linux, macOS, clean install, and upgrade.
+
+Phase 3 - Repository rename, optional:
+- Rename GitHub repository only after documentation and installers accept both URLs.
+- GitHub redirects old clone and web URLs, but installer and update tests should
+  still verify the transition.
+
+This incremental approach follows the project's own harness principle: make the
+new path easy without breaking users who already took the old path.
+
+REMOTE REVIEW AND NOTIFICATIONS
+===============================
+
+What works while away from the computer
+---------------------------------------
+
+1. GitHub email notifications
+   Enable repository notifications for:
+   - Actions failures
+   - Issues and pull requests
+   - Releases
+
+   GitHub will email CI failures. The email contains a link to the failing run.
+
+2. Replying by email
+   You can often reply to an issue or pull-request notification email and GitHub
+   will add the reply as a comment. This depends on the notification type.
+
+   You generally cannot reply to a GitHub Actions failure email with commands that
+   automatically fix and push code. Actions failure emails are notifications, not
+   a remote-control channel.
+
+3. Best mobile workflow
+   Use the GitHub mobile app or website:
+   - Open an issue in Lukematic/agent-smith.
+   - Describe the problem or requested change.
+   - Comment on an existing issue with approval, clarification, or priorities.
+   - Inspect Actions and rerun an allowed workflow.
+
+4. A safe future remote-control pattern
+   Agent Smith could add an issue-command workflow with an explicit allowlist:
+
+     /awino diagnose-ci
+     /awino prepare-fix
+     /awino update-sources
+
+   The workflow should:
+   - accept commands only from approved GitHub usernames;
+   - run in a restricted environment;
+   - never expose repository or provider secrets to model context;
+   - create a pull request rather than pushing directly to main;
+   - attach tests, logs, and gate evidence;
+   - require human approval before merge.
+
+   Email could then be used indirectly: reply to an issue email with a permitted
+   command, which becomes a GitHub comment and triggers the restricted workflow.
+
+5. Recommended first implementation
+   Start with read-only remote commands:
+   - `/awino status`
+   - `/awino diagnose-ci`
+   - `/awino source-drift`
+
+   Do not begin with autonomous code changes. Once read-only commands are reliable,
+   add `/awino prepare-fix`, which may open a pull request but may not merge it.
+
+Decision requested
+------------------
+
+Recommended brand:
+
+A.W.I.N.O. - Agentic Workflow Intelligence & Navigation Orchestrator
+
+Recommended first release change:
+- Change display name and documentation.
+- Keep `smith` as a compatibility command.
+- Add `awino` as an alias.
+- Keep old paths until migration is independently tested.
