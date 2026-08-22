@@ -487,13 +487,22 @@ class Plan:
     constraint: ConstraintVerdict
     verifier: VerifierVerdict
     anti_patterns: list[AntiPatternHit]
+    pre_execution: bool = False
 
     @property
     def next_action(self) -> str:
         if self.rung.misaligned:
             return f"Reframe first. {self.rung.advice}"
-        if self.anti_patterns:
-            first = self.anti_patterns[0]
+        # OPEN_LOOP is expected before implementation: there is no output to
+        # verify yet. Treating it as the first action made planning impossible in
+        # every new project ("fix verification before you understand the work").
+        actionable = [
+            hit
+            for hit in self.anti_patterns
+            if not (self.pre_execution and hit.pattern is AntiPattern.OPEN_LOOP)
+        ]
+        if actionable:
+            first = actionable[0]
             return f"Fix {first.pattern} before proceeding: {first.fix}"
         if not self.constraint.parallelisable:
             return self.constraint.advice
@@ -527,6 +536,7 @@ def build_plan(
     knowledge_age_days: int | None = None,
     stale_after_days: int = 14,
     human_inspected_recently: bool = True,
+    pre_execution: bool = False,
 ) -> Plan:
     rung = detect_rung(request)
     verifier = assess_verifier(task_class, evidence)
@@ -548,4 +558,5 @@ def build_plan(
         constraint=constraint,
         verifier=verifier,
         anti_patterns=anti_patterns,
+        pre_execution=pre_execution,
     )

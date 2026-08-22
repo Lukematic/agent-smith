@@ -156,8 +156,8 @@ class TestDiscovery:
 
 
 class TestSmithModes:
-    def test_three_modes_are_built(self) -> None:
-        assert len(build_modes(Path("/tmp/smith"))) == 3
+    def test_five_modes_are_built(self) -> None:
+        assert len(build_modes(Path("/tmp/smith"))) == 5
 
     def test_all_are_schema_valid(self) -> None:
         for mode in build_modes(Path("/tmp/smith")):
@@ -173,6 +173,19 @@ class TestSmithModes:
         plan = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "agent-smith-plan")
         edit = next(g for g in plan.groups if isinstance(g, list) and g[0] == "edit")
         assert "md" in edit[1]["fileRegex"]
+        assert "command" not in plan.groups
+
+    def test_discover_mode_is_read_only(self) -> None:
+        mode = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "agent-smith-discover")
+        assert "edit" not in mode.groups
+        assert "command" not in mode.groups
+        assert "one unresolved question" in mode.custom_instructions
+
+    def test_research_mode_loads_evidence_and_reproducibility(self) -> None:
+        mode = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "agent-smith-research")
+        assert "smith-evidence" in mode.custom_instructions
+        assert "smith-reproducibility" in mode.custom_instructions
+        assert "edit" not in mode.groups
 
     def test_full_mode_can_edit(self) -> None:
         full = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "agent-smith")

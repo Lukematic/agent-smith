@@ -14,6 +14,8 @@ sources:
     repo: agentic-engineering-book
     ref: main
     role: primary
+    license: CC-BY-NC-SA-4.0
+    attribution: Jaymin West and contributors
     description: >
       Living practitioner book on agentic engineering. Updated ~daily via a
       sync bot. The canonical source for prompt/model/context/tool-use/harness/
@@ -40,6 +42,8 @@ sources:
     repo: overstory
     ref: main
     role: reference
+    license: MIT
+    attribution: Jaymin West
     description: >
       Concrete agent definitions for a swarm system - orchestrator, coordinator,
       lead, builder, reviewer, scout, merger, monitor. Source of the named
@@ -54,6 +58,8 @@ sources:
     repo: warren
     ref: main
     role: reference
+    license: MIT
+    attribution: Jaymin West
     description: >
       Agent-as-workload infrastructure. Source of the four-sides-of-an-agent
       model (mind / memory / worklist / body), envelope schema, per-agent tool
@@ -68,6 +74,8 @@ sources:
     repo: seeds
     ref: main
     role: tooling
+    license: MIT
+    attribution: Jaymin West
     description: Git-native issue tracker. Smith uses sd for all worklists.
     raw_base: https://raw.githubusercontent.com/jayminwest/seeds/main/
 

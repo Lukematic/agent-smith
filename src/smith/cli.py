@@ -15,7 +15,18 @@ from pathlib import Path
 
 import typer
 
-from smith import capability, fix, harness, health, mission, models, modes, seeds, spawn
+from smith import (
+    capability,
+    fix,
+    harness,
+    health,
+    mission,
+    models,
+    modes,
+    onboarding,
+    seeds,
+    spawn,
+)
 from smith.enforce import (
     CONTRACTS,
     Gate,
@@ -514,24 +525,45 @@ def install_mode_command(
 def mode_status_command() -> None:
     """Show where the Smith modes are installed."""
     workspace = _workspace()
-    rows = modes.status(workspace.project.root, "agent-smith")
-    installed = [t for t, present in rows if present]
+    expected = [mode.slug for mode in modes.build_modes(workspace.home.root)]
+    rows = {slug: modes.status(workspace.project.root, slug) for slug in expected}
+    installed_targets: dict[tuple[str, str, str], list[str]] = {}
+    missing_targets: dict[tuple[str, str, str], list[str]] = {}
+    for slug, statuses in rows.items():
+        for target, present in statuses:
+            if not (target.exists or target.parent_exists):
+                continue
+            key = (target.label, target.scope, str(target.path))
+            bucket = installed_targets if present else missing_targets
+            bucket.setdefault(key, []).append(slug)
 
-    if installed:
+    if installed_targets:
         _echo("INSTALLED")
-        for target in installed:
-            _echo(f"  {target.label:<14} {target.scope:<8} {target.path}")
+        for (label, scope, path), slugs in installed_targets.items():
+            _echo(f"  {label:<14} {scope:<8} {len(slugs)}/{len(expected)} modes  {path}")
+            for slug in slugs:
+                _echo(f"      + {slug}")
     else:
         _echo("No Smith mode installed. Run: smith install-mode")
 
-    absent = [t for t, present in rows if not present and (t.exists or t.parent_exists)]
-    if absent:
+    globally_complete = {
+        label
+        for (label, scope, _path), slugs in installed_targets.items()
+        if scope == "global" and set(slugs) == set(expected)
+    }
+    incomplete = {
+        key: slugs
+        for key, slugs in missing_targets.items()
+        if slugs and not (key[1] == "project" and key[0] in globally_complete)
+    }
+    if incomplete:
         _echo("")
-        _echo("EDITOR PRESENT BUT MODE ABSENT")
-        for target in absent:
-            _echo(f"  {target.label:<14} {target.scope:<8} {target.path}")
+        _echo("EDITOR PRESENT BUT MODES INCOMPLETE")
+        for (label, scope, path), slugs in incomplete.items():
+            _echo(f"  {label:<14} {scope:<8} missing {', '.join(slugs)}")
+            _echo(f"      {path}")
         _echo("")
-        _echo("  smith install-mode")
+        _echo("  smith install-mode --force")
 
 
 @app.command("install-status")
@@ -636,6 +668,7 @@ def plan_command(
         knowledge_age_days=store.manifest.newest_age_days,
         stale_after_days=store.stale_days,
         human_inspected_recently=inspected,
+        pre_execution=resolved is None,
     )
 
     _echo(f"REQUEST  {request}")
@@ -663,9 +696,14 @@ def plan_command(
         _echo(f"  because {reason}")
     _echo("")
 
-    if plan.anti_patterns:
+    visible_anti_patterns = [
+        hit
+        for hit in plan.anti_patterns
+        if not (plan.pre_execution and hit.pattern is models.AntiPattern.OPEN_LOOP)
+    ]
+    if visible_anti_patterns:
         _echo("ANTI-PATTERNS")
-        for hit in plan.anti_patterns:
+        for hit in visible_anti_patterns:
             _echo(f"  {hit.pattern}: {hit.evidence}")
             _echo(f"    -> {hit.fix}")
         _echo("")
@@ -802,6 +840,11 @@ def fix_command(
 def doctor(
     fast: bool = typer.Option(False, "--fast", help="Skip lint, format, and tests"),
     as_json_output: bool = typer.Option(False, "--json", help="Machine-readable output"),
+    setup_project: bool = typer.Option(
+        False,
+        "--setup",
+        help="Offer/initialize optional project tooling such as Seeds after explicit confirmation.",
+    ),
     record: bool = typer.Option(
         False, "--record", help="Record the verdict against the current run"
     ),
@@ -814,6 +857,22 @@ def doctor(
     """
     paths = _paths()
     results = health.run_all(paths, fast=fast)
+    # The standard health suite checks Smith's own installation. Seeds belongs to
+    # the project being worked on, so replace that one result with a project-aware
+    # check rather than reporting the parent workspace's tracker.
+    workspace = _workspace()
+    if setup_project:
+        tracker = seeds.Seeds(workspace.project.root)
+        state, reason = tracker.state()
+        if not state.usable:
+            _echo(f"SEEDS  {reason}")
+            if tracker.installed and typer.confirm(
+                "Initialize the optional Seeds tracker in this project?", default=False
+            ):
+                result = tracker.init(confirmed=True)
+                _echo(f"  {'OK' if result.ok else 'FAILED'}  {result.detail}")
+    project_seeds = health.check_seeds(paths, workspace.project.root)
+    results = [project_seeds if result.name == "seeds" else result for result in results]
 
     if as_json_output:
         _echo(health.as_json(results))
@@ -1054,6 +1113,121 @@ def mission_command(
     _echo("HOW SMITH WILL CALIBRATE")
     for item in found.advice():
         _echo(f"  - {item}")
+
+
+@app.command("onboard")
+def onboard_command(
+    set_value: list[str] = typer.Option(
+        None,
+        "--set",
+        help="Confirm a field as key=value. Repeatable; list fields use semicolons.",
+    ),
+    confirm: bool = typer.Option(
+        False,
+        "--confirm",
+        help="Persist the current draft after all required fields are present.",
+    ),
+    init_seeds: bool = typer.Option(
+        False,
+        "--with-seeds",
+        help="Initialize the optional Seeds tracker after explicit confirmation.",
+    ),
+    as_json_output: bool = typer.Option(False, "--json", help="Machine-readable output"),
+) -> None:
+    """Run the mission-first project handshake.
+
+    This is the canonical first command in a new repository. It composes context,
+    mission, project intent, toolchain, tracker state, and next skill selection so
+    the user does not have to know six separate commands or their order.
+    """
+    workspace = _workspace()
+    project = workspace.project.root
+    tracker = seeds.Seeds(project)
+    found = mission.discover(project, tracker=tracker)
+    intent = onboarding.load(project) or onboarding.seed_from_mission(found)
+
+    for assignment in set_value or []:
+        if "=" not in assignment:
+            _echo(f"INVALID --set {assignment!r}; expected key=value")
+            raise typer.Exit(2)
+        key, _, value = assignment.partition("=")
+        try:
+            onboarding.apply(intent, key.strip(), value)
+        except ValueError as exc:
+            _echo(str(exc))
+            raise typer.Exit(2) from exc
+
+    # Persist partial answers after every turn. Without this, the command asks one
+    # question at a time but forgets each answer before the next invocation—the
+    # exact opposite of mission-first onboarding.
+    if set_value:
+        onboarding.save(project, intent)
+
+    questions = onboarding.frontier(intent)
+
+    if confirm:
+        if questions:
+            _echo(
+                f"REFUSED  unresolved fields: {', '.join(question.key for question in questions)}"
+            )
+            _echo("Answer one at a time with: smith onboard --set key=value")
+            raise typer.Exit(1)
+        intent.source = "confirmed"
+        saved = onboarding.save(project, intent)
+    else:
+        saved = None
+
+    state, tracker_reason = tracker.state()
+    if init_seeds and not state.usable:
+        result = tracker.init(confirmed=True)
+        state, tracker_reason = tracker.state()
+        if not result.ok:
+            _echo(f"SEEDS FAILED  {result.detail}")
+
+    if as_json_output:
+        _echo(onboarding.as_json(intent, questions))
+        return
+
+    _echo("IDENTITY")
+    _echo(f"  smith home  {workspace.home.root}")
+    _echo(f"  project     {project}")
+    _echo("")
+    _echo("MISSION DRAFT")
+    _echo(f"  {intent.mission or '(unknown)'}")
+    _echo(f"  source: {intent.source}")
+    _echo(f"  project kind: {found.kind} — {found.kind.expectations}")
+    if intent.non_goals:
+        _echo("  non-goals:")
+        for item in intent.non_goals:
+            _echo(f"    - {item}")
+    _echo("")
+
+    chain = Toolchain(project)
+    _echo("TOOLCHAIN")
+    for name, tool in chain.summary().items():
+        _echo(f"  {name:<8} {tool.command or 'unavailable'}")
+        _echo(f"           because {tool.reason}")
+    _echo("")
+    _echo(f"TRACKER   {state} ({tracker_reason})")
+    if not state.usable:
+        _echo("          optional: smith onboard --with-seeds")
+
+    if saved:
+        _echo("")
+        _echo(f"CONFIRMED  {saved}")
+        _echo('NEXT       smith plan "<your first concrete task>"')
+        return
+
+    _echo("")
+    if questions:
+        question = questions[0]
+        _echo("NEXT QUESTION")
+        _echo(f"  {question.prompt}")
+        _echo(f"  Why: {question.why}")
+        _echo(f'  Answer: smith onboard --set {question.key}="<your answer>"')
+    else:
+        _echo("READY TO CONFIRM")
+        _echo("  smith onboard --confirm")
 
 
 @app.command("limits")

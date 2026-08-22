@@ -132,7 +132,18 @@ class Toolchain:
     @property
     def active_venv(self) -> Path | None:
         value = os.environ.get("VIRTUAL_ENV") or os.environ.get("CONDA_PREFIX")
-        return Path(value) if value else None
+        if not value:
+            return None
+        candidate = Path(value).resolve()
+        try:
+            candidate.relative_to(self.root.resolve())
+        except ValueError:
+            # Smith itself normally runs from its own uv environment. Treating
+            # that as the target project's environment caused sparse projects to
+            # inherit Smith's .venv and fall back to pip. Only an environment
+            # inside the target project is evidence about that project.
+            return None
+        return candidate
 
     # ── dependency manager ───────────────────────────────────────────────────
     @cached_property
@@ -163,6 +174,13 @@ class Toolchain:
             return Manager.HATCH, "[tool.hatch] declared in pyproject and hatch is installed"
         if self.has("environment.yml", "environment.yaml") and _have("conda"):
             return Manager.CONDA, "a conda environment file is present"
+
+        # For an uninitialized Python project with a pyproject, uv is the safest
+        # default when available: it creates an isolated environment and lockfile
+        # instead of installing into the system interpreter. Existing lockfiles
+        # and declared managers above always win.
+        if self.has("pyproject.toml") and _have("uv"):
+            return Manager.UV, "Python project has no manager yet; defaulting to available uv"
 
         if self.active_venv:
             return Manager.VENV, f"an environment is already active at {self.active_venv.name}"

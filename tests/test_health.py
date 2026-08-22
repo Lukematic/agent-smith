@@ -11,7 +11,14 @@ from pathlib import Path
 import pytest
 
 from smith import health
-from smith.health import Health, check_docs, check_justfile_shim, check_memory, check_pyproject
+from smith.health import (
+    Health,
+    check_docs,
+    check_justfile_shim,
+    check_memory,
+    check_pyproject,
+    check_seeds,
+)
 from smith.paths import SmithPaths
 
 
@@ -155,3 +162,31 @@ class TestReporting:
         for result in health.run_all(real, fast=True):
             if result.health is not Health.OK:
                 assert result.remedy, f"{result.name} has no remedy"
+
+
+class TestProjectAwareSeeds:
+    def test_project_root_does_not_inherit_smith_homes_tracker(
+        self, blank: SmithPaths, tmp_path: Path
+    ) -> None:
+        project = tmp_path / "separate-project"
+        project.mkdir()
+        result = check_seeds(blank, project)
+        assert result.health is Health.WARN
+        assert "no .seeds" in result.detail or "not installed" in result.detail
+
+    def test_legacy_markdown_tracker_warns_instead_of_demanding_deletion(
+        self, blank: SmithPaths, tmp_path: Path, monkeypatch
+    ) -> None:
+        from smith import seeds as seeds_module
+
+        project = tmp_path / "project"
+        (project / "tasks").mkdir(parents=True)
+        (project / "tasks" / "todo.md").write_text("- [ ] old work\n", encoding="utf-8")
+
+        monkeypatch.setattr(
+            seeds_module.Seeds, "state", lambda self: (seeds_module.SeedsState.READY, "ready")
+        )
+        result = check_seeds(blank, project)
+        assert result.health is Health.WARN
+        assert "legacy" in result.detail
+        assert "archive" in result.remedy

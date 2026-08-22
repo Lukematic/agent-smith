@@ -163,8 +163,8 @@ Write-Host "Smith lives at: $Dir" -ForegroundColor White
 Write-Host "Update it with: cd $Dir; git pull" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "First commands, in any project:" -ForegroundColor White
-Write-Host "  smith context     what Smith thinks home and project are"
-Write-Host "  smith mission     what Smith thinks the project is for"
+Write-Host "  smith onboard     mission, user, goals, tenets, expectations"
+Write-Host "  smith plan        choose the right engineering rung and next step"
 Write-Host "  smith doctor      health, with remedies"
 Write-Host ""
 

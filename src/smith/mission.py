@@ -32,7 +32,13 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
-AGENT_INSTRUCTION_FILES = ("AGENTS.md", "CLAUDE.md", ".goosehints", ".cursorrules", "GEMINI.md")
+AGENT_INSTRUCTION_FILES = (
+    "AGENTS.md",
+    "CLAUDE.md",
+    "GEMINI.md",
+    ".goosehints",
+    ".cursorrules",
+)
 MISSION_HEADINGS = (
     "mission",
     "purpose",

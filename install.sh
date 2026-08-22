@@ -189,10 +189,10 @@ fi
 printf "${GREEN}INSTALL COMPLETE${NC}\n"
 echo
 echo "Next:"
-echo "  In an agent session:  @agent-smith what is a harness?"
-echo "  Health check:         uv run smith doctor"
-echo "  Available skills:     uv run smith skills"
-echo "  Open a gated run:     uv run smith gate open code-change \"objective\" --scope path"
+echo "  In your project:      smith onboard"
+echo "  Then plan work:       smith plan \"<your task>\""
+echo "  Health check:         smith doctor"
+echo "  Available skills:     smith skills"
 echo
 
 

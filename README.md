@@ -94,14 +94,16 @@ smith doctor             # every project gate
 
 ### Modes, for Kilo and Roo
 
-Three modes appear in the selector, split by **capability** rather than topic, so
-the restriction is enforced by the editor instead of requested in prose:
+Five modes appear in the selector. Capability boundaries come first; two focused
+specialists then compose the appropriate bundled skills:
 
 | Mode | Tools | Structurally cannot |
 | --- | --- | --- |
 | 🕶️ Agent Smith | read, edit, command, mcp | — |
 | 🕶️ Smith Consult | read, mcp | edit, so a consult stays a consult |
-| 🕶️ Smith Plan | read, **Markdown-only** edit, command, mcp | become an implementation session |
+| 🕶️ Smith Plan | read, **Markdown-only** edit, mcp | execute commands or implementation edits |
+| 🕶️ Smith Discover | read, mcp | implement before mission confirmation |
+| 🕶️ Smith Research | read, mcp | release unsupported factual synthesis |
 
 ```bash
 smith install-mode                  # every detected editor
@@ -131,7 +133,7 @@ permissions are harness-specific. `docs/install.md` lists the known destinations
 
 ```bash
 smith context     # what Smith thinks home and project are
-smith mission     # what Smith thinks this project is for
+smith onboard     # mission, user, goals, tenets, expectations, success
 smith doctor      # health, with a remedy per finding
 smith work        # tracked work, if a tracker exists
 ```
@@ -260,6 +262,7 @@ One rule: **docs live in `docs/`, code in `src/`, nothing loose at the root.**
 | [docs/harness.md](docs/harness.md) | The Harness |
 | [docs/api-keys.md](docs/api-keys.md) | API Keys and Custom Gateways |
 | [docs/walkthrough-nuclear-engineer.md](docs/walkthrough-nuclear-engineer.md) | How Smith supports a nuclear engineer without pretending to be one |
+| [docs/credits-and-sources.md](docs/credits-and-sources.md) | Credits and Sources |
 ---
 
 ## Principles

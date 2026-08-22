@@ -376,7 +376,7 @@ def check_capability_claims(paths: SmithPaths) -> Result:
     return _ok("capability_claims", f"{len(rows)} documented claims all backed by a passing probe")
 
 
-def check_seeds(paths: SmithPaths) -> Result:
+def check_seeds(paths: SmithPaths, project_root: Path | None = None) -> Result:
     """A worklist should exist and must not be duplicated.
 
     Seeds is **optional**. Smith runs in repositories it does not own, so an
@@ -386,17 +386,18 @@ def check_seeds(paths: SmithPaths) -> Result:
     """
     from smith.seeds import Seeds, SeedsState
 
-    seeds = Seeds(paths.root)
+    root = project_root or paths.root
+    seeds = Seeds(root)
     state, reason = seeds.state()
 
-    tasks_dir = paths.root / "tasks"
+    tasks_dir = root / "tasks"
     markdown_lists = list(tasks_dir.glob("todo.md")) if tasks_dir.is_dir() else []
 
     if state is SeedsState.READY and markdown_lists:
-        return _fail(
+        return _warn(
             "seeds",
-            "both a seeds tracker and a markdown todo exist, so neither is authoritative",
-            "delete the markdown list and use sd only",
+            "both a seeds tracker and a legacy markdown todo exist; Seeds is authoritative",
+            "migrate the legacy list into Seeds, then archive it after human review",
         )
 
     if state is SeedsState.READY:

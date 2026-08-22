@@ -236,8 +236,11 @@ One mode per turn. Announce it. Load only that skill, and record it:
 
 | Trigger | Skill | What it does |
 | --- | --- | --- |
+| raw idea, sparse repo, unclear mission | `smith-discover` | one-question-at-a-time mission and requirements handshake |
 | "what is X", "how should I do X" | `smith-consult` | grounded answer, ≤3 files, every claim cited |
 | "my agent does X wrong" | `smith-triage` | named mode, surface, structural fix, recurrence block |
+| factual research, RAG, scientific synthesis | `smith-evidence` | evidence sufficiency and citation release gate |
+| scientific/data/agent pipeline | `smith-reproducibility` | run IDs, snapshots, config/prompt versions, audit trail |
 | complex multi-file change | `smith-rpi` | research → plan → implement, one goal per session |
 | needs many attempts, has a gate | `smith-ralph` | fresh context per iteration, cross-model review |
 | independent parallel work | `smith-delegate` | disjoint ownership, verified independently |
@@ -256,6 +259,7 @@ smith gate skill <name>         # record that you used it, so usage is auditable
 
 ```
 1-2 files, well understood?          -> direct edit, no ceremony
+Mission or product intent unclear?   -> smith-discover / smith onboard
 Do not understand it yet?            -> smith-rpi research, then STOP for review
 Machine-checkable gate, many tries?  -> smith-ralph
 Single ordered pass?                 -> smith-rpi plan then implement

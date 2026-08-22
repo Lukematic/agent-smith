@@ -5,8 +5,8 @@ description: Dual-write memory discipline for Agent Smith - stores durable rules
 
 # Smith Memory
 
-Two stores, deliberately. The Memory MCP extension gives **recall** — goose loads
-saved memories at session start and includes them in every prompt. Files give
+Two stores, deliberately. When the active harness provides a Memory MCP extension,
+it gives **recall** by loading saved memories into context. Files give
 **audit** — dates, supersessions, and history that a key-value cache cannot hold.
 
 **Rule: every `remember_memory` call is mirrored to a file. If the two disagree,

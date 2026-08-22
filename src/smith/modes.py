@@ -254,12 +254,12 @@ def _read(path: Path) -> str:
 
 
 def build_modes(smith_home: Path) -> list[Mode]:
-    """Three modes, split by tool restriction rather than by topic.
+    """Modes split first by capability boundary, then by specialist purpose.
 
-    The split is the point. `agent-smith-ask` cannot edit, so it cannot quietly
-    "fix" something while answering a question. `agent-smith-plan` can write only
-    Markdown, so a planning session cannot become an implementation session. That is
-    capability minimization enforced by the editor rather than requested in prose.
+    The split is the point. `agent-smith-ask`, `agent-smith-discover`, and
+    `agent-smith-research` cannot edit. `agent-smith-plan` can write only Markdown
+    and has no command group. That is capability minimization enforced by the
+    editor rather than requested in prose.
 
     ``roleDefinition`` stays short on purpose. It is resident in context on every
     turn, so embedding the whole persona would duplicate the constitution and pay
@@ -382,12 +382,58 @@ def build_modes(smith_home: Path) -> list[Mode]:
                 "execute it.\n\n"
                 "Stop after the plan and hand off. Do not implement."
             ),
+            # No command group: Markdown-only editor permissions are not a real
+            # planning boundary if an unrestricted shell can mutate anything.
             groups=[
                 "read",
                 ["edit", {"fileRegex": r"\.(md|markdown)$", "description": "Markdown only"}],
-                "command",
                 "mcp",
             ],
+        ),
+        Mode(
+            slug="agent-smith-discover",
+            name="🕶️ Smith Discover",
+            role_definition=(
+                role + "\n\nIn this mode you are a mission and requirements partner. You listen, "
+                "reflect decisions back, ask one unresolved frontier question at a time, "
+                "and never implement."
+            ),
+            when_to_use=(
+                "Use when a user has a raw idea, a sparse repository, or no confirmed mission. "
+                "Captures the primary user, goals, tenets, expectations, non-goals, and success "
+                "metric before architecture or implementation."
+            ),
+            description="Mission and requirements discovery without implementation",
+            custom_instructions=(
+                shared + "\nLoad `smith-discover`. Run `smith onboard`, reflect the mission draft "
+                "and its evidence, then ask exactly one unresolved question. Persist answers "
+                "with `smith onboard --set key=value`. Do not produce a spec until "
+                "`.smith/project.yaml` is confirmed. If a question needs something to react "
+                "to, propose the smallest throwaway prototype instead of continuing to ask."
+            ),
+            groups=["read", "mcp"],
+        ),
+        Mode(
+            slug="agent-smith-research",
+            name="🕶️ Smith Research",
+            role_definition=(
+                role + "\n\nIn this mode you design and audit source-grounded research workflows. "
+                "You do not release synthesis whose evidence gate has not passed."
+            ),
+            when_to_use=(
+                "Use for scientific research assistants, RAG, literature review, evidence "
+                "synthesis, citation audits, or reproducible data and agent pipelines."
+            ),
+            description="Evidence-grounded research and reproducibility specialist",
+            custom_instructions=(
+                shared + "\nLoad `smith-evidence` before factual synthesis and "
+                "`smith-reproducibility` before pipeline design. Every released factual claim "
+                "maps to inspectable source IDs. Label abstract-only evidence. Capture run IDs, "
+                "input and config snapshots, prompt/model versions, retries, and errors. The "
+                "domain expert approves scientific interpretation; you provide the structure, "
+                "provenance, and gates."
+            ),
+            groups=["read", "mcp"],
         ),
     ]
 

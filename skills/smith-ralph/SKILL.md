@@ -29,7 +29,8 @@ iterations of two models is `UNBOUNDED_SPEND`.
 
 ## State contract
 
-All state in `.goose/ralph/`. Nothing else survives an iteration.
+All state in `.smith/ralph/`. Nothing else survives an iteration. The state path
+belongs to Agent Smith, not to whichever harness happens to invoke it.
 
 | File | Purpose |
 | --- | --- |
@@ -70,13 +71,13 @@ independent perspective that is the point.
 
 ## Work phase contract
 
-1. `cat .goose/ralph/task.md` — the task
-2. `cat .goose/ralph/iteration.txt`
-3. `cat .goose/ralph/review-feedback.txt` — **if this exists, address it first**
+1. `cat .smith/ralph/task.md` — the task
+2. `cat .smith/ralph/iteration.txt`
+3. `cat .smith/ralph/review-feedback.txt` — **if this exists, address it first**
 4. List existing files; read before modifying
 5. Make meaningful incremental progress; run verification
-6. `echo "<what I did>" > .goose/ralph/work-summary.txt` — always
-7. `echo done > .goose/ralph/work-complete.txt` — only if genuinely complete
+6. `echo "<what I did>" > .smith/ralph/work-summary.txt` — always
+7. `echo done > .smith/ralph/work-complete.txt` — only if genuinely complete
 8. If truly stuck, write `RALPH-BLOCKED.md` with what was tried and why
 
 Ignoring existing feedback and redoing prior work is `FEEDBACK_IGNORED` — the
@@ -99,10 +100,10 @@ to end the loop is `REVIEW_THEATER`; blocking on formatting is `NITPICK_BLOCK`.
 Output exactly one:
 
 ```bash
-echo "SHIP" > .goose/ralph/review-result.txt
+echo "SHIP" > .smith/ralph/review-result.txt
 # or
-echo "REVISE" > .goose/ralph/review-result.txt
-echo "<specific, actionable feedback>" > .goose/ralph/review-feedback.txt
+echo "REVISE" > .smith/ralph/review-result.txt
+echo "<specific, actionable feedback>" > .smith/ralph/review-feedback.txt
 ```
 
 `REVISE` with vague feedback wastes an entire iteration. Name the file, the
@@ -123,7 +124,7 @@ stop and escalate — that is the three-strikes rule.
 ## Reset
 
 ```bash
-rm -rf .goose/ralph
+rm -rf .smith/ralph
 ```
 
 ## Reporting

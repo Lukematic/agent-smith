@@ -95,8 +95,8 @@ echo "Smith lives at: $DIR"
 echo "Update it with: cd $DIR && git pull"
 echo
 echo "First commands, in any project:"
-echo "  smith context     what Smith thinks home and project are"
-echo "  smith mission     what Smith thinks the project is for"
+echo "  smith onboard     mission, user, goals, tenets, expectations"
+echo "  smith plan        choose the right engineering rung and next step"
 echo "  smith doctor      health, with remedies"
 echo
 

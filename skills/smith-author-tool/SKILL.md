@@ -60,8 +60,8 @@ Search and report, in order:
 
 1. `$SMITH/emitted/` — did we build it already?
 2. `$SMITH_SKILL_LIBRARY` — the local library
-3. Built-in goose skills (`web-search` ships by default) and existing extensions
-4. Installed plugins — `goose plugin` list
+3. Built-in skills and extensions exposed by the active harness
+4. Installed harness plugins or extension inventory
 5. Registry `reference_configs` — the book ships real examples
 
 Existing capability at ≥70% → adapt it. A near-duplicate is `DUPLICATE_TOOL`.

@@ -16,7 +16,7 @@ Format:
 
 ## Rules
 
-- [2026-08-21] `KNOWLEDGE_FORK` — install Agent Smith once as a global git-backed plugin at `~/.agents/plugins/agent-smith/`. Repos get a `.goosehints` pointer, never a copy. (surface: context)
+- [2026-08-21] `KNOWLEDGE_FORK` — install Agent Smith once at user scope using the active harness integration. Repositories get only a minimal pointer, never a private copy of Smith's knowledge base. (surface: context)
 - [2026-08-21] `SCOPE_INVERSION` — rules and knowledge are global; findings and worklists are local. A repo's test command is not doctrine. (surface: context)
 - [2026-08-21] `SINGLE_WRITE` — every `remember_memory` call is mirrored to a file under `memory/`. Memory MCP is a cache; the files are the ledger. On disagreement, the file wins. (surface: context)
 - [2026-08-21] `LINTER_FALSE_POSITIVE` — a validator that flags correct artifacts gets ignored, which is worse than no validator. Checks that cannot apply must report SKIP, never FAIL. (surface: tools)
@@ -38,4 +38,3 @@ Format:
 ## Superseded
 
 <!-- moved here with their supersession date, kept as evidence -->
-

@@ -1,6 +1,6 @@
 # Agent Smith — Design Plan
 
-**Status:** v0.2 — Goose-native plugin
+**Status:** v0.3 — multi-harness agent package
 **Owner:** you
 **Upstream knowledge source:** `jayminwest/agentic-engineering-book` (updated ~daily)
 **Deployment:** see [DEPLOYMENT.md](DEPLOYMENT.md) — install once globally, never per-repo
@@ -38,7 +38,8 @@ L1 always loaded. L2–L5 progressive: metadata always, bodies on demand.
 
 ## 3. Folder contract
 
-The folder *is* a Goose Open Plugin. `plugin.json` at root, `skills/`, `hooks/`.
+The folder contains a portable persona, model-invoked skills, deterministic CLI,
+and an Open Plugin manifest for compatible harnesses.
 
 ```
 .smith/
@@ -104,9 +105,9 @@ Rule: **nothing else** goes here. Findings go to the target repo
 | P2 | memory dual-write (MCP + ledger) | a lesson in session N changes behavior in N+1 | **done** (9 lessons) |
 | P3 | author-agent / author-tool + lint | emitted artifact passes lint; bad artifact blocks | **done** (8/8 caught) |
 | P4 | loops: RPI, Ralph, delegate | right loop chosen and declared before work starts | **done** |
-| P5 | global plugin install + auto-update | `goose plugin update agent-smith` works | **next** |
-| P6 | first real repo adoption | `.goosehints` pointer; RPI research on a live task | pending |
-| P7 | seeds integration | Smith keeps no private todo list | pending |
+| P5 | global multi-harness install | personas, skills, and modes install per detected harness | **done** |
+| P6 | first real repo adoption | project pointer; RPI research on a live task | **done** |
+| P7 | Seeds integration | optional worklist integration and evidence-backed closure | **done** |
 
 Stop after any phase. Each is independently useful — build a room, not the house.
 
@@ -165,7 +166,7 @@ attempt gets fresh context and a second model reviews it.
 | Network access | fetch freely into `cache/`; no other network |
 | Where emitted agents go | `emitted/` staging; human promotes to `~/.agents/agents/` |
 | Refresh cadence | `--auto-update` on the plugin + staleness warning after 14 days |
-| Per-repo install | **no** — one global plugin, repos get a `.goosehints` pointer |
+| Per-repo install | **no by default** — one global install; repos get a minimal harness-appropriate pointer |
 | Memory store | both: Memory MCP for recall, file ledger for audit; file wins |
 
 

@@ -362,6 +362,19 @@ class TestComposedPlan:
         assert result.anti_patterns
         assert "Fix" in result.next_action
 
+    def test_open_loop_does_not_preempt_understanding_before_execution(self) -> None:
+        result = build_plan(
+            "design a research MVP",
+            task_class=TaskClass.CODE_CHANGE,
+            evidence=[],
+            understood=False,
+            interfaces_settled=False,
+            units_disjoint=False,
+            pre_execution=True,
+        )
+        assert any(hit.pattern is AntiPattern.OPEN_LOOP for hit in result.anti_patterns)
+        assert result.next_action.startswith("Constraint is understanding")
+
 
 class TestRealWorldPhrasing:
     """Rung detection against phrasings taken from actual user requests.

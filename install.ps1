@@ -228,8 +228,8 @@ if ($doctorFailed -or $testsFailed) {
 Write-Host "INSTALL COMPLETE" -ForegroundColor Green
 Write-Host ""
 Write-Host "Next:" -ForegroundColor White
-Write-Host "  In an agent session:  @agent-smith what is a harness?"
-Write-Host "  Health check:         uv run smith doctor"
-Write-Host "  Available skills:     uv run smith skills"
-Write-Host "  Open a gated run:     uv run smith gate open code-change `"objective`" --scope path"
+Write-Host "  In your project:      smith onboard"
+Write-Host "  Then plan work:       smith plan `"<your task>`""
+Write-Host "  Health check:         smith doctor"
+Write-Host "  Available skills:     smith skills"
 Write-Host ""

@@ -1,214 +1,185 @@
-# DEPLOYMENT — how Agent Smith spans repos
+# Deployment
 
-**The question:** do I drop `.smith/` into every repo?
+Install Agent Smith **once at user scope**. Each repository gets project-local
+intent, run state, and an optional pointer—not a copied knowledge base.
 
-**The answer:** No. Copying it per-repo gives you N diverging forks of the same
-knowledge harness. You would fix a lesson in repo A and never see it in repo B.
-That is `KNOWLEDGE_FORK`, and it is the exact failure the registry exists to
-prevent.
-
-Install Smith **once, globally, as a git-backed Goose plugin with auto-update**.
-Each repo gets a ~15-line pointer file, not a copy.
+This prevents `KNOWLEDGE_FORK`: fixing a lesson or updating the registry once must
+improve every project that uses Smith.
 
 ---
 
-## 1. The split: what is global vs per-project
+## Global versus project-local
 
-| Thing | Scope | Why |
+| Artifact | Scope | Why |
 | --- | --- | --- |
-| Smith's skills | **global** (plugin) | one source of truth, auto-updated |
-| Smith's constitution | **global** (plugin) | rules should not fork per repo |
-| Knowledge registry + cache | **global** (plugin) | the book is the same book everywhere |
-| Foundational lessons | **global** memory | "orchestrators get no Bash" is universal |
-| Project conventions | **per-project** memory | "this repo uses uv, not pip" |
-| Worklist (seeds) | **per-project** | issues belong to the repo |
-| RPI research/plans | **per-project** (`thoughts/`) | they describe *this* codebase |
-| Ralph state | **per-project** (`.goose/ralph/`) | run-scoped |
+| Persona, skills, constitution | global/user | one maintained behavior source |
+| Knowledge registry and cache | global/user | the same source corpus everywhere |
+| Foundational agent lessons | global/user | universal harness rules |
+| Confirmed project intent | project `.smith/project.yaml` | mission differs per repository |
+| Project conventions and failures | project `.smith/memory/` | local, not doctrine |
+| Run ledger and Ralph state | project `.smith/` | belongs to the work |
+| Seeds worklist | project `.seeds/` | issues belong to the repository |
+| RPI research and plans | project `thoughts/` | describes the codebase |
 
-The rule: **rules and knowledge are global; findings and worklists are local.**
+**Rules and knowledge are shared; findings, decisions, and worklists are local.**
 
 ---
 
-## 2. Global install (once)
+## Install once
 
-Smith's folder *is* a valid Goose Open Plugin — `plugin.json` at the root,
-`skills/`, `hooks/hooks.json`.
+```powershell
+irm https://raw.githubusercontent.com/Lukematic/agent-smith/main/bootstrap.ps1 | iex
+```
 
 ```bash
-# publish .smith/ as its own git repo once, then:
-goose plugin install --auto-update https://github.com/Lukematic/agent-smith.git
+curl -fsSL https://raw.githubusercontent.com/Lukematic/agent-smith/main/bootstrap.sh | sh
 ```
 
-That lands it at `~/.agents/plugins/agent-smith/` and namespaces every skill:
+Or clone and inspect first:
 
-```
-agent-smith:smith-consult
-agent-smith:smith-triage
-agent-smith:smith-rpi
-agent-smith:smith-ralph
-agent-smith:smith-delegate
-agent-smith:smith-author-agent
-agent-smith:smith-author-skill
-agent-smith:smith-author-tool
-agent-smith:smith-self-update
-agent-smith:smith-memory
+```bash
+git clone https://github.com/Lukematic/agent-smith.git
+cd agent-smith
+./install.sh          # .\install.ps1 on Windows
 ```
 
-`--auto-update` means goose re-pulls before plugin skills load (rate-limited, so
-not every session). Your daily-updated book knowledge harness stays current
-without you doing anything.
+The installer detects and adapts to supported harnesses:
 
-Until it is a git repo, symlink for local dev:
+| Harness | Installed artifact |
+| --- | --- |
+| Claude Code | agent persona plus linked skills |
+| Kilo | primary persona, linked skills, selectable modes |
+| Roo/Zoo | selectable custom modes |
+| GitHub Copilot | VS Code chat mode |
+| compatible open-agent harness | agent plus plugin |
+| Cursor | adapted rule |
 
-```powershell
-New-Item -ItemType SymbolicLink `
-  -Path "$HOME\.agents\plugins\agent-smith" `
-  -Target "<your-path>"
+Check what was found:
+
+```bash
+smith install-status
+smith mode-status
 ```
-
-Symlinked/copied plugins are discovered but **not** managed by
-`goose plugin update` — you run `smith-self-update` manually instead.
-
-### The custom agent is separate
-
-Plugins carry skills and hooks only. The Smith *persona* is a custom agent and
-must be installed on its own:
-
-```powershell
-Copy-Item "$HOME\.agents\plugins\agent-smith\agents\agent-smith.md" `
-          "$HOME\.agents\agents\agent-smith.md"
-```
-
-Then in any session: `@agent-smith what is a harness?` or
-`Delegate to agent-smith: triage why my builder keeps writing outside its scope.`
 
 ---
 
-## 3. Per-project footprint (tiny, by design)
+## First command in a project
 
-In each repo you work in, exactly two things:
+```bash
+smith onboard
+```
 
-**a) `.goosehints`** — three lines that make Smith discoverable in context:
+It:
+
+1. resolves Smith home versus project root;
+2. reads project instructions, metadata, README, non-goals, and current tracker;
+3. detects toolchain, lint, test, and install commands;
+4. reflects a mission draft with its source/confidence;
+5. asks one unresolved frontier question at a time;
+6. optionally offers Seeds initialization;
+7. persists confirmed intent to `.smith/project.yaml`.
+
+Example:
+
+```bash
+smith onboard --set primary_user="working scientists reviewing literature"
+smith onboard --set goals="search open indexes; inspect evidence; cited synthesis"
+smith onboard --set tenets="no claim without source IDs; no credentials on disk"
+smith onboard --set expectations="free hosting; simple web UI; BYOK or local model"
+smith onboard --set success_metric="a scientist can review and trace every claim"
+smith onboard --confirm
+```
+
+Then:
+
+```bash
+smith plan "build the first useful slice"
+```
+
+---
+
+## Minimal project pointer
+
+A repository may add a short pointer to `AGENTS.md`, `CLAUDE.md`, `.goosehints`,
+or the harness-specific equivalent:
+
+```bash
+smith pointer
+```
+
+The pointer says where Smith is installed and that agentic-engineering tasks should
+route to it. It does not copy the persona, skills, registry, or memory.
+
+---
+
+## Manual fallback
+
+If a harness is not detected:
+
+1. Open `agents/agent-smith.md` in the clone.
+2. Copy the body after YAML frontmatter.
+3. Paste it into the product's system prompt, custom mode, persona, agent
+   instructions, or project instructions field.
+4. Grant only the tools appropriate to the intended role.
+
+The Markdown body is portable. Frontmatter and permission schemas are not, which
+is why `smith install` rebuilds them per harness.
+
+---
+
+## Update
+
+```bash
+cd <your-agent-smith-clone>
+git pull
+uv sync --all-groups
+smith install --overwrite
+smith install-mode --force
+smith doctor
+smith update
+```
+
+Linked skills update with the clone. Personas and mode files are regenerated to
+keep their harness-specific frontmatter current.
+
+---
+
+## Memory policy
+
+When Memory MCP is available, Smith may dual-write short recall records to MCP and
+append-only files. The files are the audit ledger and win on disagreement.
+
+Categories:
+
+| Category | Scope | Example |
+| --- | --- | --- |
+| agent doctrine | global | orchestrators do not receive implementation tools |
+| failure modes | global | named recurrence pattern |
+| book routing | global | topic-to-chapter route |
+| project conventions | project | this repo verifies with `uv run pytest` |
+| project failures | project | this pipeline loses source IDs at normalization |
+
+Scientific/domain conclusions are never promoted into global doctrine. They remain
+source-grounded project evidence requiring domain review.
+
+---
+
+## Which loop to use
 
 ```text
-Agentic-engineering questions, agent authoring, and agent debugging go to the
-agent-smith agent (@agent-smith). Its skills are namespaced agent-smith:*.
-Project-specific conventions live in .goose/memory/; never edit the global plugin from here.
+1–2 well-understood files                 -> direct
+Mission or user outcome unclear           -> smith-discover / smith onboard
+Codebase not understood                   -> smith-rpi research, then stop
+Clear machine-checkable gate, many tries  -> smith-ralph
+Independent disjoint workstreams          -> smith-delegate
+Research/RAG factual synthesis            -> smith-evidence
+Scientific/data pipeline                  -> smith-reproducibility
 ```
 
-**b) `.agents/skills/project-context/SKILL.md`** — optional, only if the repo has
-conventions Smith must respect (test command, package manager, forbidden dirs).
+These compose. A typical research-product sequence is:
 
-That is it. No registry copy. No skills copy. No constitution copy.
-
+```text
+onboard -> discover -> RPI research -> plan interrogation -> approved spec
+        -> implementation -> deterministic tests -> evidence gate
+        -> independent verification -> project lesson
 ```
-your-repo/
-  .goosehints                       # 3 lines pointing at Smith
-  .goose/memory/                    # project-local memory (Memory MCP)
-  .goose/ralph/                     # ralph loop state, gitignored
-  thoughts/{research,plans}/         # RPI outputs, committed
-  .seeds/                           # worklist
-  .agents/skills/project-context/    # optional local conventions
-```
-
----
-
-## 4. Memory: dual-write, two lifetimes
-
-The Memory MCP extension is loaded into **every prompt** at session start. That
-makes it the right place for *recall* and the wrong place for *audit*. So Smith
-writes both:
-
-| Store | Mechanism | Scope | Purpose |
-| --- | --- | --- | --- |
-| Memory MCP | `remember_memory(...)` | `is_global=true` for doctrine, `false` for project | fast recall, always in context |
-| `memory/lessons.md` | file append | global plugin | append-only audit trail with dates and supersessions |
-| `memory/expertise/*.jsonl` | file append | global plugin | structured records with classification |
-
-Rule: **every `remember_memory` call is mirrored to a file.** Memory MCP is a
-cache with no history; the files are the ledger. If they disagree, the file wins.
-
-Categories Smith uses:
-
-| Category | `is_global` | Example |
-| --- | --- | --- |
-| `agentic_doctrine` | true | orchestrators never get Write/Edit/Bash |
-| `failure_modes` | true | a new named mode Smith coined |
-| `book_routing` | true | "harness questions route to 6.1/6.5" |
-| `project_conventions` | false | this repo verifies with `uv run pytest -q` |
-| `project_failures` | false | the builder here keeps touching `src/legacy/` |
-
-Cost control: Memory MCP content rides in every prompt. Keep entries one line.
-Anything longer goes in a file and the memory entry points at the path — the docs
-explicitly recommend this for large instructions.
-
----
-
-## 5. Which loop for which problem
-
-Smith's job is picking the right machine, not running everything through one.
-
-```
-Is the change confined to 1-2 files and well understood?
-├─ yes ──► direct edit. No ceremony. (RPI here is overkill.)
-└─ no
-   │
-   Do you understand the current code well enough to plan?
-   ├─ no  ──► smith-rpi, research phase only. Stop. Review.
-   └─ yes
-      │
-      Is there a machine-checkable completion signal (tests/build)?
-      ├─ yes, and the work needs many attempts ──► smith-ralph
-      │                                            (fresh context per iteration,
-      │                                             cross-model review)
-      └─ yes, and it is a single ordered pass ──► smith-rpi plan + implement
-      │
-      Are there independent workstreams with disjoint files?
-      └─ yes ──► smith-delegate (parallel subagents)
-```
-
-| Loop | Use when | Do not use when |
-| --- | --- | --- |
-| **RPI** | complex, multi-file, spans layers; you need a reviewable plan | small changes — it is deliberately slow |
-| **Ralph** | clear pass/fail gate; benefits from repeated attempts | exploratory work, no verifiable criteria |
-| **Subagents** | independent parallel work, disjoint file ownership | sequential deps, same-file edits |
-| **Direct** | one obvious change | anything you cannot hold in your head |
-
-These compose: RPI research → RPI plan → **Ralph the implement phase** so each
-attempt gets fresh context and a second model reviews it.
-
----
-
-## 6. Rollout order
-
-| Step | Action | Gate |
-| --- | --- | --- |
-| 1 | symlink plugin, copy the agent file | `@agent-smith` responds with a status header |
-| 2 | ask "what is a harness?" | answers citing 6.1/6.5, opens ≤3 files |
-| 3 | enable Memory MCP, store one doctrine entry | entry recalled in a fresh session |
-| 4 | run `smith-self-update` | drift report shows 0 |
-| 5 | pick **one** real repo, add `.goosehints` | Smith reads project memory, not global only |
-| 6 | run RPI research on a real task in that repo | `thoughts/research/*.md` exists and is accurate |
-| 7 | author one agent via `smith-author-agent` | lint passes, you promote it manually |
-| 8 | publish to git, reinstall with `--auto-update` | `goose plugin update agent-smith` works |
-
-Do not do step 5 in five repos at once. One repo, prove the loop, then fan out.
-
----
-
-## 7. Guardrails against wild-west drift
-
-| Risk | Guard |
-| --- | --- |
-| per-repo forks of Smith | one global plugin; repos get pointers only |
-| stale knowledge | `--auto-update` + staleness warning after 14 days |
-| context bloat | 3-file fetch ceiling, registry-only routing |
-| memory sprawl | 5 fixed categories; one-line entries; files for anything longer |
-| agent sprawl | reuse search mandatory before authoring; emitted to staging |
-| tool sprawl | new tools only after the "why not a skill?" gate |
-| silent breakage | `lint_agent.ps1` blocks on FAIL; hooks run it on write |
-| lost lessons | append-only ledger; Memory MCP is a cache, files are truth |
-
-
-
-
