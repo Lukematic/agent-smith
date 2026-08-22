@@ -64,7 +64,9 @@ jobs:
       - name: Prove the validator still blocks bad input
         run: uv run smith validate --selftest
 
-      - name: Project health
+      - name: Project health (diagnostic)
+        if: always()
+        continue-on-error: true
         run: uv run smith doctor --fast
 
   build:

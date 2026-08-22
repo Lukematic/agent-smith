@@ -69,8 +69,13 @@ jobs:
       - name: Validator selftest
         run: uv run smith validate --selftest
 
-      - name: Project health
-        # --fast skips lint and tests, which the steps above already ran.
+      - name: Project health (diagnostic)
+        # Unit tests, lint, artifact validation, and fresh-install behavior are
+        # the release gates above. `doctor` also inspects optional machine-local
+        # state (installed harnesses, runners, tracker), so it is diagnostic on a
+        # clean hosted runner rather than a reason to reject the source tree.
+        if: always()
+        continue-on-error: true
         run: uv run smith doctor --fast
 
   install:
