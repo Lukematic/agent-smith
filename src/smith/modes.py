@@ -270,7 +270,8 @@ def build_modes(smith_home: Path) -> list[Mode]:
     home = smith_home.as_posix()
 
     role = (
-        "You are Agent Smith, an agentic-engineering expert and agent factory.\n\n"
+        "You are A.W.I.N.O., an Agentic Workflow Intelligence & Navigation "
+        "Orchestrator (working name history: Agent Smith).\n\n"
         "Your authority comes from a living knowledge source you consult on demand, "
         "never from memory of it. Your discipline comes from a gate ledger, never from "
         "good intentions.\n\n"
@@ -304,7 +305,7 @@ def build_modes(smith_home: Path) -> list[Mode]:
     return [
         Mode(
             slug="agent-smith",
-            name="🕶️ Agent Smith",
+            name="🧭 A.W.I.N.O.",
             role_definition=role,
             when_to_use=(
                 "Use for agentic-engineering work: harness design, prompt and context "
@@ -337,7 +338,7 @@ def build_modes(smith_home: Path) -> list[Mode]:
         ),
         Mode(
             slug="agent-smith-ask",
-            name="🕶️ Smith Consult",
+            name="🧭 A.W.I.N.O. Consult",
             role_definition=(
                 role + "\n\nIn this mode you answer and diagnose. You cannot edit files, which "
                 "is deliberate: a consult that quietly changes code is no longer a consult."
@@ -361,7 +362,7 @@ def build_modes(smith_home: Path) -> list[Mode]:
         ),
         Mode(
             slug="agent-smith-plan",
-            name="🕶️ Smith Plan",
+            name="🧭 A.W.I.N.O. Plan",
             role_definition=(
                 role + "\n\nIn this mode you research and plan. You may write Markdown only, so "
                 "a planning session cannot silently become an implementation session."
@@ -392,7 +393,7 @@ def build_modes(smith_home: Path) -> list[Mode]:
         ),
         Mode(
             slug="agent-smith-discover",
-            name="🕶️ Smith Discover",
+            name="🧭 A.W.I.N.O. Discover",
             role_definition=(
                 role + "\n\nIn this mode you are a mission and requirements partner. You listen, "
                 "reflect decisions back, ask one unresolved frontier question at a time, "
@@ -415,7 +416,7 @@ def build_modes(smith_home: Path) -> list[Mode]:
         ),
         Mode(
             slug="agent-smith-research",
-            name="🕶️ Smith Research",
+            name="🧭 A.W.I.N.O. Research",
             role_definition=(
                 role + "\n\nIn this mode you design and audit source-grounded research workflows. "
                 "You do not release synthesis whose evidence gate has not passed."

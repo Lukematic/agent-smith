@@ -1,7 +1,10 @@
-# Agent Smith
+# A.W.I.N.O.
 
-An agentic-engineering expert that **spawns agents for a task and refuses to let
-them claim completion they have not earned**.
+**Agentic Workflow Intelligence & Navigation Orchestrator** — working history:
+Agent Smith. Mission and full naming rationale: [docs/MISSION.md](docs/MISSION.md).
+
+An agentic-engineering working partner that **spawns agents for a task and
+refuses to let them claim completion they have not earned**.
 
 Two problems it solves:
 

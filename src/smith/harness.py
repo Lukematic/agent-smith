@@ -403,14 +403,15 @@ def pointer_text(smith_home: Path) -> str:
     discoverable without copying anything. Copying Smith per project forks its
     knowledge base, which is the failure a pointer avoids.
     """
-    return f"""## Agent Smith
+    return f"""## A.W.I.N.O. (Agentic Workflow Intelligence & Navigation Orchestrator)
 
-Agentic-engineering questions, agent authoring, and agent debugging go to Agent
-Smith. Its home is `{smith_home}`.
+Agentic-engineering questions, agent authoring, and agent debugging go to
+A.W.I.N.O. (installed under the compatibility name `agent-smith`). Its home is
+`{smith_home}`.
 
 - Concepts, harness design, failure triage: load `agent-smith`
 - Before any multi-step work: `smith plan "<request>"` then `smith gate open ...`
 - Completion is computed, never claimed: `smith gate close` decides
-- Project purpose and calibration: `smith mission`
-- Project-local conventions live in this repository, never in Smith's home
+- Project purpose and calibration: `smith onboard`
+- Project-local conventions live in this repository, never in A.W.I.N.O.'s home
 """
