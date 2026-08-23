@@ -212,6 +212,38 @@ class TestSmithModes:
         assert all("/opt/custom-smith" in m.role_definition for m in modes)
 
 
+class TestReadmeMatchesGeneratedModes:
+    """The README documents mode names by hand; build_modes() generates them.
+
+    Those two drifted once already: the code was renamed to A.W.I.N.O. but the
+    README table still said Agent Smith / Smith Consult / etc, which is exactly
+    the kind of stale-doc bug a human catches by reading, not by running the
+    existing suite. This makes that drift a CI failure instead of a support
+    question raised after release.
+    """
+
+    def _readme_text(self) -> str:
+        root = Path(__file__).resolve().parents[1]
+        return (root / "README.md").read_text(encoding="utf-8")
+
+    def test_every_generated_mode_name_appears_in_readme(self) -> None:
+        readme = self._readme_text()
+        for mode in build_modes(Path("/tmp/smith")):
+            assert mode.name in readme, f"README is missing or stale for mode name {mode.name!r}"
+
+    def test_readme_does_not_still_reference_the_old_mode_names(self) -> None:
+        readme = self._readme_text()
+        stale = [
+            "🕶️ Agent Smith",
+            "🕶️ Smith Consult",
+            "🕶️ Smith Plan",
+            "🕶️ Smith Discover",
+            "🕶️ Smith Research",
+        ]
+        found = [name for name in stale if name in readme]
+        assert not found, f"README still contains renamed-away mode names: {found}"
+
+
 class TestIdempotentLinking:
     """A reinstall must not fail on links it created itself.
 

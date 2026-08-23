@@ -102,11 +102,11 @@ specialists then compose the appropriate bundled skills:
 
 | Mode | Tools | Structurally cannot |
 | --- | --- | --- |
-| 🕶️ Agent Smith | read, edit, command, mcp | — |
-| 🕶️ Smith Consult | read, mcp | edit, so a consult stays a consult |
-| 🕶️ Smith Plan | read, **Markdown-only** edit, mcp | execute commands or implementation edits |
-| 🕶️ Smith Discover | read, mcp | implement before mission confirmation |
-| 🕶️ Smith Research | read, mcp | release unsupported factual synthesis |
+| 🧭 A.W.I.N.O. | read, edit, command, mcp | — |
+| 🧭 A.W.I.N.O. Consult | read, mcp | edit, so a consult stays a consult |
+| 🧭 A.W.I.N.O. Plan | read, **Markdown-only** edit, mcp | execute commands or implementation edits |
+| 🧭 A.W.I.N.O. Discover | read, mcp | implement before mission confirmation |
+| 🧭 A.W.I.N.O. Research | read, mcp | release unsupported factual synthesis |
 
 ```bash
 smith install-mode                  # every detected editor
