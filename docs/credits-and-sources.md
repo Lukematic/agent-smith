@@ -64,3 +64,16 @@ are integrations—not Agent Smith's product identity. User-facing documentation
 should use neutral terms such as **active harness**, **agent persona**, **skill**,
 and **project-local state**, except where an exact product name or command is
 operationally necessary.
+
+## Reviewed for adoption (2026-08-23)
+
+- **obra/superpowers** (MIT) — reviewed for the spec/plan document-review-loop
+  pattern and the systematic-debugging four-phase methodology. Full comparison:
+  docs/updates/third-party-skills-review.md.
+- **muratcankoylan/Agent-Skills-for-Context-Engineering** (MIT) — reviewed for the
+  tool-design consolidation principle and the harness-engineering surface
+  taxonomy. Full comparison: docs/updates/third-party-skills-review.md.
+
+Neither project's code or skill content is vendored verbatim. Where a pattern was
+adopted, it was re-implemented against this repo's own architecture (see the
+linked review doc for the specific adaptation decisions and rejected items).
