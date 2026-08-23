@@ -1,7 +1,9 @@
-"""Agent Smith command line interface.
+"""A.W.I.N.O. (Agentic Workflow Intelligence & Navigation Orchestrator) command line interface.
 
-Every command here is deterministic. The model calls these rather than doing the
-work in prose, which is the ``MODEL_DOES_DETERMINISM`` guard applied to Smith.
+Working history: this project shipped as "Agent Smith"; the package, module path,
+and `smith` command are kept for compatibility (see docs/MISSION.md). Every
+command here is deterministic. The model calls these rather than doing the
+work in prose, which is the ``MODEL_DOES_DETERMINISM`` guard applied to A.W.I.N.O.
 """
 
 from __future__ import annotations
@@ -26,6 +28,7 @@ from smith import (
     onboarding,
     seeds,
     spawn,
+    watch,
 )
 from smith.enforce import (
     CONTRACTS,
@@ -45,7 +48,7 @@ from smith.validate import BROKEN_SELFTEST, Status, discover, validate_file, val
 app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
-    help="Agent Smith: knowledge harness, artifact validation, and folder hygiene.",
+    help="A.W.I.N.O.: knowledge harness, artifact validation, and folder hygiene.",
 )
 gate_app = typer.Typer(
     no_args_is_help=True, help="Run ledger. Completion is computed, never claimed."
@@ -149,6 +152,104 @@ def update() -> None:
     )
     if result["added"]:
         _echo("Curate each ADDED path one at a time with tags and use_when. Never bulk-add.")
+
+
+@app.command("watch")
+def watch_command(
+    seed: bool = typer.Option(
+        False, "--seed", help="Also create a review seed for each changed source (requires sd)"
+    ),
+    as_json_output: bool = typer.Option(False, "--json", help="Machine-readable output"),
+) -> None:
+    """Poll every configured and watchlisted source for upstream changes.
+
+    This is change *detection*, not autonomous learning. It answers "did the
+    tree sha change since last check" for the book, overstory, warren, seeds
+    repos, and anything added via `smith watch add`. Nothing is fetched into the
+    registry and no knowledge is integrated automatically — see docs
+    for why that boundary is deliberate.
+    """
+    paths = _paths()
+    findings = watch.scan_all(paths)
+
+    if as_json_output:
+        _echo(watch.as_json(findings))
+    else:
+        _echo(watch.as_report(findings))
+
+    if seed:
+        tracker = seeds.Seeds(_workspace().project.root)
+        state, reason = tracker.state()
+        if not state.usable:
+            _echo(f"\nSKIP seed creation: {reason}")
+        else:
+            for payload in watch.seed_titles_for_changes(findings):
+                result = tracker.create(
+                    payload["title"],
+                    issue_type="task",
+                    priority=3,
+                    description=payload["description"],
+                    labels=payload["labels"],
+                )
+                _echo(f"  seed: {'OK' if result.ok else 'FAILED'} {result.detail}")
+
+
+@app.command("watch-add")
+def watch_add_command(
+    repo: str = typer.Argument(..., help="owner/repo, e.g. someuser/some-agent-skills"),
+    ref: str = typer.Option("main", "--ref", help="Branch or tag to watch"),
+    note: str = typer.Option("", "--note", help="Why this repo is worth watching"),
+) -> None:
+    """Add a repo to the watchlist. This is the 'check out this repo' command.
+
+    Adding a repo here does not fetch or integrate anything. It only means the
+    repo's tree sha is checked on the next `smith watch`.
+    """
+    if "/" not in repo:
+        _echo("REFUSED: expected owner/repo")
+        raise typer.Exit(2)
+    owner, _, name = repo.partition("/")
+    paths = _paths()
+    try:
+        entry = watch.add_watched_repo(paths, owner, name, ref=ref, note=note)
+    except ValueError as exc:
+        _echo(f"REFUSED: {exc}")
+        raise typer.Exit(1) from exc
+    _echo(f"WATCHING  {entry.id}  ({entry.html_url})")
+
+
+@app.command("watch-remove")
+def watch_remove_command(
+    repo: str = typer.Argument(..., help="owner/repo to stop watching"),
+) -> None:
+    """Remove a repo from the watchlist."""
+    removed = watch.remove_watched_repo(_paths(), repo)
+    _echo("REMOVED" if removed else "NOT FOUND, nothing removed")
+
+
+@app.command("watch-list")
+def watch_list_command() -> None:
+    """Show every source and watchlisted repo Smith checks for changes."""
+    paths = _paths()
+    watched = watch.load_watchlist(paths)
+    _echo("CONFIGURED SOURCES (knowledge/SOURCES.yaml, checked by 'smith watch')")
+    import yaml as _yaml
+
+    if paths.sources.is_file():
+        data = _yaml.safe_load(paths.sources.read_text(encoding="utf-8")) or {}
+        for source in data.get("sources", []):
+            has_tree = "tree_api" in source
+            _echo(
+                f"  {source.get('id'):<12} {'watched' if has_tree else 'no tree to diff':<16} {source.get('name', '')}"
+            )
+    if watched:
+        _echo("")
+        _echo("USER-ADDED WATCHLIST (knowledge/watchlist.yaml)")
+        for entry in watched:
+            _echo(f"  {entry.id:<30} {entry.note or '(no note)'}")
+    else:
+        _echo("")
+        _echo("No user-added repos yet. Add one with: smith watch-add owner/repo")
 
 
 @app.command()
@@ -1586,7 +1687,7 @@ def gate_record(
         _echo("Attestations are weaker than executed evidence and are reported as such.")
         return
 
-    item = ledger.record(resolved, gate, cmd, cwd=_paths().root)
+    item = ledger.record(resolved, gate, cmd, cwd=_workspace().project.root)
     verdict = "PASS" if item.passed else "FAIL"
     _echo(f"{verdict}  {gate}  exit={item.exit_code}  {item.duration_ms}ms  attempt={item.attempt}")
     _echo(f"command: {item.command}")
@@ -1612,11 +1713,11 @@ def gate_check(
     resolved = _resolve_run(run_id)
     ledger = _ledger()
     run = ledger.load(resolved)
-    root = _paths().root
+    root = _workspace().project.root
     problems = 0
 
     if diff_base:
-        diff = subprocess.run(
+        diff_result = subprocess.run(
             ["git", "diff", diff_base, "--"],
             capture_output=True,
             text=True,
@@ -1624,8 +1725,8 @@ def gate_check(
             errors="replace",
             cwd=str(root),
             check=False,
-        ).stdout
-        names = subprocess.run(
+        )
+        names_result = subprocess.run(
             ["git", "diff", "--name-only", diff_base, "--"],
             capture_output=True,
             text=True,
@@ -1633,32 +1734,46 @@ def gate_check(
             errors="replace",
             cwd=str(root),
             check=False,
-        ).stdout.split()
-
-        weakened = detect_test_weakening(diff)
-        if weakened:
+        )
+        if diff_result.returncode != 0 or names_result.returncode != 0:
+            # git failed (no repo, bad ref, etc). An empty diff from a failed
+            # command is not evidence of "no weakening" — reporting it as such
+            # would silently pass a check that never actually ran.
             problems += 1
-            _echo(f"TESTS_WEAKENED  {len(weakened)} finding(s):")
-            for finding in weakened:
-                _echo(f"  ! {finding}")
-            _echo("  Fix the code, never the test.")
+            _echo(
+                "GIT_DIFF_FAILED  could not diff against "
+                f"{diff_base!r}: {(diff_result.stderr or names_result.stderr).strip()}"
+            )
+            _echo(
+                "  Not a git repo, or the ref does not exist. Use --attest instead of --diff-base."
+            )
         else:
-            ledger.attest(
-                resolved, Gate.TESTS_NOT_WEAKENED, f"diff vs {diff_base} shows no weakening"
-            )
-            _echo("TESTS_NOT_WEAKENED  ok")
+            diff = diff_result.stdout
+            names = names_result.stdout.split()
+            weakened = detect_test_weakening(diff)
+            if weakened:
+                problems += 1
+                _echo(f"TESTS_WEAKENED  {len(weakened)} finding(s):")
+                for finding in weakened:
+                    _echo(f"  ! {finding}")
+                _echo("  Fix the code, never the test.")
+            else:
+                ledger.attest(
+                    resolved, Gate.TESTS_NOT_WEAKENED, f"diff vs {diff_base} shows no weakening"
+                )
+                _echo("TESTS_NOT_WEAKENED  ok")
 
-        violations = detect_scope_violations(names, run.file_scope)
-        if violations:
-            problems += 1
-            _echo(f"SCOPE_VIOLATION  {len(violations)} file(s) outside declared scope:")
-            for path in violations:
-                _echo(f"  ! {path}")
-        elif run.file_scope:
-            ledger.attest(
-                resolved, Gate.SCOPE_RESPECTED, f"{len(names)} changed files all within scope"
-            )
-            _echo("SCOPE_RESPECTED  ok")
+            violations = detect_scope_violations(names, run.file_scope)
+            if violations:
+                problems += 1
+                _echo(f"SCOPE_VIOLATION  {len(violations)} file(s) outside declared scope:")
+                for path in violations:
+                    _echo(f"  ! {path}")
+            elif run.file_scope:
+                ledger.attest(
+                    resolved, Gate.SCOPE_RESPECTED, f"{len(names)} changed files all within scope"
+                )
+                _echo("SCOPE_RESPECTED  ok")
     else:
         _echo("SKIP  pass --diff-base to enable weakening and scope checks")
 
