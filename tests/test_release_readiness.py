@@ -61,7 +61,11 @@ def test_canonical_and_deprecated_entry_points_are_declared() -> None:
 def test_canonical_version_flag() -> None:
     result = runner.invoke(cli.app, ["--version"])
     assert result.exit_code == 0
-    assert result.stdout == "awino 0.3.0\n"
+    pyproject = Path("pyproject.toml").read_text(encoding="utf-8")
+    version = next(
+        line.split('"')[1] for line in pyproject.splitlines() if line.startswith("version = ")
+    )
+    assert result.stdout == f"awino {version}\n"
 
 
 def test_installer_and_release_automation_use_canonical_command() -> None:
