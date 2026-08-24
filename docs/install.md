@@ -34,7 +34,7 @@ If you would rather see each step:
 
 ```bash
 git clone https://github.com/Lukematic/agent-smith.git
-cd agent-smith
+cd awino
 
 ./install.sh              # or ./install.ps1 on Windows
 ```
@@ -66,7 +66,7 @@ the exact failure this whole tool exists to prevent.
 | `sd` (seeds) | optional | `bun install -g @os-eco/seeds-cli` |
 
 Only `git` cannot be installed for you. `just` is convenience: every recipe also
-runs as `uv run smith ...`. Seeds is an optional issue tracker; Smith never
+runs as `uv run awino ...`. Seeds is an optional issue tracker; A.W.I.N.O. never
 installs or initializes it without being asked.
 
 ---
@@ -74,15 +74,15 @@ installs or initializes it without being asked.
 ## Where it lands
 
 ```
-~/dev/agent-smith/               the clone, editable, updated with git pull
+~/dev/awino/               the clone, editable, updated with git pull
   .venv/                         isolated environment
 
 ~/.claude/agents/agent-smith.md  persona, if Claude Code is present
-~/.claude/skills/smith-*/        skills, junctioned to the clone
+~/.claude/skills/awino-*/        skills, junctioned to the clone
 ~/.agents/agents/agent-smith.md  persona, if Goose is present
 ~/.agents/plugins/agent-smith/   the whole plugin, linked
 ~/.config/kilo/agents/agent-smith.md  Kilo primary persona
-~/.config/kilo/skills/smith-*/        Kilo skills, linked
+~/.config/kilo/skills/awino-*/        Kilo skills, linked
 <VS Code prompts>/agent-smith.chatmode.md  GitHub Copilot chat mode
 ```
 
@@ -100,7 +100,7 @@ awino install-status
 
 ## Pointing a harness at the persona
 
-Smith's persona is one Markdown file. If your tool is not auto-detected, install it
+A.W.I.N.O.'s persona is one Markdown file. If your tool is not auto-detected, install it
 by hand.
 
 ### Automatic, for a specific harness
@@ -115,7 +115,7 @@ awino install --harness cursor      # ~/.cursor/rules/, frontmatter adapted
 
 Add `--scope project` to install into the current repository instead of your home
 directory. Use that only when a team must pin one exact version: a single shared
-Smith cannot fork its own knowledge base, and per-project copies will.
+A.W.I.N.O. cannot fork its own knowledge base, and per-project copies will.
 
 ### Manual, for any tool that reads a system prompt
 
@@ -133,9 +133,9 @@ The persona is `agents/agent-smith.md` in the clone. Point your tool at it:
 `awino install --harness cursor` rewrites the frontmatter for you. For everything
 else the body is portable as-is.
 
-### Pointer, for a project that should route to Smith
+### Pointer, for a project that should route to A.W.I.N.O.
 
-The lightest option: three lines in `AGENTS.md` or `CLAUDE.md` that make Smith
+The lightest option: three lines in `AGENTS.md` or `CLAUDE.md` that make A.W.I.N.O.
 discoverable without copying anything.
 
 ```bash
@@ -143,7 +143,7 @@ awino pointer                 # print the block
 awino install --pointer       # append it to AGENTS.md or CLAUDE.md
 ```
 
-Prefer this over copying Smith into a project. Copying forks its knowledge base;
+Prefer this over copying A.W.I.N.O. into a project. Copying forks its knowledge base;
 a pointer does not.
 
 ---
@@ -151,14 +151,14 @@ a pointer does not.
 ## First five minutes
 
 ```bash
-awino context     # what Smith thinks home and project are
-smith mission     # what Smith thinks this project is for
+awino context     # what A.W.I.N.O. thinks home and project are
+awino mission     # what A.W.I.N.O. thinks this project is for
 awino doctor      # health, with a remedy per finding
 awino skills      # what is available
 awino work        # tracked work, if a tracker exists
 ```
 
-Run `awino context` **first, in every new repository.** Every gate command Smith
+Run `awino context` **first, in every new repository.** Every gate command A.W.I.N.O.
 records comes from that resolution, so a wrong answer there makes every later green
 gate meaningless.
 
@@ -185,17 +185,17 @@ parallel agents is justified yet.
 Then work under a gate:
 
 ```bash
-smith gate open code-change "add retry logic" --scope src/client.py
-smith gate record tested --cmd "<your test command>"
-smith gate record linted --cmd "<your lint command>"
-smith gate check --diff-base HEAD
-smith gate close
+awino gate open code-change "add retry logic" --scope src/client.py
+awino gate record tested --cmd "<your test command>"
+awino gate record linted --cmd "<your lint command>"
+awino gate check --diff-base HEAD
+awino gate close
 ```
 
-`smith gate close` refuses unless every gate holds. You will not be able to report
+`awino gate close` refuses unless every gate holds. You will not be able to report
 the work as complete until it passes, which is the point.
 
-Smith discovers your project's real commands, so you do not have to use its
+A.W.I.N.O. discovers your project's real commands, so you do not have to use its
 toolchain:
 
 ```bash
@@ -207,7 +207,7 @@ awino context     # shows the detected install, lint, and test commands
 ## Updating
 
 ```bash
-cd ~/dev/agent-smith
+cd ~/dev/awino
 git pull
 uv sync --all-groups     # only if dependencies changed
 awino doctor             # confirm nothing broke
@@ -226,11 +226,11 @@ The installer edits `PATH` for future shells. Open a new terminal, or
 `export PATH="$HOME/.local/bin:$PATH"`.
 
 **Symlinks fail on Windows**
-Smith falls back to a directory junction, then to a copy. A copy needs
+A.W.I.N.O. falls back to a directory junction, then to a copy. A copy needs
 `awino install` re-run after each `git pull`; the output tells you which you got.
 
-**`smith` is not recognized**
-It lives in the clone's environment. Use `uv run smith ...` from the clone, or
+**The deprecated compatibility command is not recognized**
+It lives in the clone's environment. Use `uv run awino ...` from the clone, or
 `uv tool install --editable .` to expose it globally.
 
 **`No global harness directories found`**
@@ -241,7 +241,7 @@ No supported tool is installed yet. Name one explicitly with
 Run `awino fix`. It repairs what is mechanically fixable and reports what needs
 judgement. Anything left is a real problem with a stated remedy.
 
-**Smith thinks the wrong directory is the project**
-Set `SMITH_PROJECT=/path/to/project`, or run from inside the project. Confirm with
+**A.W.I.N.O. thinks the wrong directory is the project**
+Set `AWINO_PROJECT=/path/to/project`, or run from inside the project. Confirm with
 `awino context`.
 

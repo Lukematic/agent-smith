@@ -1,11 +1,11 @@
 """Multi-source knowledge watching: detect upstream changes, never auto-merge.
 
-``smith update`` (in cli.py / knowledge.py) checks drift against exactly one
+``awino update`` (in cli.py / knowledge.py) checks drift against exactly one
 hardcoded repository — the book. That is honestly labelled version tracking, not
 research. This module extends the same *mechanism* (poll a git tree, diff
 against what is known) to every source declared in ``knowledge/SOURCES.yaml``,
 including sources with no chapter/registry structure at all (skills repos, tool
-repos, arbitrary reference repos the user points Smith at).
+repos, arbitrary reference repos the user points A.W.I.N.O. at).
 
 What this still is: change **detection**, not autonomous learning. Every finding
 becomes a *proposed* review item (a seed, if seeds is available; a report line
@@ -14,7 +14,7 @@ lesson is written without a human looking at the diff first. That boundary is
 deliberate — see docs/loop-engineering-honesty.md for why crossing it silently
 would be a false claim about what this system does.
 
-Grounded in the same harness-engineering principle as everywhere else in Smith:
+Grounded in the same harness-engineering principle as everywhere else in A.W.I.N.O.:
 a recurring manual chore (checking N repos by hand) gets a structural mechanism
 (one command that checks all N and tells you exactly what changed), and the
 judgement call (is this worth integrating) stays with a human.
@@ -39,7 +39,7 @@ SNAPSHOT_FILE = "watch_snapshot.json"
 
 @dataclass(frozen=True)
 class WatchedRepo:
-    """One arbitrary GitHub repo Smith should poll for changes.
+    """One arbitrary GitHub repo A.W.I.N.O. should poll for changes.
 
     Distinct from ``SOURCES.yaml`` entries: sources are curated, registry-backed
     knowledge origins with a role and a license. A watchlist entry is just "check
@@ -84,7 +84,7 @@ def save_watchlist(paths: SmithPaths, repos: list[WatchedRepo]) -> Path:
     path = watchlist_path(paths)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "// note": "Repos Smith should poll for changes. Add with 'smith watch add'.",
+        "// note": "Repos A.W.I.N.O. should poll for changes. Add with 'awino watch add'.",
         "repos": [{k: v for k, v in vars(r).items() if v} for r in repos],
     }
     path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
@@ -97,7 +97,7 @@ def add_watched_repo(
     """Add a repo to the watchlist. This is the 'check out this repo' entry point.
 
     Adding to the watchlist does not fetch anything and does not touch the
-    registry. It only means the repo will be included in future `smith watch`
+    registry. It only means the repo will be included in future `awino watch`
     scans.
     """
     repos = load_watchlist(paths)
@@ -218,7 +218,7 @@ def check_source_for_changes(
 def scan_all(paths: SmithPaths, client: httpx.Client | None = None) -> list[ChangeFinding]:
     """Check every configured source and every watchlisted repo for changes.
 
-    This is the single entry point both `smith watch` (local, on demand) and the
+    This is the single entry point both `awino watch` (local, on demand) and the
     scheduled GitHub Actions workflow (remote, on a cron) call. Same code path,
     so "the user ran it" and "the schedule ran it" produce identical, comparable
     output.
@@ -279,8 +279,8 @@ def as_report(findings: list[ChangeFinding]) -> str:
     lines.append("")
     lines.append(
         "Nothing was fetched or added automatically. Review each changed source with "
-        "`smith fetch <path> --source <id>` or open the repo directly, then curate any "
-        "addition into knowledge/REGISTRY.yaml by hand — see smith-self-update."
+        "`awino fetch <path> --source <id>` or open the repo directly, then curate any "
+        "addition into knowledge/REGISTRY.yaml by hand — see awino-self-update."
     )
     return "\n".join(lines)
 

@@ -111,6 +111,20 @@ class TestFairGeneration:
         assert readme in written
         assert "Append-only" in readme.read_text(encoding="utf-8")
 
+    def test_legacy_generated_readme_is_migrated_to_awino_marker(self, tmp_path: Path) -> None:
+        target = tmp_path / "memory"
+        target.mkdir()
+        (target / "lessons.md").write_text("x\n", encoding="utf-8")
+        readme = target / "README.md"
+        readme.write_text(f"{fair.LEGACY_GENERATED_MARKER}\n# stale\n", encoding="utf-8")
+
+        written, _ = fair.write_missing(tmp_path)
+        migrated = readme.read_text(encoding="utf-8")
+
+        assert readme in written
+        assert fair.GENERATED_MARKER in migrated
+        assert fair.LEGACY_GENERATED_MARKER not in migrated
+
     def test_stubs_are_reportable(self, tmp_path: Path) -> None:
         target = tmp_path / "mystery"
         target.mkdir()

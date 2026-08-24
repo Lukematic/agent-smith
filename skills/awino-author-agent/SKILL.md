@@ -4,7 +4,7 @@ description: Use when asked to create a new agent, subagent, orchestrator, or sp
 allowed-tools: Read, Write, Glob, Grep, Bash
 ---
 
-# Smith Author Agent
+# A.W.I.N.O. Author Agent
 
 Emit a new agent definition that inherits the book's practices by construction.
 
@@ -15,7 +15,7 @@ Emit a new agent definition that inherits the book's practices by construction.
 Search, in order, and report what you found:
 
 1. `.smith/emitted/` — did we already build this?
-2. `$SMITH_SKILL_LIBRARY` — the local library
+2. `$AWINO_SKILL_LIBRARY` — the local library
    has hundreds of skills. Grep for the capability.
 3. Registry `reference_configs` — the book ships real agent definitions
    (`ref.meta-agent`, `ref.scout`, `ref.docs-scraper`, `ref.expert-4pack`).
@@ -136,7 +136,7 @@ Paste the output. Any FAIL blocks completion.
 | lint | PASS (n checks) |
 
 **Promote with:** `awino install --harness <target>` after adding the staged
-persona to Smith's source registry. For Kilo, the live global directory is
+persona to A.W.I.N.O.'s source registry. For Kilo, the live global directory is
 `~/.config/kilo/agents/`, not `~/.kilo/agent/`.
 **Grounded in:** chapters/...
 ```

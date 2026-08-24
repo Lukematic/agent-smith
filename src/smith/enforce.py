@@ -7,7 +7,7 @@ harder is a ``PROMPT_PATCH``.
 So completion becomes a computed verdict rather than an assertion. A task opens a
 run, gates are declared up front from its task class, and each gate closes only
 when a real command has been executed and its exit code and output recorded. The
-agent calls ``smith gate close``, which either passes or refuses and prints
+agent calls ``awino gate close``, which either passes or refuses and prints
 exactly which gates are unmet.
 
 Evidence is captured by running the command, not by the agent describing it. An
@@ -223,8 +223,8 @@ class Ledger:
     ledger that guessed its own location would recreate the nesting bug it exists
     to avoid.
 
-    The ledger belongs to the repository being worked on, never to Smith home. A
-    shared Smith install that accumulated every project's runs would make
+    The ledger belongs to the repository being worked on, never to A.W.I.N.O. home. A
+    shared A.W.I.N.O. install that accumulated every project's runs would make
     attribution impossible and leak one project's state into another.
     """
 

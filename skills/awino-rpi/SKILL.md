@@ -3,7 +3,7 @@ name: awino-rpi
 description: Research then Plan then Implement for complex multi-file changes. Use for refactors, migrations, feature additions, large upgrades, and documentation overhauls where jumping to code would drift
 ---
 
-# Smith RPI
+# A.W.I.N.O. RPI
 
 Most agent failures on large changes are not capability failures — they are
 **context failures**. The work spans more than can be safely held at once, so the

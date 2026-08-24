@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Install Agent Smith into an agent harness.
+    Install A.W.I.N.O. into an agent harness.
 
 .DESCRIPTION
     One command from a fresh clone to a working install. Installs uv if missing,
@@ -13,7 +13,7 @@
     from a broken knowledge base.
 
 .PARAMETER Scope
-    global  installs to ~/.agents/ so Smith works in every project (default)
+    global  installs to ~/.agents/ so A.W.I.N.O. works in every project (default)
     local   installs into the current project's .agents/ only
 
 .PARAMETER NoLink
@@ -36,7 +36,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$smithRoot = $PSScriptRoot
+$awinoRoot = $PSScriptRoot
 
 function Write-Step  { param([string]$m) Write-Host "==> $m" -ForegroundColor Cyan }
 function Write-Ok    { param([string]$m) Write-Host "  OK    $m" -ForegroundColor Green }
@@ -44,8 +44,8 @@ function Write-Warn2 { param([string]$m) Write-Host "  WARN  $m" -ForegroundColo
 function Write-Bad   { param([string]$m) Write-Host "  FAIL  $m" -ForegroundColor Red }
 
 Write-Host ""
-Write-Host "Agent Smith installer" -ForegroundColor White
-Write-Host "  source: $smithRoot"
+Write-Host "A.W.I.N.O. installer" -ForegroundColor White
+Write-Host "  source: $awinoRoot"
 Write-Host "  scope:  $Scope"
 Write-Host ""
 
@@ -74,7 +74,7 @@ if (Get-Command uv -ErrorAction SilentlyContinue) {
 
 # ── 2. environment ───────────────────────────────────────────────────────────
 Write-Step "Syncing the project environment"
-Push-Location $smithRoot
+Push-Location $awinoRoot
 try {
     # Hardlinking fails on OneDrive, network shares, Docker volumes, and any
     # filesystem where the uv cache and the project sit on different backing
@@ -144,7 +144,7 @@ if (Get-Command sd -ErrorAction SilentlyContinue) {
 } else {
     $runtime = @('bun', 'npm') | Where-Object { Get-Command $_ -ErrorAction SilentlyContinue } | Select-Object -First 1
     if (-not $runtime) {
-        Write-Warn2 "seeds not installed and no bun or npm found. Optional, Smith works without it"
+        Write-Warn2 "seeds not installed and no bun or npm found. Optional, A.W.I.N.O. works without it"
     } else {
         Write-Warn2 "seeds not found, installing with $runtime"
         try {
@@ -156,7 +156,7 @@ if (Get-Command sd -ErrorAction SilentlyContinue) {
         if (Get-Command sd -ErrorAction SilentlyContinue) {
             Write-Ok "seeds installed with $runtime"
         } else {
-            Write-Warn2 "could not install seeds automatically. Optional, Smith works without it"
+            Write-Warn2 "could not install seeds automatically. Optional, A.W.I.N.O. works without it"
         }
     }
 }

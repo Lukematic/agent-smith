@@ -1,8 +1,8 @@
 """Toolchain detection: adapt to the project, do not dictate to it.
 
-Smith runs inside other people's repositories. A tool that demands uv in a Poetry
+A.W.I.N.O. runs inside other people's repositories. A tool that demands uv in a Poetry
 project, or pytest in a Jest project, is not a harness: it is an obstacle. So the
-commands Smith runs for its gates are *discovered* from what the project actually
+commands A.W.I.N.O. runs for its gates are *discovered* from what the project actually
 uses, with a documented preference order and an explicit fallback.
 
 The preference order is not arbitrary. It follows the strongest available
@@ -138,9 +138,9 @@ class Toolchain:
         try:
             candidate.relative_to(self.root.resolve())
         except ValueError:
-            # Smith itself normally runs from its own uv environment. Treating
+            # A.W.I.N.O. itself normally runs from its own uv environment. Treating
             # that as the target project's environment caused sparse projects to
-            # inherit Smith's .venv and fall back to pip. Only an environment
+            # inherit A.W.I.N.O.'s .venv and fall back to pip. Only an environment
             # inside the target project is evidence about that project.
             return None
         return candidate
@@ -151,7 +151,7 @@ class Toolchain:
         """Pick the manager by strongest guarantee, not by preference.
 
         A lockfile is evidence of intent: someone committed it, so reproducing it
-        is what the project expects. Only when no lock exists does Smith fall back
+        is what the project expects. Only when no lock exists does A.W.I.N.O. fall back
         to whatever environment happens to be present.
         """
         tool = self.pyproject.get("tool", {})
@@ -366,7 +366,7 @@ class Toolchain:
         """Resolve a gate to a command, preferring the project's own recipe.
 
         If the project defines ``just test``, use it. The project's own entry point
-        encodes setup Smith cannot infer, such as starting a database or setting an
+        encodes setup A.W.I.N.O. cannot infer, such as starting a database or setting an
         environment variable.
         """
         runner, runner_reason = self.runner
@@ -402,7 +402,7 @@ class Toolchain:
 
     @property
     def blocking_gaps(self) -> list[str]:
-        """What genuinely prevents Smith from gating work here."""
+        """What genuinely prevents A.W.I.N.O. from gating work here."""
         gaps: list[str] = []
         manager, reason = self.manager
         if manager is Manager.NONE:

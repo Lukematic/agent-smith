@@ -1,6 +1,6 @@
 """Seeds integration: one worklist, and gate closure that closes issues.
 
-Seeds is a git-native issue tracker where the JSONL file is the database. Smith
+Seeds is a git-native issue tracker where the JSONL file is the database. A.W.I.N.O.
 integrates with it rather than replacing it, because two worklists is worse than
 one: a markdown checklist beside a real tracker means nobody knows which is
 authoritative. That failure has a name here, ``COMPETING_TRACKER``.
@@ -15,7 +15,7 @@ Three things this buys:
 3. **Verification issues become discoverable.** An issue labelled ``verify``
    describes a check somebody wanted, which is exactly the input a gate needs.
 
-Every call shells out to ``sd`` with ``--json``. Smith never writes
+Every call shells out to ``sd`` with ``--json``. A.W.I.N.O. never writes
 ``.seeds/*.jsonl`` directly: the CLI owns advisory locking and atomic writes, and
 hand-editing the JSONL would corrupt concurrent agent runs.
 """
@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-# Labels Smith understands. Seeds itself treats labels as opaque strings.
+# Labels A.W.I.N.O. understands. Seeds itself treats labels as opaque strings.
 VERIFY_LABEL = "verify"
 BLOCKED_LABEL = "blocked-on-verification"
 
@@ -53,16 +53,16 @@ class SeedsState(StrEnum):
     def blocking(self) -> bool:
         """Seeds is never a blocking dependency.
 
-        Smith works in repositories it does not own. A missing tracker is a
-        degraded capability, not a failure: Smith falls back to reporting work
+        A.W.I.N.O. works in repositories it does not own. A missing tracker is a
+        degraded capability, not a failure: A.W.I.N.O. falls back to reporting work
         rather than tracking it. Treating an absent optional tool as an error
-        would make Smith unusable in exactly the repositories it is meant to help.
+        would make A.W.I.N.O. unusable in exactly the repositories it is meant to help.
         """
         return False
 
 
 # Installing a tracker into someone else's repository is a committed, git-visible
-# mutation nobody asked for. Smith states the effects, offers, and abides.
+# mutation nobody asked for. A.W.I.N.O. states the effects, offers, and abides.
 INSTALL_HINT = "bun install -g @os-eco/seeds-cli"
 INIT_HINT = "sd init"
 INIT_EFFECTS = (
@@ -147,8 +147,8 @@ class Seeds:
         return (self.root / ".seeds" / "issues.jsonl").is_file()
 
     def state(self) -> tuple[SeedsState, str]:
-        """Report usability without pretending. A tracker Smith cannot reach is
-        not a tracker Smith should claim to be using."""
+        """Report usability without pretending. A tracker A.W.I.N.O. cannot reach is
+        not a tracker A.W.I.N.O. should claim to be using."""
         if not self.installed:
             return (
                 SeedsState.NOT_INSTALLED,
@@ -171,7 +171,7 @@ class Seeds:
         """Initialize a tracker, only when explicitly confirmed.
 
         Refuses by default. ``sd init`` writes ``.seeds/`` and edits
-        ``.gitattributes`` in a repository Smith may not own, so the human asks
+        ``.gitattributes`` in a repository A.W.I.N.O. may not own, so the human asks
         for it or it does not happen.
         """
         if not confirmed:
@@ -179,7 +179,7 @@ class Seeds:
                 False,
                 "init",
                 f"refusing to create a tracker unasked. Run '{INIT_HINT}' yourself, "
-                "or pass --confirm to have Smith do it.",
+                "or pass --confirm to have A.W.I.N.O. do it.",
             )
         if not self.installed:
             return SeedsResult(False, "init", f"sd is not installed; '{INSTALL_HINT}'")

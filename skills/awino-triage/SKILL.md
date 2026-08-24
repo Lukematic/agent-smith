@@ -4,7 +4,7 @@ description: Use when an agent is misbehaving and the complaint is vague. Conver
 allowed-tools: Read, Glob, Grep, Bash
 ---
 
-# Smith Triage
+# A.W.I.N.O. Triage
 
 "The agent is bad" is not a diagnosis. It bundles unrelated problems with
 unrelated fixes and points effort at the model, which is rarely the cause.

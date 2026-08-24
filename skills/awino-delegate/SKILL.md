@@ -3,7 +3,7 @@ name: awino-delegate
 description: Decompose work into parallel subagents with disjoint file ownership. Use when independent workstreams can run simultaneously and the orchestrator should coordinate rather than implement
 ---
 
-# Smith Delegate
+# A.W.I.N.O. Delegate
 
 Subagents run in **isolated sessions** and return a result. They do not inherit
 the parent conversation. That isolation is the feature — it keeps the

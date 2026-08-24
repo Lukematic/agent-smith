@@ -4,9 +4,9 @@ description: Use when asked to update yourself or refresh knowledge. Diffs the l
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash
 ---
 
-# Smith Self-Update
+# A.W.I.N.O. Self-Update
 
-Agent Smith's knowledge is upstream and changes daily. This skill keeps the
+A.W.I.N.O.'s knowledge is upstream and changes daily. This skill keeps the
 *index* current without ever bulk-importing the corpus.
 
 ## Instructions

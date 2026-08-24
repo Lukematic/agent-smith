@@ -1,5 +1,5 @@
-# SOURCES.yaml — upstream knowledge sources for Agent Smith
-# Smith reads this to know WHERE knowledge lives. It never inlines the content.
+# SOURCES.yaml — upstream knowledge sources for A.W.I.N.O.
+# A.W.I.N.O. reads this to know WHERE knowledge lives. It never inlines the content.
 
 version: 1
 refresh_policy:
@@ -76,16 +76,16 @@ sources:
     role: tooling
     license: MIT
     attribution: Jaymin West
-    description: Git-native issue tracker. Smith uses sd for all worklists.
+    description: Git-native issue tracker. A.W.I.N.O. uses sd for all worklists.
     raw_base: https://raw.githubusercontent.com/jayminwest/seeds/main/
 
   - id: local_skills
     name: Local skill library
     kind: filesystem
-    path: $SMITH_SKILL_LIBRARY
+    path: $AWINO_SKILL_LIBRARY
     role: reuse_first
     description: >
-      Large existing local skill collection. Smith MUST search here before
+      Large existing local skill collection. A.W.I.N.O. MUST search here before
       authoring a new skill. Reuse beats creation.
 
 fetch:

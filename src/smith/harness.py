@@ -1,6 +1,6 @@
 """Harness installation: put the persona where each tool actually looks.
 
-Smith's persona is one Markdown body, but every harness expects a different
+A.W.I.N.O.'s persona is one Markdown body, but every harness expects a different
 location, filename, and frontmatter shape. Getting any of the three wrong fails
 *silently*: the file lands on disk, nothing errors, and the agent never appears.
 So each target is verified against a real installation rather than assumed.
@@ -120,7 +120,7 @@ class Harness(StrEnum):
 
 @dataclass(frozen=True)
 class Target:
-    """One place Smith can be installed."""
+    """One place A.W.I.N.O. can be installed."""
 
     harness: Harness
     root: Path
@@ -165,7 +165,7 @@ class Action:
 def discover(project: Path) -> list[Target]:
     """Every harness location, global first.
 
-    Global comes first because it is the right default: one shared Smith cannot
+    Global comes first because it is the right default: one shared A.W.I.N.O. cannot
     fork its own knowledge base, which is the failure that copying per project
     guarantees.
     """
@@ -177,7 +177,7 @@ def discover(project: Path) -> list[Target]:
 
 
 def detected(project: Path) -> list[Target]:
-    """Only locations that already exist, so Smith installs where you work."""
+    """Only locations that already exist, so A.W.I.N.O. installs where you work."""
     return [t for t in discover(project) if t.exists]
 
 
@@ -325,7 +325,7 @@ def _persona_for(harness: Harness, source: Path) -> str:
         return "\n".join(header) + "\n\n" + body
 
     if harness is Harness.CLAUDE:
-        # Claude Code agents declare a tool list. Smith needs to read, search,
+        # Claude Code agents declare a tool list. A.W.I.N.O. needs to read, search,
         # write, and run its own CLI, so the set is deliberate rather than
         # inherited.
         tools = "Read, Write, Edit, Grep, Glob, Bash, Task, TodoWrite, WebFetch"
@@ -389,7 +389,7 @@ def install(
 
 
 def status(project: Path, targets: list[Target] | None = None) -> list[tuple[Target, bool, str]]:
-    """Where Smith is currently installed, and where it is not."""
+    """Where A.W.I.N.O. is currently installed, and where it is not."""
     out: list[tuple[Target, bool, str]] = []
     for target in targets or discover(project):
         persona = target.persona_path
@@ -416,8 +416,8 @@ def status(project: Path, targets: list[Target] | None = None) -> list[tuple[Tar
 def pointer_text(smith_home: Path) -> str:
     """A short block for AGENTS.md or CLAUDE.md in a project.
 
-    This is the minimum a repository needs: three lines that make Smith
-    discoverable without copying anything. Copying Smith per project forks its
+    This is the minimum a repository needs: three lines that make A.W.I.N.O.
+    discoverable without copying anything. Copying A.W.I.N.O. per project forks its
     knowledge base, which is the failure a pointer avoids.
     """
     return f"""## A.W.I.N.O. (Agentic Workflow Intelligence & Navigation Orchestrator)

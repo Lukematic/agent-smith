@@ -1,4 +1,4 @@
-# Agent Smith — task runner
+# A.W.I.N.O. task runner
 # https://github.com/casey/just
 #
 # Every command an agent or human needs, in one discoverable place.
@@ -55,6 +55,10 @@ test-cov:
 # about caches and must not block on regenerable artifacts.
 check: lint test validate selftest tidy-check
     @echo "ALL GATES PASSED"
+
+# Audit active surfaces for unclassified legacy branding
+branding:
+    uv run pytest tests/test_branding.py -q
 
 # Prove the validator still blocks a deliberately broken artifact. A validator
 # verified only against passing input is untested.
@@ -129,7 +133,7 @@ clean:
 install-harness:
     uv run awino install
 
-# Where is Smith installed?
+# Where is A.W.I.N.O. installed?
 install-status:
     uv run awino install-status
 

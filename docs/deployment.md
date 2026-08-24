@@ -1,10 +1,10 @@
 # Deployment
 
-Install Agent Smith **once at user scope**. Each repository gets project-local
+Install A.W.I.N.O. **once at user scope**. Each repository gets project-local
 intent, run state, and an optional pointer—not a copied knowledge base.
 
 This prevents `KNOWLEDGE_FORK`: fixing a lesson or updating the registry once must
-improve every project that uses Smith.
+improve every project that uses A.W.I.N.O.
 
 ---
 
@@ -39,7 +39,7 @@ Or clone and inspect first:
 
 ```bash
 git clone https://github.com/Lukematic/agent-smith.git
-cd agent-smith
+cd awino
 ./install.sh          # .\install.ps1 on Windows
 ```
 
@@ -71,7 +71,7 @@ awino onboard
 
 It:
 
-1. resolves Smith home versus project root;
+1. resolves A.W.I.N.O. home versus project root;
 2. reads project instructions, metadata, README, non-goals, and current tracker;
 3. detects toolchain, lint, test, and install commands;
 4. reflects a mission draft with its source/confidence;
@@ -107,7 +107,7 @@ or the harness-specific equivalent:
 awino pointer
 ```
 
-The pointer says where Smith is installed and that agentic-engineering tasks should
+The pointer says where A.W.I.N.O. is installed and that agentic-engineering tasks should
 route to it. It does not copy the persona, skills, registry, or memory.
 
 ---
@@ -130,7 +130,7 @@ is why `awino install` rebuilds them per harness.
 ## Update
 
 ```bash
-cd <your-agent-smith-clone>
+cd <your-awino-clone>
 git pull
 uv sync --all-groups
 awino install --overwrite
@@ -146,7 +146,7 @@ keep their harness-specific frontmatter current.
 
 ## Memory policy
 
-When Memory MCP is available, Smith may dual-write short recall records to MCP and
+When Memory MCP is available, A.W.I.N.O. may dual-write short recall records to MCP and
 append-only files. The files are the audit ledger and win on disagreement.
 
 Categories:
@@ -168,12 +168,12 @@ source-grounded project evidence requiring domain review.
 
 ```text
 1–2 well-understood files                 -> direct
-Mission or user outcome unclear           -> smith-discover / awino onboard
-Codebase not understood                   -> smith-rpi research, then stop
-Clear machine-checkable gate, many tries  -> smith-ralph
-Independent disjoint workstreams          -> smith-delegate
-Research/RAG factual synthesis            -> smith-evidence
-Scientific/data pipeline                  -> smith-reproducibility
+Mission or user outcome unclear           -> awino-discover / awino onboard
+Codebase not understood                   -> awino-rpi research, then stop
+Clear machine-checkable gate, many tries  -> awino-ralph
+Independent disjoint workstreams          -> awino-delegate
+Research/RAG factual synthesis            -> awino-evidence
+Scientific/data pipeline                  -> awino-reproducibility
 ```
 
 These compose. A typical research-product sequence is:

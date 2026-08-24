@@ -3,7 +3,7 @@ name: awino-author-tool
 description: Decide whether a capability should be a skill, a hook, a script, a recipe, or an MCP server, then build it. Use when asked to create a tool or extend what an agent can do
 ---
 
-# Smith Author Tool
+# A.W.I.N.O. Author Tool
 
 Most "I need a tool for this" requests do not need a tool. Building an MCP server
 where a skill would do is `TOOL_SPRAWL`: more surface, more failure modes, more
@@ -58,8 +58,8 @@ Review before enabling; never hook something you have not read.
 
 Search and report, in order:
 
-1. `$SMITH/emitted/` — did we build it already?
-2. `$SMITH_SKILL_LIBRARY` — the local library
+1. `$AWINO/emitted/` — did we build it already?
+2. `$AWINO_SKILL_LIBRARY` — the local library
 3. Built-in skills and extensions exposed by the active harness
 4. Installed harness plugins or extension inventory
 5. Registry `reference_configs` — the book ships real examples
@@ -84,7 +84,7 @@ Tool design rules:
 
 ## Step 5 — Spec, then approval
 
-Write `$SMITH/specs/<slug>-tool-spec.md`:
+Write `$AWINO/specs/<slug>-tool-spec.md`:
 
 ```markdown
 # Spec: <name>
@@ -127,7 +127,7 @@ Present and stop. Approval required before building.
 | script | beside the skill that calls it, in the skill's directory |
 | recipe | `~/.config/goose/recipes/<name>.yaml` |
 
-Emit to `$SMITH/emitted/` first. The human promotes. Writing straight into a live
+Emit to `$AWINO/emitted/` first. The human promotes. Writing straight into a live
 skills directory is `DIRECT_PROMOTION`.
 
 Supporting files live in the skill directory and are reachable via the developer
@@ -139,7 +139,7 @@ Run it. Paste the output. Then run it wrong on purpose and paste that too — a 
 whose failure path is untested will fail silently in production.
 
 ```powershell
-& $SMITH\scripts\lint_agent.ps1 -Path $SMITH\emitted\<name>\SKILL.md
+& $AWINO\scripts\lint_agent.ps1 -Path $AWINO\emitted\<name>\SKILL.md
 ```
 
 ## Reporting

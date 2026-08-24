@@ -1,11 +1,11 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    One-line bootstrap for Agent Smith on a machine with nothing installed.
+    One-line bootstrap for A.W.I.N.O. on a machine with nothing installed.
 
 .DESCRIPTION
     Clones the repository, installs uv if missing, creates an isolated
-    environment, links Smith into the agent harness, and verifies the result.
+    environment, links A.W.I.N.O. into the agent harness, and verifies the result.
 
     Run directly from the web:
         irm https://raw.githubusercontent.com/Lukematic/agent-smith/main/bootstrap.ps1 | iex
@@ -16,14 +16,14 @@
 
 .NOTES
     Environment overrides:
-        SMITH_REPO   repository URL, for a fork
-        SMITH_DIR    clone location, overrides the default below
-        SMITH_REF    branch or tag to check out, default main
+        AWINO_REPO   repository URL, for a fork (falls back to SMITH_REPO)
+        AWINO_DIR    clone location (falls back to SMITH_DIR)
+        AWINO_REF    branch or tag (falls back to SMITH_REF, default main)
 
     Where it clones, in order:
-        1. -Dir or SMITH_DIR, if given
-        2. ./agent-smith in the current directory, when that is a sensible place
-        3. ~/dev/agent-smith, when the current directory is a home or system root
+        1. -Dir or AWINO_DIR, if given
+        2. ./awino in the current directory, when that is a sensible place
+        3. ~/dev/awino, when the current directory is a home or system root
 
     Cloning into the current directory is the least surprising default: you ran the
     command from somewhere deliberately. The fallback exists because dropping a
@@ -31,9 +31,9 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Repo = $(if ($env:SMITH_REPO) { $env:SMITH_REPO } else { "https://github.com/Lukematic/agent-smith.git" }),
+    [string]$Repo = $(if ($env:AWINO_REPO) { $env:AWINO_REPO } elseif ($env:SMITH_REPO) { $env:SMITH_REPO } else { "https://github.com/Lukematic/agent-smith.git" }),
     [string]$Dir  = "",
-    [string]$Ref  = $(if ($env:SMITH_REF)  { $env:SMITH_REF }  else { "main" }),
+    [string]$Ref  = $(if ($env:AWINO_REF) { $env:AWINO_REF } elseif ($env:SMITH_REF) { $env:SMITH_REF } else { "main" }),
     [switch]$Local,
     [switch]$NoTools
 )
@@ -54,7 +54,8 @@ function Resolve-CloneDir {
     param([string]$Requested)
 
     if ($Requested) { return $Requested }
-    if ($env:SMITH_DIR) { return $env:SMITH_DIR }
+    if ($env:AWINO_DIR) { return $env:AWINO_DIR }
+    if ($env:SMITH_DIR) { return $env:SMITH_DIR } # Deprecated compatibility fallback.
 
     $here = (Get-Location).Path
 
@@ -70,21 +71,21 @@ function Resolve-CloneDir {
 
     foreach ($bad in $unsuitable) {
         if ($here.TrimEnd('\') -ieq $bad.TrimEnd('\')) {
-            $fallback = Join-Path $HOME "dev\agent-smith"
+            $fallback = Join-Path $HOME "dev\awino"
             Warn "current directory is $here, which is not a good place for a clone"
             Write-Host "  Using $fallback instead. Pass -Dir to choose your own." -ForegroundColor DarkGray
             return $fallback
         }
     }
 
-    return (Join-Path $here "agent-smith")
+    return (Join-Path $here "awino")
 }
 
 $Dir = Resolve-CloneDir -Requested $Dir
 
 
 Write-Host ""
-Write-Host "Agent Smith bootstrap" -ForegroundColor White
+Write-Host "A.W.I.N.O. bootstrap" -ForegroundColor White
 Write-Host "  repo: $Repo"
 Write-Host "  into: $Dir"
 Write-Host ""
@@ -169,7 +170,7 @@ if ($installFailed) {
 
 Write-Host "BOOTSTRAP COMPLETE" -ForegroundColor Green
 Write-Host ""
-Write-Host "Smith lives at: $Dir" -ForegroundColor White
+Write-Host "A.W.I.N.O. lives at: $Dir" -ForegroundColor White
 Write-Host "Update it with: cd $Dir; git pull" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "First commands, in any project:" -ForegroundColor White

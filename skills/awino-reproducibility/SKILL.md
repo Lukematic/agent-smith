@@ -4,7 +4,7 @@ name: awino-reproducibility
 description: Reproducibility discipline for scientific research pipelines. Requires traceable run artifacts with inputs configuration model identity event history and rerun instructions.
 ---
 
-# Smith Reproducibility
+# A.W.I.N.O. Reproducibility
 
 Use before building or modifying a scientific, data, RAG, evaluation, or agent
 pipeline whose results must be explainable later.

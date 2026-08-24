@@ -1,7 +1,7 @@
 """Subagent spawning with enforced delegation discipline.
 
-The persona claimed Smith "spawns scoped subagents" and `smith-delegate` described
-how, but no spawn code existed. That is an ``UNGROUNDED_CLAIM`` in Smith's own
+The persona claimed A.W.I.N.O. "spawns scoped subagents" and `awino-delegate` described
+how, but no spawn code existed. That is an ``UNGROUNDED_CLAIM`` in A.W.I.N.O.'s own
 artifact, and the fix is code rather than softer wording.
 
 What this module refuses to do is the important part:
@@ -33,7 +33,8 @@ from pathlib import Path
 
 MAX_CONCURRENT = 6
 DEFAULT_TIMEOUT_SECONDS = 900
-SPAWN_DEPTH_ENV = "SMITH_SPAWN_DEPTH"
+SPAWN_DEPTH_ENV = "AWINO_SPAWN_DEPTH"
+LEGACY_SPAWN_DEPTH_ENV = "SMITH_SPAWN_DEPTH"
 
 
 class Runner(StrEnum):
@@ -133,7 +134,7 @@ class Assignment:
         context = "\n".join(f"- {p}" for p in self.context_paths) or "- none specified"
         return f"""# Assignment: {self.agent_id}
 
-You are a **{self.role}** subagent. You were spawned by Agent Smith to do one
+You are a **{self.role}** subagent. You were spawned by A.W.I.N.O. to do one
 scoped piece of work. You inherit no conversation, so everything you need is here.
 
 ## Objective
@@ -177,7 +178,7 @@ blocked report is useful; a false completion is not.
 
 ## Reference
 
-Agent Smith's constitution is at `{smith_home}/AGENT_SMITH.md` if you need its
+A.W.I.N.O.'s constitution is at `{smith_home}/AWINO.md` if you need its
 conventions.
 """
 
@@ -250,7 +251,7 @@ def plan_waves(assignments: list[Assignment]) -> list[list[Assignment]]:
 
 def current_depth() -> int:
     try:
-        return int(os.environ.get(SPAWN_DEPTH_ENV, "0"))
+        return int(os.environ.get(SPAWN_DEPTH_ENV) or os.environ.get(LEGACY_SPAWN_DEPTH_ENV, "0"))
     except ValueError:
         return 0
 

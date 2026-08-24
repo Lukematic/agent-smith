@@ -1,6 +1,6 @@
 """Mission discovery: read the project's purpose instead of assuming it.
 
-Smith runs in repositories it did not create. Without knowing what a project is
+A.W.I.N.O. runs in repositories it did not create. Without knowing what a project is
 *for*, every judgement it makes is generic: it will suggest tests for a
 scratchpad, propose CI for a private notebook, and treat a teaching repository
 like a production service.
@@ -17,7 +17,7 @@ human authored them:
    contradicts the stated purpose. That contradiction is information.
 5. **Structure** is the weakest signal and the last resort.
 
-What Smith must never do is invent a mission. An agent acting confidently on a
+What A.W.I.N.O. must never do is invent a mission. An agent acting confidently on a
 fabricated purpose is worse than one that asks, because the fabrication propagates
 into every downstream plan.
 """
@@ -119,7 +119,7 @@ class Evidence:
 
 @dataclass
 class Mission:
-    """What a project is for, and how confident Smith is about that."""
+    """What a project is for, and how confident A.W.I.N.O. is about that."""
 
     project: str
     statement: str | None = None
@@ -141,7 +141,7 @@ class Mission:
         return "unknown: no mission statement found in any authored source"
 
     def advice(self) -> list[str]:
-        """What Smith should do differently given this mission."""
+        """What A.W.I.N.O. should do differently given this mission."""
         out: list[str] = []
         if not self.known:
             out.append(

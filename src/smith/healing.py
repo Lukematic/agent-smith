@@ -12,8 +12,8 @@ Grounded in two book chapters, not improvised:
   stops after three attempts and why a remedy that reports success but does not
   change the outcome is treated as a failure, not a retry.
 
-The failure this replaces: Smith spawned a subagent, it failed on
-"Not logged in", and Smith reported only `FAILED  unverified`. The exit code was
+The failure this replaces: A.W.I.N.O. spawned a subagent, it failed on
+"Not logged in", and A.W.I.N.O. reported only `FAILED  unverified`. The exit code was
 captured correctly and the diagnosis was absent, which is the difference between a
 ledger and a colleague.
 
@@ -41,7 +41,7 @@ MAX_HEAL_ATTEMPTS = 3
 
 
 class Failure(StrEnum):
-    """Named failure classes. A class Smith cannot name, it cannot heal."""
+    """Named failure classes. A class A.W.I.N.O. cannot name, it cannot heal."""
 
     AUTH_MISSING = "AUTH_MISSING"
     CLI_MISSING = "CLI_MISSING"
@@ -163,12 +163,12 @@ SIGNATURES: tuple[tuple[Failure, tuple[str, ...], str, Callable | None, str], ..
         "cannot be healed automatically: credentials are yours to provide",
         None,
         "run 'claude /login', set ANTHROPIC_API_KEY, or point the runner at your "
-        "own gateway (see docs/api-keys.md). Smith will not touch your credentials.",
+        "own gateway (see docs/api-keys.md). A.W.I.N.O. will not touch your credentials.",
     ),
     (
         Failure.RATE_LIMITED,
         ("rate limit", "429", "too many requests", "overloaded"),
-        "waiting is the only remedy, and Smith does not sleep on your behalf",
+        "waiting is the only remedy, and A.W.I.N.O. does not sleep on your behalf",
         None,
         "wait and retry. If this repeats, reduce concurrency with fewer subagents.",
     ),
@@ -210,7 +210,7 @@ SIGNATURES: tuple[tuple[Failure, tuple[str, ...], str, Callable | None, str], ..
     (
         Failure.CLI_MISSING,
         ("is not recognized", "command not found", "no such file or directory: "),
-        "cannot be healed: installing arbitrary tooling is not Smith's call",
+        "cannot be healed: installing arbitrary tooling is not A.W.I.N.O.'s call",
         None,
         "install the missing command, then retry.",
     ),
@@ -224,7 +224,7 @@ SIGNATURES: tuple[tuple[Failure, tuple[str, ...], str, Callable | None, str], ..
     (
         Failure.NETWORK,
         ("connection refused", "temporary failure in name resolution", "timed out", "unreachable"),
-        "cannot be healed: the network is outside Smith",
+        "cannot be healed: the network is outside A.W.I.N.O.",
         None,
         "check connectivity or proxy settings, then retry.",
     ),

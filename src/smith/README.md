@@ -1,6 +1,6 @@
 # `src/smith`
 
-The deterministic half of Agent Smith. Anything a script does reliably does not
+The deterministic half of A.W.I.N.O. Anything a script does reliably does not
 belong in a prompt, so it lives here instead.
 
 ## Contents
@@ -8,7 +8,7 @@ belong in a prompt, so it lives here instead.
 | Module | Responsibility |
 | --- | --- |
 | `cli.py` | Every command, via typer. The only module that prints. |
-| `paths.py` | Smith home vs project resolution, plus the wheel-bundle fallback. |
+| `paths.py` | A.W.I.N.O. home vs project resolution, plus the wheel-bundle fallback. |
 | `knowledge.py` | Fetch, cache, provenance, drift, routing, and the file budget. |
 | `enforce.py` | The gate ledger. Completion is computed from recorded exit codes. |
 | `models.py` | Mental models as decision functions: ladder, constraint, verifier, pit. |
@@ -25,16 +25,16 @@ belong in a prompt, so it lives here instead.
 
 ## Usage
 
-Installed as the `smith` console script by `pyproject.toml`.
+Installed as the `awino` console script by `pyproject.toml`.
 
 ```bash
-smith --help          # every command
-smith context         # what Smith thinks home and project are
-smith doctor          # project health, refuses on failure
-smith gate open ...   # start a gated run
+awino --help          # every command
+awino context         # what A.W.I.N.O. thinks home and project are
+awino doctor          # project health, refuses on failure
+awino gate open ...   # start a gated run
 ```
 
-Inside Smith's own repository, `just` wraps the common paths: `just check` runs
+Inside A.W.I.N.O.'s own repository, `just` wraps the common paths: `just check` runs
 lint, tests, and validation as a single gate.
 
 ## Format
@@ -58,7 +58,7 @@ Three conventions worth knowing before editing:
 Edit freely, but `just check` must pass before the work is complete:
 
 ```bash
-just check    # ruff check, ruff format --check, pytest, smith validate, tidy-check
+just check    # ruff check, ruff format --check, pytest, awino validate, tidy-check
 ```
 
 The test suite exists to prove the gates actually block, not merely that the code
@@ -71,5 +71,5 @@ refuses the case it was built to catch.
 
 ---
 
-This file is hand-written and carries no `smith:generated` marker, so
-`smith fix` will not overwrite it.
+This file is hand-written and carries no generated marker, so `awino fix` will
+not overwrite it.

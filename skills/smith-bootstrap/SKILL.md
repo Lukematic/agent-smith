@@ -24,7 +24,8 @@ your project folders.
 
 ```text
 .smith/
-  AGENT_SMITH.md            # constitution - REQUIRED, do not stub
+  AWINO.md                  # canonical constitution - REQUIRED, do not stub
+  AGENT_SMITH.md            # deprecated compatibility pointer
   PLAN.md
   knowledge/{SOURCES.yaml, REGISTRY.yaml, MANIFEST.json, cache/}
   skills/                   # smith-* skills
@@ -101,7 +102,7 @@ agent (routes to smith-triage).
 | Mode | Guard |
 | --- | --- |
 | `SCAFFOLD_IN_WRONG_PLACE` | .smith must be at workspace root |
-| `STUB_CONSTITUTION` | AGENT_SMITH.md must be the full text, never a placeholder |
+| `STUB_CONSTITUTION` | AWINO.md must be the full text, never a placeholder |
 | `BULK_REGISTRY_DUMP` | never add registry entries without tags and use_when |
 | `PREMATURE_COMPLETION` | bootstrap is not done until the fetch smoke test output is pasted |
 | `INVENTED_LESSONS` | lessons.md starts empty; rules come from real sessions |

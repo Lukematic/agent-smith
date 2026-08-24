@@ -1,12 +1,12 @@
 ---
 name: awino-bootstrap
-description: Use on Agent Smith first run to create the .smith folder scaffold and verify the knowledge registry against upstream. Triggers on "bootstrap agent smith", "set up agent smith", missing .smith folder.
+description: Use on A.W.I.N.O. first run to create the .smith folder scaffold and verify the knowledge registry against upstream. Triggers on "bootstrap A.W.I.N.O.", "set up A.W.I.N.O.", missing .smith folder.
 allowed-tools: Read, Write, Glob, Grep, Bash
 ---
 
-# Smith Bootstrap
+# A.W.I.N.O. Bootstrap
 
-First-run initialization for Agent Smith. Idempotent — safe to re-run.
+First-run initialization for A.W.I.N.O. Idempotent — safe to re-run.
 
 ## Instructions
 
@@ -24,7 +24,8 @@ your project folders.
 
 ```text
 .smith/
-  AGENT_SMITH.md            # constitution - REQUIRED, do not stub
+  AWINO.md                  # canonical constitution - REQUIRED, do not stub
+  AGENT_SMITH.md            # deprecated compatibility pointer
   PLAN.md
   knowledge/{SOURCES.yaml, REGISTRY.yaml, MANIFEST.json, cache/}
   skills/                   # awino-* skills
@@ -70,10 +71,10 @@ not claim bootstrap succeeded without it.
 
 ### Step 5: Check the local skill library
 
-Before Smith ever authors a skill, it must know what already exists:
+Before A.W.I.N.O. ever authors a skill, it must know what already exists:
 
 ```powershell
-Get-ChildItem -Recurse -Filter SKILL.md $SMITH_SKILL_LIBRARY |
+Get-ChildItem -Recurse -Filter SKILL.md $AWINO_SKILL_LIBRARY |
   Measure-Object | Select-Object Count
 ```
 
@@ -82,7 +83,7 @@ Record the count in `memory/SESSION_LOG.md`. Reuse beats creation.
 ### Step 6: Report
 
 ```markdown
-## Agent Smith Bootstrapped
+## A.W.I.N.O. Bootstrapped
 
 | Check | Result |
 |-------|--------|
@@ -101,7 +102,7 @@ agent (routes to awino-triage).
 | Mode | Guard |
 | --- | --- |
 | `SCAFFOLD_IN_WRONG_PLACE` | .smith must be at workspace root |
-| `STUB_CONSTITUTION` | AGENT_SMITH.md must be the full text, never a placeholder |
+| `STUB_CONSTITUTION` | AWINO.md must be the full text, never a placeholder |
 | `BULK_REGISTRY_DUMP` | never add registry entries without tags and use_when |
 | `PREMATURE_COMPLETION` | bootstrap is not done until the fetch smoke test output is pasted |
 | `INVENTED_LESSONS` | lessons.md starts empty; rules come from real sessions |

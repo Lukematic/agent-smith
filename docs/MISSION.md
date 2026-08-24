@@ -36,13 +36,13 @@ claiming it is done.
    call — rather than the bookkeeping around them.
 
 2. **Never claim more than it has proven.**
-   Every capability claim is probed against the running system (`smith limits`).
+   Every capability claim is probed against the running system (`awino limits`).
    Every completion claim is computed from a recorded exit code
-   (`smith gate close`), never asserted. A degraded or absent capability is
+   (`awino gate close`), never asserted. A degraded or absent capability is
    stated with its limit in the same sentence it is mentioned in.
 
 3. **Meet the user where their project already is.**
-   `smith onboard` reads what a project already says about itself before asking
+   `awino onboard` reads what a project already says about itself before asking
    anything. It asks the user one unresolved question at a time rather than
    demanding a questionnaire, and it persists the answer so the next command
    does not start over.
@@ -81,7 +81,7 @@ claiming it is done.
   verifies a nuclear engineer's, export-control analyst's, or data scientist's
   work — it does not originate the scientific or regulatory conclusion.
 - A.W.I.N.O. does not run unattended by default. Autonomy level is computed from
-  verifier strength (`smith plan`) and reported explicitly; it is not assumed.
+  verifier strength (`awino plan`) and reported explicitly; it is not assumed.
 - A.W.I.N.O. does not silently rename, delete, or restructure a user's existing
   tooling (Seeds, task lists, git history) without asking first.
 
@@ -90,7 +90,7 @@ claiming it is done.
 A.W.I.N.O. is working when a user can:
 
 1. Point it at a fresh or existing project and get a grounded read of what the
-   project is for, in under one minute (`smith onboard`).
+   project is for, in under one minute (`awino onboard`).
 2. Ask a conceptual question and receive a cited answer that opens at most three
    knowledge files, never a wall of restated documentation.
 3. Report a misbehaving agent and receive a named failure mode, a surface, and a
@@ -102,16 +102,16 @@ A.W.I.N.O. is working when a user can:
 
 ## Relationship to the prior name
 
-This project was built and is still distributed as **Agent Smith** /
+This project was built and is still distributed as **A.W.I.N.O.** /
 `awino-harness` (PyPI) / `awino` (CLI command). `smith` is the deprecated
 user-facing brand. The rename is deliberately staged (see
 `docs/name-options.txt` for the full migration plan and the other name
 candidates that were considered and preserved):
 
 - **Phase 1 (this change):** display name, mission, and mode names become
-  A.W.I.N.O. The `smith` command, package name, mode slugs, and `.smith/`
+  A.W.I.N.O. The former command, package name, mode slugs, and `.smith/`
   project directory are unchanged so existing installs keep working.
-- **Phase 2:** an `awino` CLI alias ships alongside `smith`.
+- **Phase 2:** `awino` becomes canonical while the former command remains a deprecated compatibility alias.
 - **Phase 3 (not yet done):** repository rename and directory migration, only
   after compatibility is independently tested. This step is not taken in this
   change — see `docs/name-options.txt` for why.

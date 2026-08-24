@@ -1,6 +1,6 @@
 # Enforcement
 
-How Agent Smith stops agents from ignoring instructions.
+How A.W.I.N.O. stops agents from ignoring instructions.
 
 ---
 
@@ -30,7 +30,7 @@ Before:  agent decides it is done, then says so
 After:   agent asks a gate whether it may be done, and the gate computes an answer
 ```
 
-The agent names the command. **Smith runs it and observes the exit code.** That
+The agent names the command. **A.W.I.N.O. runs it and observes the exit code.** That
 asymmetry is the whole design. A model can write "all tests passed"; it cannot
 produce a zero exit code from a failing suite.
 
@@ -41,7 +41,7 @@ produce a zero exit code from a failing suite.
 ### 1. A run has a contract it did not choose
 
 ```bash
-smith gate open code-change "add retry to the fetch client" --scope src/smith/knowledge.py
+awino gate open code-change "add retry to the fetch client" --scope src/smith/knowledge.py
 ```
 
 ```
@@ -72,7 +72,7 @@ did not diagnose it, it guessed.
 ### 2. Evidence is executed, not described
 
 ```bash
-smith gate record tested --cmd "uv run pytest"
+awino gate record tested --cmd "uv run pytest"
 ```
 
 ```
@@ -88,7 +88,7 @@ Gates with no command use `--attest`, and attestations are reported separately s
 weak proof stays visible:
 
 ```bash
-smith gate record planned --attest "docs/plans/2026-08-21-retry.md"
+awino gate record planned --attest "docs/plans/2026-08-21-retry.md"
 ```
 
 ```
@@ -98,7 +98,7 @@ NOTE  attested rather than executed: planned, tests_not_weakened
 ### 3. Two checks that do not trust the agent at all
 
 ```bash
-smith gate check --diff-base HEAD
+awino gate check --diff-base HEAD
 ```
 
 **Test weakening.** Parses the diff for deleted assertions, added skip markers,
@@ -113,7 +113,7 @@ arithmetic, not by conscience.
 ### 4. Closing is a verdict, not an announcement
 
 ```bash
-smith gate close
+awino gate close
 ```
 
 ```
@@ -137,23 +137,23 @@ does not forget.
 
 | Instruction that decayed | Mechanism that replaced it |
 | --- | --- |
-| always run the tests before saying done | exit code recorded by Smith |
+| always run the tests before saying done | exit code recorded by A.W.I.N.O. |
 | never weaken a test to make it pass | diff parsed for deleted asserts and added skips |
 | stay inside your assigned files | changed files reconciled against declared scope |
 | stop after three attempts | attempt counter blocks the gate |
-| load the relevant skill | `smith gate skill <name>` makes usage auditable |
-| keep the repo clean | `smith doctor` fails on stray files and unlinked docs |
-| keep the environment working | `smith doctor` runs `uv sync --frozen` |
+| load the relevant skill | `awino gate skill <name>` makes usage auditable |
+| keep the repo clean | `awino doctor` fails on stray files and unlinked docs |
+| keep the environment working | `awino doctor` runs `uv sync --frozen` |
 | record what you learned | `lesson_recorded` gate, format-checked by doctor |
 
 ---
 
 ## The project gates the project
 
-`smith doctor` applies the same philosophy to the repository:
+`awino doctor` applies the same philosophy to the repository:
 
 ```bash
-smith doctor --fast
+awino doctor --fast
 ```
 
 ```
@@ -177,7 +177,7 @@ parseable, plugin installed.
 Wire the verdict into a run:
 
 ```bash
-smith doctor --record
+awino doctor --record
 ```
 
 ---

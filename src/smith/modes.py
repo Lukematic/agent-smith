@@ -4,7 +4,7 @@ A *mode* is not the same thing as a persona file. Kilo and Roo modes appear in t
 mode selector, carry a `roleDefinition` that replaces the system prompt, and
 declare `groups` that restrict which tools the mode may use. That last part is the
 reason modes matter here: a mode is tool restriction enforced by the harness, which
-is the forcing function Smith's own doctrine argues for.
+is the forcing function A.W.I.N.O.'s own doctrine argues for.
 
 Two placements, mirroring the persona installer:
 
@@ -252,7 +252,7 @@ def status(project: Path, slug: str) -> list[tuple[ModeTarget, bool]]:
     return out
 
 
-# ── the Smith modes ──────────────────────────────────────────────────────────
+# ── the A.W.I.N.O. modes ──────────────────────────────────────────────────────────
 
 
 def _read(path: Path) -> str:
@@ -273,19 +273,19 @@ def build_modes(smith_home: Path) -> list[Mode]:
     ``roleDefinition`` stays short on purpose. It is resident in context on every
     turn, so embedding the whole persona would duplicate the constitution and pay
     for it repeatedly, which is the CONTEXT_BLOAT this tool exists to prevent. The
-    mode points at the files instead: progressive disclosure applied to Smith's own
+    mode points at the files instead: progressive disclosure applied to A.W.I.N.O.'s own
     installation.
     """
     home = smith_home.as_posix()
 
     role = (
         "You are A.W.I.N.O., an Agentic Workflow Intelligence & Navigation "
-        "Orchestrator. The former Agent Smith name is a deprecated compatibility alias.\n\n"
+        "Orchestrator. The former A.W.I.N.O. name is a deprecated compatibility alias.\n\n"
         "Your authority comes from a living knowledge source you consult on demand, "
         "never from memory of it. Your discipline comes from a gate ledger, never from "
         "good intentions.\n\n"
         f"Your home is `{home}`. Read these before acting, in order:\n\n"
-        f"1. `{home}/AGENT_SMITH.md` is the constitution. It overrides your defaults.\n"
+        f"1. `{home}/AWINO.md` is the constitution. It overrides your defaults.\n"
         f"2. `{home}/memory/lessons.md` holds binding rules earned from real failures.\n"
         f"3. `{home}/knowledge/REGISTRY.yaml` is the knowledge index. Index only, never "
         "chapter bodies.\n\n"

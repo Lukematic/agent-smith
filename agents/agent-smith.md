@@ -33,7 +33,7 @@ A.W.I.N.O. environment with failing gates gives confidently wrong answers.
 
 Then load, in order:
 
-1. `$AWINO/AGENT_SMITH.md` — the constitution (legacy filename retained for compatibility).
+1. `$AWINO/AWINO.md` — the canonical constitution.
 2. `$AWINO/memory/lessons.md` — binding rules that **override your defaults**.
 3. `$AWINO/knowledge/REGISTRY.yaml` — the index. **Index only, never bodies.**
 

@@ -5,7 +5,7 @@ data and it transfers directly to a codebase an agent has to navigate: a directo
 whose purpose is undocumented is not findable, and content whose format is
 unstated is not reusable.
 
-The concrete rule Smith enforces: **every meaningful directory carries a README.md
+The concrete rule A.W.I.N.O. enforces: **every meaningful directory carries a README.md
 that answers four questions.**
 
 | FAIR | Question the README must answer |
@@ -31,8 +31,10 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-GENERATED_MARKER = "<!-- smith:generated -->"
-STUB_MARKER = "<!-- smith:stub -->"
+GENERATED_MARKER = "<!-- awino:generated -->"
+STUB_MARKER = "<!-- awino:stub -->"
+LEGACY_GENERATED_MARKER = "<!-- smith:generated -->"
+LEGACY_STUB_MARKER = "<!-- smith:stub -->"
 
 REQUIRED_SECTIONS = ("Contents", "Usage", "Format", "Stability")
 
@@ -58,25 +60,25 @@ EXEMPT: dict[str, str] = {
 KNOWN: dict[str, tuple[str, str, str, str]] = {
     "agents": (
         "Agent persona definitions, one Markdown file per agent.",
-        "Installed to `~/.agents/agents/` by `install.ps1` or `smith link`. Not loaded from here.",
+        "Installed to `~/.agents/agents/` by `install.ps1` or `awino link`. Not loaded from here.",
         "Markdown with YAML frontmatter (`name`, `description`, `model`).",
-        "Edit freely. Validated by `smith validate agents`; a colon inside a description breaks discovery silently.",
+        "Edit freely. Validated by `awino validate agents`; a colon inside a description breaks discovery silently.",
     ),
     "skills": (
         "Model-invoked skills, one directory per skill containing `SKILL.md`.",
-        "Loaded as `agent-smith:<name>` when Smith is installed as a plugin. List them with `smith skills`.",
+        "Loaded as `awino-<name>` when A.W.I.N.O. is installed. List them with `awino skills`.",
         "Markdown with YAML frontmatter. Required body sections: Failure Modes, Completion.",
-        "Edit freely. `smith validate skills` blocks a malformed skill. The index at `docs/skills.md` is generated.",
+        "Edit freely. `awino validate skills` blocks a malformed skill. The index at `docs/skills.md` is generated.",
     ),
     "knowledge": (
         "The knowledge index and its disposable cache. `REGISTRY.yaml` is the routing table.",
-        "`smith route` reads the index without spending budget; `smith fetch` populates `cache/`.",
+        "`awino route` reads the index without spending budget; `awino fetch` populates `cache/`.",
         "YAML for the registry and sources, JSON for the provenance manifest, Markdown in the cache.",
         "Edit `REGISTRY.yaml` and `SOURCES.yaml`. Never edit `cache/` or `MANIFEST.json`: both are regenerated.",
     ),
     "memory": (
         "Durable lessons and structured expertise records that survive across sessions.",
-        "Read at session start. `lessons.md` overrides Smith's defaults.",
+        "Read at session start. `lessons.md` overrides A.W.I.N.O.'s defaults.",
         "Markdown for lessons, JSON Lines for expertise records.",
         "Append-only. To revise a lesson, mark the old line `[SUPERSEDED yyyy-mm-dd]` and add a new one below it.",
     ),
@@ -84,11 +86,11 @@ KNOWN: dict[str, tuple[str, str, str, str]] = {
         "Long-form documentation for humans. One topic per file.",
         "Every file here must be linked from the root `README.md`, which the `docs` gate enforces.",
         "Markdown.",
-        "Edit freely, except `skills.md`, which `smith fix` regenerates from the filesystem.",
+        "Edit freely, except `skills.md`, which `awino fix` regenerates from the filesystem.",
     ),
     "src": (
-        "The deterministic half of Smith: anything a script does reliably does not belong in a prompt.",
-        "Installed as the `smith` console script. Run `smith --help`.",
+        "The deterministic half of A.W.I.N.O.: anything a script does reliably does not belong in a prompt.",
+        "Installed as the `awino` console script. Run `awino --help`.",
         "Python 3.12, typed, formatted and linted by ruff.",
         "Edit freely. `just check` must pass: lint, tests, and artifact validation.",
     ),
@@ -129,8 +131,8 @@ KNOWN: dict[str, tuple[str, str, str, str]] = {
         "Safe to delete once you are sure. Archiving beats deleting because a wrong archive is recoverable.",
     ),
     "state": (
-        "Project-local run ledgers and project memory, kept out of Smith's shared knowledge.",
-        "Written by `smith gate`. Read by `smith gate status` and `smith plan`.",
+        "Project-local run ledgers and project memory, kept out of A.W.I.N.O.'s shared knowledge.",
+        "Written by `awino gate`. Read by `awino gate status` and `awino plan`.",
         "JSON for run metadata, JSON Lines for evidence.",
         "`run/` is gitignored and disposable. Project lessons are worth keeping.",
     ),
@@ -224,7 +226,8 @@ def inspect(directory: Path, root: Path) -> DocStatus:
         for section in REQUIRED_SECTIONS
         if not re.search(rf"^#{{1,4}}\s*{section}", text, re.MULTILINE | re.IGNORECASE)
     )
-    return DocStatus(directory, True, GENERATED_MARKER in text, missing)
+    generated = GENERATED_MARKER in text or LEGACY_GENERATED_MARKER in text
+    return DocStatus(directory, True, generated, missing)
 
 
 def audit(root: Path) -> list[DocStatus]:
@@ -296,8 +299,8 @@ def render(directory: Path, root: Path) -> str:
         "",
         "---",
         "",
-        "Generated by `smith fix`. Edit freely: removing the marker at the top of this",
-        "file stops Smith from regenerating it.",
+        "Generated by `awino fix`. Edit freely: removing the marker at the top of this",
+        "file stops A.W.I.N.O. from regenerating it.",
         "",
     ]
     return "\n".join(lines)
@@ -334,6 +337,7 @@ def stubs(root: Path) -> list[Path]:
         if status.exempt or not status.exists:
             continue
         readme = status.directory / "README.md"
-        if STUB_MARKER in readme.read_text(encoding="utf-8"):
+        text = readme.read_text(encoding="utf-8")
+        if STUB_MARKER in text or LEGACY_STUB_MARKER in text:
             found.append(readme)
     return found

@@ -1,16 +1,16 @@
 ---
 name: awino-memory
-description: Dual-write memory discipline for Agent Smith - stores durable rules in the Memory MCP extension for recall and mirrors every entry to an append-only file ledger for audit
+description: Dual-write memory discipline for A.W.I.N.O. - stores durable rules in the Memory MCP extension for recall and mirrors every entry to an append-only file ledger for audit
 ---
 
-# Smith Memory
+# A.W.I.N.O. Memory
 
 Two stores, deliberately. When the active harness provides a Memory MCP extension,
 it gives **recall** by loading saved memories into context. Files give
 **audit** — dates, supersessions, and history that a key-value cache cannot hold.
 
 **Rule: every `remember_memory` call is mirrored to a file. If the two disagree,
-the file wins.** Memory MCP is a cache; `$SMITH/memory/` is the ledger.
+the file wins.** Memory MCP is a cache; `$AWINO/memory/` is the ledger.
 
 ## Why both
 
@@ -69,13 +69,13 @@ One line. Imperative. Self-contained — it will be read with no surrounding con
 
 ### Step 3 — Mirror to the ledger
 
-Doctrine and failure modes → `$SMITH/memory/lessons.md`, append-only:
+Doctrine and failure modes → `$AWINO/memory/lessons.md`, append-only:
 
 ```markdown
 - [2026-08-21] `ORCHESTRATOR_IMPLEMENTS` — orchestrators get Task/Read/Glob/TodoWrite only, never Write/Edit/Bash. (surface: tools)
 ```
 
-Patterns and decisions → `$SMITH/memory/expertise/<domain>.jsonl`:
+Patterns and decisions → `$AWINO/memory/expertise/<domain>.jsonl`:
 
 ```json
 {"type":"convention","domain":"orchestration","description":"Orchestrators get Task/Read/Glob/TodoWrite only","classification":"foundational","source":"chapters/5-tool-use/3-tool-restrictions.md","ts":"2026-08-21"}
@@ -116,7 +116,7 @@ out to have been right the first time.
 
 At session start, in this order:
 
-1. `$SMITH/memory/lessons.md` — binding rules that override defaults
+1. `$AWINO/memory/lessons.md` — binding rules that override defaults
 2. `retrieve_memories(category="agentic_doctrine", is_global=true)`
 3. `retrieve_memories(category="project_conventions", is_global=false)`
 4. Relevant `expertise/<domain>.jsonl` only when working that domain

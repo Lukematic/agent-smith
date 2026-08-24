@@ -1,6 +1,6 @@
 """A.W.I.N.O. (Agentic Workflow Intelligence & Navigation Orchestrator) command line interface.
 
-Working history: this project shipped as "Agent Smith"; the package, module path,
+Working history: this project shipped as "A.W.I.N.O."; the package, module path,
 and `smith` command are kept for compatibility (see docs/MISSION.md). Every
 command here is deterministic. The model calls these rather than doing the
 work in prose, which is the ``MODEL_DOES_DETERMINISM`` guard applied to A.W.I.N.O.
@@ -109,7 +109,7 @@ def _workspace() -> Workspace:
 
 
 def _toolchain(workspace: Workspace | None = None) -> Toolchain:
-    """Toolchain of the project under work, not of Smith."""
+    """Toolchain of the project under work, not of A.W.I.N.O."""
     return Toolchain((workspace or _workspace()).project.root)
 
 
@@ -338,7 +338,7 @@ def watch_remove_command(
 
 @app.command("watch-list")
 def watch_list_command() -> None:
-    """Show every source and watchlisted repo Smith checks for changes."""
+    """Show every source and watchlisted repo A.W.I.N.O. checks for changes."""
     paths = _paths()
     watched = watch.load_watchlist(paths)
     _echo("CONFIGURED SOURCES (knowledge/SOURCES.yaml, checked by 'awino watch')")
@@ -579,7 +579,7 @@ def install_command(
     """Install the persona and skills into every harness found on this machine.
 
     Detection rather than assumption: Claude Code, Goose, Kilo, and Cursor each
-    expect the persona somewhere different, so Smith adapts instead of demanding
+    expect the persona somewhere different, so A.W.I.N.O. adapts instead of demanding
     one layout.
     """
     workspace = _workspace()
@@ -622,14 +622,14 @@ def install_command(
                 failed = True
 
     if pointer and not dry_run:
-        markers = ("## A.W.I.N.O.", "## Agent Smith")
+        markers = ("## A.W.I.N.O.", "## A.W.I.N.O.")
         for name in ("AGENTS.md", "CLAUDE.md"):
             path = workspace.project.root / name
             if not path.is_file():
                 continue
             body = path.read_text(encoding="utf-8")
             if any(marker in body for marker in markers):
-                _echo(f"POINTER    {name} already references Smith")
+                _echo(f"POINTER    {name} already references A.W.I.N.O.")
                 continue
             path.write_text(
                 body.rstrip() + "\n\n" + harness.pointer_text(smith_home), encoding="utf-8"
@@ -663,7 +663,7 @@ def install_mode_command(
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would happen"),
     emit_json: bool = typer.Option(False, "--json", help="Print the mode definitions instead"),
 ) -> None:
-    """Install Smith as a selectable mode in Kilo, Roo, or a fork.
+    """Install A.W.I.N.O. as a selectable mode in Kilo, Roo, or a fork.
 
     A mode is not a persona file. It appears in the mode selector, replaces the
     system prompt, and declares which tool groups it may use, so the restriction is
@@ -777,7 +777,7 @@ def mode_status_command() -> None:
 
 @app.command("install-status")
 def install_status_command() -> None:
-    """Show where Smith is installed and where it is not."""
+    """Show where A.W.I.N.O. is installed and where it is not."""
     workspace = _workspace()
     rows = harness.status(workspace.project.root)
     installed = [r for r in rows if r[1]]
@@ -803,13 +803,13 @@ def install_status_command() -> None:
 
 @app.command("pointer")
 def pointer_command() -> None:
-    """Print the AGENTS.md block that makes Smith discoverable in a project."""
+    """Print the AGENTS.md block that makes A.W.I.N.O. discoverable in a project."""
     _echo(harness.pointer_text(_workspace().home.root))
 
 
 @app.command()
 def scaffold() -> None:
-    """Create any missing directories Smith expects."""
+    """Create any missing directories A.W.I.N.O. expects."""
     created = _paths().ensure_scaffold()
     for path in created:
         _echo(f"  created {path}")
@@ -962,7 +962,7 @@ def skills(
 ) -> None:
     """List canonical skills, optionally recommending one for a request.
 
-    This is how Smith learns where its own skills live at load time rather than
+    This is how A.W.I.N.O. learns where its own skills live at load time rather than
     hardcoding a directory that moves when the install location changes.
     """
     paths = _paths()
@@ -1103,7 +1103,7 @@ def doctor(
     """
     paths = _paths()
     results = health.run_all(paths, fast=fast)
-    # The standard health suite checks Smith's own installation. Seeds belongs to
+    # The standard health suite checks A.W.I.N.O.'s own installation. Seeds belongs to
     # the project being worked on, so replace that one result with a project-aware
     # check rather than reporting the parent workspace's tracker.
     workspace = _workspace()
@@ -1160,7 +1160,7 @@ def work_command(
     """Show tracked work that is ready to start, from the project's own tracker.
 
     Seeds is optional. When absent this reports that and stops, rather than
-    inventing a worklist Smith would then be the only one aware of.
+    inventing a worklist A.W.I.N.O. would then be the only one aware of.
     """
     workspace = _workspace()
     tracker = seeds.Seeds(workspace.project.root)
@@ -1171,7 +1171,7 @@ def work_command(
 
     if not state.usable:
         _echo("")
-        _echo("No tracker, so work is untracked. Smith will not create one unasked.")
+        _echo("No tracker, so work is untracked. A.W.I.N.O. will not create one unasked.")
         _echo(f"  install: {seeds.INSTALL_HINT}")
         _echo(f"  init:    {seeds.INIT_HINT}   (or: awino work-init --confirm)")
         return
@@ -1204,7 +1204,7 @@ def work_init_command(
     """Offer to initialize a seeds tracker, then do it if the human agrees.
 
     Refusing silently leaves the user stuck. Acting silently mutates a repository
-    Smith may not own. So Smith states exactly what would change, asks, and abides
+    A.W.I.N.O. may not own. So A.W.I.N.O. states exactly what would change, asks, and abides
     by the answer.
     """
     workspace = _workspace()
@@ -1221,7 +1221,7 @@ def work_init_command(
     if not tracker.installed:
         _echo("")
         _echo(f"seeds is not installed. Install it with:  {seeds.INSTALL_HINT}")
-        _echo("Smith does not install global tooling on your behalf.")
+        _echo("A.W.I.N.O. does not install global tooling on your behalf.")
         raise typer.Exit(1)
 
     _echo("")
@@ -1315,7 +1315,7 @@ def mission_command(
 ) -> None:
     """Read what the project is for, from its own authored sources.
 
-    Smith never invents a mission. An agent acting confidently on a fabricated
+    A.W.I.N.O. never invents a mission. An agent acting confidently on a fabricated
     purpose is worse than one that asks, because the fabrication propagates into
     every downstream plan.
     """
@@ -1365,7 +1365,7 @@ def mission_command(
         _echo(f"  {item.source}: {text}")
 
     _echo("")
-    _echo("HOW SMITH WILL CALIBRATE")
+    _echo("HOW A.W.I.N.O. WILL CALIBRATE")
     for item in found.advice():
         _echo(f"  - {item}")
 
@@ -1492,9 +1492,9 @@ def limits_command(
         False, "--strict", help="Exit nonzero if any documented claim is false"
     ),
 ) -> None:
-    """Report what Smith can actually do, probed rather than claimed.
+    """Report what A.W.I.N.O. can actually do, probed rather than claimed.
 
-    This exists because of a real failure: the persona said Smith "spawns scoped
+    This exists because of a real failure: the persona said A.W.I.N.O. "spawns scoped
     subagents" and a skill described how, while no spawn code existed. Prose
     describing a capability is indistinguishable from prose describing an
     aspiration, so capabilities are probed at call time and the probe wins.
@@ -1695,9 +1695,9 @@ def delegate_command(
 
 @app.command()
 def context() -> None:
-    """Show what Smith considers home, what it considers the project, and the toolchain.
+    """Show what A.W.I.N.O. considers home, what it considers the project, and the toolchain.
 
-    Run this first in an unfamiliar repository. Every gate command Smith records
+    Run this first in an unfamiliar repository. Every gate command A.W.I.N.O. records
     comes from this resolution, so a wrong answer here makes every later green gate
     meaningless.
     """
@@ -1708,7 +1708,7 @@ def context() -> None:
     _echo(f"  A.W.I.N.O. home    {workspace.home.root}")
     _echo(f"  project       {workspace.project.root}")
     _echo(
-        f"  layout        {'working on Smith itself' if workspace.working_on_self else workspace.describe()}"
+        f"  layout        {'working on A.W.I.N.O. itself' if workspace.working_on_self else workspace.describe()}"
     )
     _echo(f"  run ledger    {workspace.runs}")
     _echo("")
@@ -1745,7 +1745,7 @@ def setup(
 ) -> None:
     """Install the project's dependencies using whatever manager it already uses.
 
-    Smith does not impose uv. It reproduces a committed lockfile when one exists,
+    A.W.I.N.O. does not impose uv. It reproduces a committed lockfile when one exists,
     respects an active environment when one is present, and falls back to pip only
     when nothing better is declared.
     """
@@ -1787,9 +1787,9 @@ def registry_json() -> None:
 
 
 def _ledger() -> Ledger:
-    """Ledger for the project under work, never for Smith home.
+    """Ledger for the project under work, never for A.W.I.N.O. home.
 
-    Runs are project history. A shared Smith install that accumulated every
+    Runs are project history. A shared A.W.I.N.O. install that accumulated every
     project's runs would make attribution impossible.
     """
     workspace = _workspace()

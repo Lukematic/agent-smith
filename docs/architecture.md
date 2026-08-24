@@ -1,4 +1,4 @@
-# Agent Smith — Design Plan
+# A.W.I.N.O. — Design Plan
 
 **Status:** v0.3 — multi-harness agent package
 **Owner:** you
@@ -9,7 +9,7 @@
 
 ## 1. The one-sentence thesis
 
-Agent Smith is **not a knowledge dump**. It is a *harness* with a **registry** of
+A.W.I.N.O. is **not a knowledge dump**. It is a *harness* with a **registry** of
 where knowledge lives, a **fetcher** that pulls just-in-time, a **memory** that
 records what was actually learned, **loops** that match the shape of the problem,
 and a **factory** that emits new agents, skills, and tools.
@@ -28,7 +28,7 @@ mistake structurally impossible rather than warning against it in prose.
 ├─ L4  FACTORY   ── authors agents, skills, and tools; lint blocks bad output
 ├─ L3  MEMORY    ── Memory MCP for recall + file ledger for audit (dual-write)
 ├─ L2  RETRIEVAL ── topic -> registry -> fetch raw.githubusercontent -> cache
-└─ L1  CONSTITUTION ── AGENT_SMITH.md: harness-over-prompt, named failure modes,
+└─ L1  CONSTITUTION ── AWINO.md: harness-over-prompt, named failure modes,
                        spec-as-contract, tool restriction, cost awareness
 ```
 
@@ -43,8 +43,9 @@ and an Open Plugin manifest for compatible harnesses.
 
 ```
 .smith/
-  plugin.json               # Open Plugin manifest -> skills namespaced agent-smith:*
-  AGENT_SMITH.md            # L1 constitution — always loaded
+  plugin.json               # Open Plugin manifest
+  AWINO.md                  # L1 canonical constitution — always loaded
+  AGENT_SMITH.md            # deprecated compatibility pointer
   PLAN.md                   # this file
   DEPLOYMENT.md             # global install, per-repo footprint, loop selection
   agents/
@@ -57,17 +58,17 @@ and an Open Plugin manifest for compatible harnesses.
     MANIFEST.json           # what was fetched, when, which sha
     DRIFT.md                # generated drift report
     cache/                  # fetched markdown, gitignored
-  skills/                   # 10 skills, indexed in docs/skills.md by `smith fix`
-    smith-bootstrap/        # first run: scaffold + verify
-    smith-consult/          # answer a concept question
-    smith-triage/           # failure-mode diagnosis (ch. 11.2)
-    smith-rpi/              # research -> plan -> implement
-    smith-ralph/            # fresh-context iteration + cross-model review
-    smith-delegate/         # parallel subagents, disjoint file ownership
-    smith-memory/           # dual-write memory discipline
-    smith-author-agent/     # emit an agent
-    smith-author-tool/      # skill vs hook vs script vs recipe vs MCP gate
-    smith-self-update/      # refresh registry, report lesson drift
+  skills/                   # 10 skills, indexed in docs/skills.md by `awino fix`
+    awino-bootstrap/        # first run: scaffold + verify
+    awino-consult/          # answer a concept question
+    awino-triage/           # failure-mode diagnosis (ch. 11.2)
+    awino-rpi/              # research -> plan -> implement
+    awino-ralph/            # fresh-context iteration + cross-model review
+    awino-delegate/         # parallel subagents, disjoint file ownership
+    awino-memory/           # dual-write memory discipline
+    awino-author-agent/     # emit an agent
+    awino-author-tool/      # skill vs hook vs script vs recipe vs MCP gate
+    awino-self-update/      # refresh registry, report lesson drift
   memory/
     lessons.md              # binding prevention rules (append-only)
     expertise/              # <domain>.jsonl records
@@ -92,7 +93,7 @@ and an Open Plugin manifest for compatible harnesses.
 ```
 
 Rule: **nothing else** goes here. Findings go to the target repo
-(`thoughts/`, `.seeds/`). Smith owns its own house only.
+(`thoughts/`, `.seeds/`). A.W.I.N.O. owns its own house only.
 
 ---
 
@@ -145,7 +146,7 @@ attempt gets fresh context and a second model reviews it.
 
 ---
 
-## 7. Constitution highlights (enforced text in AGENT_SMITH.md)
+## 7. Constitution highlights (enforced text in AWINO.md)
 
 - **Harness over prompt.** Change the system, not the wording. Prompt patches are
   logged as debt, not fixes.

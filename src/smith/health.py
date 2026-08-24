@@ -3,7 +3,7 @@
 Clean directories, clean docs, working lint, a present justfile, a valid
 pyproject, a live uv environment, and a reachable seeds tracker are all things
 that decay silently. Asking an agent to "keep the repo clean" is a wish. Each of
-these is a check that returns a verdict, so ``smith doctor`` can refuse.
+these is a check that returns a verdict, so ``awino doctor`` can refuse.
 
 Every check returns the same shape so the CLI renders them uniformly and the
 gate ledger can consume them as evidence.
@@ -76,12 +76,14 @@ def check_skill_registry(paths: SmithPaths) -> Result:
     index entry with no directory behind it is a router that lies. Both are
     detectable by comparing two lists, so neither should ever survive a commit.
     """
-    on_disk = {p.parent.name for p in paths.skills.glob("*/SKILL.md")}
+    on_disk = {p.parent.name for p in paths.skills.glob("awino-*/SKILL.md")}
     if not on_disk:
         return _warn("skill_registry", "no skills found", "author one")
 
     bare = sorted(
-        d.name for d in paths.skills.iterdir() if d.is_dir() and not (d / "SKILL.md").is_file()
+        d.name
+        for d in paths.skills.glob("awino-*")
+        if d.is_dir() and not (d / "SKILL.md").is_file()
     )
     if bare:
         return _fail(
@@ -118,7 +120,7 @@ def check_skill_registry(paths: SmithPaths) -> Result:
         if not declared.get("name"):
             return _fail("skill_registry", "plugin.json has no name", "add a name field")
 
-    return _ok("skill_registry", f"{len(on_disk)} skill(s), all indexed and manifested")
+    return _ok("skill_registry", f"{len(on_disk)} canonical skill(s), all indexed and manifested")
 
 
 def check_uv(paths: SmithPaths) -> Result:
@@ -305,7 +307,7 @@ def check_artifacts(paths: SmithPaths) -> Result:
         return _fail(
             "artifacts",
             f"{len(blocked)} of {len(files)} invalid",
-            "smith validate skills agents -v",
+            "awino validate skills agents -v",
         )
     return _ok("artifacts", f"{len(files)} artifact(s) valid")
 
@@ -349,7 +351,7 @@ def check_folder_docs(paths: SmithPaths) -> Result:
 def check_capability_claims(paths: SmithPaths) -> Result:
     """Every documented capability claim must be backed by a passing probe.
 
-    This is the check that was missing when the persona claimed Smith "spawns
+    This is the check that was missing when the persona claimed A.W.I.N.O. "spawns
     scoped subagents" while no spawn code existed. Prose describing a capability is
     indistinguishable from prose describing an aspiration, so the claim is checked
     against a probe and the probe wins.
@@ -363,7 +365,7 @@ def check_capability_claims(paths: SmithPaths) -> Result:
         return _fail(
             "capability_claims",
             f"{len(false_claims)} documented claim(s) unsupported: {names}",
-            "write the code or change the document, then re-run smith limits --claims",
+            "write the code or change the document, then re-run awino limits --claims",
         )
 
     caveated = [c for _, c in rows if c.state is capability.State.DEGRADED]
@@ -379,7 +381,7 @@ def check_capability_claims(paths: SmithPaths) -> Result:
 def check_seeds(paths: SmithPaths, project_root: Path | None = None) -> Result:
     """A worklist should exist and must not be duplicated.
 
-    Seeds is **optional**. Smith runs in repositories it does not own, so an
+    Seeds is **optional**. A.W.I.N.O. runs in repositories it does not own, so an
     absent tracker is a degraded capability, never a failure. The one genuine
     failure is two worklists at once: a markdown checklist beside a real tracker
     means nobody knows which is authoritative, which is ``COMPETING_TRACKER``.
@@ -431,7 +433,7 @@ def _strip_code_fences(text: str) -> str:
 def check_memory(paths: SmithPaths) -> Result:
     """The lessons ledger must exist and stay append-only in shape."""
     if not paths.lessons.is_file():
-        return _fail("memory", "no memory/lessons.md", "smith scaffold")
+        return _fail("memory", "no memory/lessons.md", "awino scaffold")
     prose = _strip_code_fences(paths.lessons.read_text(encoding="utf-8"))
     rules = re.findall(r"^- \[(\d{4}-\d{2}-\d{2})\]", prose, re.MULTILINE)
     malformed = [
@@ -466,7 +468,7 @@ def check_knowledge(paths: SmithPaths) -> Result:
 
 
 def check_harness_install(_paths: SmithPaths) -> Result:
-    """Is Smith actually reachable as a plugin and a persona?"""
+    """Is A.W.I.N.O. actually reachable as a plugin and a persona?"""
     home = Path.home()
     plugin = home / ".agents" / "plugins" / "agent-smith"
     persona = home / ".agents" / "agents" / "agent-smith.md"

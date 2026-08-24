@@ -4,14 +4,14 @@ name: awino-evidence
 description: Evidence sufficiency and citation gate for research RAG QA and scientific workflows. Decides answer retrieve-more clarify no-answer or block-unsupported-synthesis before factual output is released.
 ---
 
-# Smith Evidence
+# A.W.I.N.O. Evidence
 
-Use when Smith is designing or reviewing a research assistant, RAG system,
+Use when A.W.I.N.O. is designing or reviewing a research assistant, RAG system,
 scientific synthesis, market analysis, or any factual workflow where related
 sources are not automatically sufficient evidence.
 
 This composes the local `evidence-sufficiency-gates` and
-`citation-support-verification` disciplines into Smith's gate vocabulary.
+`citation-support-verification` disciplines into A.W.I.N.O.'s gate vocabulary.
 
 ## Core rule
 

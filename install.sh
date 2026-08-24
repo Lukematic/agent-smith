@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install Agent Smith into an agent harness.
+# Install A.W.I.N.O. into an agent harness.
 #
 # One command from a fresh clone to a working install. Installs uv if missing,
 # syncs the environment, links the plugin, installs the persona, and verifies the
@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-SMITH_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AWINO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCOPE="global"
 NO_LINK=0
 NO_TOOLS=0
@@ -39,8 +39,8 @@ warn() { printf "${YELLOW}  WARN  %s${NC}\n" "$1"; }
 bad()  { printf "${RED}  FAIL  %s${NC}\n" "$1"; }
 
 echo
-echo "Agent Smith installer"
-echo "  source: $SMITH_ROOT"
+echo "A.W.I.N.O. installer"
+echo "  source: $AWINO_ROOT"
 echo "  scope:  $SCOPE"
 echo
 
@@ -58,7 +58,7 @@ fi
 
 # ── 2. environment ───────────────────────────────────────────────────────────
 step "Syncing the project environment"
-cd "$SMITH_ROOT"
+cd "$AWINO_ROOT"
 # Hardlinking fails on network shares, Docker volumes, and any filesystem where
 # the uv cache and the project sit on different backing stores. Copy mode is
 # slower on first run and works everywhere, which is the right trade for an
@@ -134,7 +134,7 @@ elif command -v npm >/dev/null 2>&1; then
     npm install -g @os-eco/seeds-cli >/dev/null 2>&1
     command -v sd >/dev/null 2>&1 && ok "seeds installed with npm" || warn "npm install did not put sd on PATH"
 else
-    warn "seeds not installed and no bun or npm found. Optional, Smith works without it"
+    warn "seeds not installed and no bun or npm found. Optional, A.W.I.N.O. works without it"
 fi
 
 # ── 4. self-repair, so a fresh clone is coherent ─────────────────────────────

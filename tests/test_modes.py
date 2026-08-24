@@ -233,7 +233,11 @@ class TestSmithModes:
 
     def test_role_definition_points_at_the_constitution(self) -> None:
         for mode in build_modes(Path("/tmp/smith")):
-            assert "AGENT_SMITH.md" in mode.role_definition
+            assert "AWINO.md" in mode.role_definition
+
+    def test_no_active_mode_loads_the_legacy_constitution_pointer(self) -> None:
+        for mode in build_modes(Path("/tmp/smith")):
+            assert "AGENT_SMITH.md" not in mode.role_definition
 
     def test_every_mode_states_when_to_use_it(self) -> None:
         for mode in build_modes(Path("/tmp/smith")):
@@ -276,7 +280,7 @@ class TestReadmeMatchesGeneratedModes:
         found = [name for name in stale if name in readme]
         assert not found, f"README still contains renamed-away mode names: {found}"
 
-    @pytest.mark.parametrize("relative_path", ["agents/awino.md", "AGENT_SMITH.md", "README.md"])
+    @pytest.mark.parametrize("relative_path", ["agents/awino.md", "AWINO.md", "README.md"])
     def test_primary_flow_contract_is_documented(self, relative_path: str) -> None:
         root = Path(__file__).resolve().parents[1]
         text = (root / relative_path).read_text(encoding="utf-8")

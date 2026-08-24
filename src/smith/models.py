@@ -422,7 +422,7 @@ class AntiPattern(StrEnum):
 
 ANTI_PATTERN_FIX: dict[AntiPattern, str] = {
     AntiPattern.OPEN_LOOP: "close the loop with an independent check before any iteration advances",
-    AntiPattern.KNOWLEDGE_ROT: "run 'smith update' and reconcile lessons against the refreshed source",
+    AntiPattern.KNOWLEDGE_ROT: "run 'awino update' and reconcile lessons against the refreshed source",
     AntiPattern.COGNITIVE_SURRENDER: "inspect what the loop is doing, not only whether it is running",
 }
 

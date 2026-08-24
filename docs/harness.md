@@ -1,6 +1,6 @@
 # The Harness
 
-What Agent Smith's harness *is*, which mental model fires *when*, and why.
+What A.W.I.N.O.'s harness *is*, which mental model fires *when*, and why.
 
 This document exists because "we have mental models" is not a design. A model
 that does not name its trigger never fires. A harness that is not inventoried
@@ -24,20 +24,20 @@ instruction-following.
 
 (book: chapters/6-harnesses/4-harness-as-control-system.md)
 
-### Guides: what Smith prevents before it happens
+### Guides: what A.W.I.N.O. prevents before it happens
 
 | Guide | Kind | Mechanism | Prevents |
 | --- | --- | --- | --- |
 | Fetch budget | computational | `BudgetExceeded` raised on the 4th file | `CONTEXT_BLOAT` |
 | Gate contract | computational | task class fixes the gates, agent never selects them | `PREMATURE_COMPLETION` |
 | Scope declaration | computational | `--scope` recorded at run open, before any write | `FILE_SCOPE_VIOLATION` |
-| Artifact validator | computational | `smith validate` exits 1 on a malformed skill | broken discovery, missing gates |
+| Artifact validator | computational | `awino validate` exits 1 on a malformed skill | broken discovery, missing gates |
 | Root allowlist | computational | `ROOT_ALLOWED` in `tidy.py` | clutter accumulation |
 | Registry-only routing | computational | routing reads the index, never the corpus | `UNGROUNDED_CLAIM` |
-| Rung detection | inferential | `smith plan` classifies the request's real rung | solving a loop problem with a prompt |
+| Rung detection | inferential | `awino plan` classifies the request's real rung | solving a loop problem with a prompt |
 | Constraint location | inferential | upstream-first check ordering | building against a moving design |
 
-### Sensors: what Smith observes after the fact
+### Sensors: what A.W.I.N.O. observes after the fact
 
 | Sensor | Kind | Mechanism | Catches |
 | --- | --- | --- | --- |
@@ -60,12 +60,12 @@ Honest gaps, not aspirations:
 
 | Missing | Why it matters | Rung it belongs to |
 | --- | --- | --- |
-| Triggers (cron, CI) | without them Smith is harness-level, not loop-level | loop |
+| Triggers (cron, CI) | without them A.W.I.N.O. is harness-level, not loop-level | loop |
 | Worktree isolation | parallel agents cannot yet be given disjoint checkouts | loop |
 | Independent reviewer subagent | `reviewed` is satisfied by `doctor`, not a second model | loop |
 | Telemetry after merge | no production feedback, only pre-merge checks | factory |
 
-Smith currently sits at **harness** on the ladder, with the state and skill
+A.W.I.N.O. currently sits at **harness** on the ladder, with the state and skill
 components of a loop already built. Triggers and worktrees are what would promote
 it. Claiming loop-level today would be `COGNITIVE_SURRENDER` by way of wishful
 labelling.
@@ -79,10 +79,10 @@ is a function in `src/smith/models.py`, not a passage to read.
 
 | Model | Fires when | Question it answers | Command |
 | --- | --- | --- | --- |
-| **Leverage ladder** | a request arrives | am I about to author the wrong artifact? | `smith plan`, `smith ladder` |
-| **Design as bottleneck** | before spending effort | where is the scarce resource right now? | `smith plan` |
-| **Verifier strength** | before granting autonomy | how far may this run unattended? | `smith plan` |
-| **Pit of success** | when adding a rule | will this hold without vigilance? | `smith pit` |
+| **Leverage ladder** | a request arrives | am I about to author the wrong artifact? | `awino plan`, `awino ladder` |
+| **Design as bottleneck** | before spending effort | where is the scarce resource right now? | `awino plan` |
+| **Verifier strength** | before granting autonomy | how far may this run unattended? | `awino plan` |
+| **Pit of success** | when adding a rule | will this hold without vigilance? | `awino pit` |
 
 ### The order is not arbitrary
 
@@ -96,13 +96,13 @@ They run in a fixed sequence because each one can invalidate the next:
 ```
 
 Optimising execution of the wrong artifact is the most expensive mistake
-available, so the ladder goes first. `smith plan` short-circuits on rung
+available, so the ladder goes first. `awino plan` short-circuits on rung
 misalignment for exactly this reason.
 
 ### Worked example: the request that looks like a prompt problem
 
 ```bash
-smith plan "the agent keeps writing to the wrong directory every time"
+awino plan "the agent keeps writing to the wrong directory every time"
 ```
 
 ```
@@ -123,17 +123,17 @@ Your question. Three separate refusals, each from a different model:
 
 ```bash
 # design unsettled
-smith plan "parallelise the migration across 30 agents" --understood
+awino plan "parallelise the migration across 30 agents" --understood
   -> CONSTRAINT design: every unit built against a moving interface is rework
   -> FAN OUT no
 
 # design settled, units share files
-smith plan "..." --understood --interfaces-settled
+awino plan "..." --understood --interfaces-settled
   -> CONSTRAINT decomposition: parallel agents would overwrite each other
   -> FAN OUT no
 
 # all settled, but gates were attested rather than executed
-smith plan "..." --understood --interfaces-settled --units-disjoint
+awino plan "..." --understood --interfaces-settled --units-disjoint
   -> max autonomy checkpointed
   -> FAN OUT no
 ```
@@ -156,7 +156,7 @@ and not anti_patterns             # loop is not already rotting
 ## 3. Autonomy is computed, not chosen
 
 The loop-engineering claim is that verification, not model capability, bounds
-autonomy. That is only actionable if verifier strength is measurable, so Smith
+autonomy. That is only actionable if verifier strength is measurable, so A.W.I.N.O.
 reads the ledger.
 
 | Evidence state | Max autonomy | Meaning |
@@ -183,12 +183,12 @@ unattended.
 ## 4. The three ways a loop rots
 
 Each is invisible from inside the loop, which is why each needs a check outside
-it. `smith plan` reports all three.
+it. `awino plan` reports all three.
 
 | Anti-pattern | Detected by | Fix |
 | --- | --- | --- |
 | `OPEN_LOOP` | no executed objective check | close the loop with an independent check |
-| `KNOWLEDGE_ROT` | cache age against the staleness policy | `smith update`, reconcile lessons |
+| `KNOWLEDGE_ROT` | cache age against the staleness policy | `awino update`, reconcile lessons |
 | `COGNITIVE_SURRENDER` | autonomy at `bounded`+ with no recorded human inspection | inspect what the loop does, not just that it runs |
 
 `COGNITIVE_SURRENDER` deliberately does not fire under `supervised` autonomy: a
@@ -210,14 +210,14 @@ Written as a function it changes the *plan*:
 | "consider whether this is really a prompt problem" | `detect_rung()` returns `HARNESS` and short-circuits |
 | "make sure verification is strong before automating" | `assess_verifier()` caps autonomy at `supervised` |
 | "design is usually the bottleneck at scale" | `locate_constraint()` refuses fan-out |
-| "prefer designs where the easy path is correct" | `smith pit` exits 1 |
+| "prefer designs where the easy path is correct" | `awino pit` exits 1 |
 
 This is the same move as the gate ledger, one level up: replace an instruction
 with a mechanism.
 
 ---
 
-## 6. Applying it to Smith itself
+## 6. Applying it to A.W.I.N.O. itself
 
 The harness caught its own author four times during construction, which is the
 only evidence that matters:

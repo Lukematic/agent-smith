@@ -1,28 +1,28 @@
 #!/usr/bin/env bash
-# One-line bootstrap for Agent Smith on a machine with nothing installed.
+# One-line bootstrap for A.W.I.N.O. on a machine with nothing installed.
 #
 #   curl -fsSL https://raw.githubusercontent.com/Lukematic/agent-smith/main/bootstrap.sh | sh
 #
 # Clones the repository, installs uv if missing, creates an isolated environment,
-# links Smith into the agent harness, and verifies the result.
+# links A.W.I.N.O. into the agent harness, and verifies the result.
 #
 # Every step is verified rather than assumed. A silent partial install produces an
 # agent that answers confidently from a broken knowledge base, which is worse than
 # a loud failure.
 #
 # Environment overrides:
-#   SMITH_REPO   repository URL, for a fork
-#   SMITH_DIR    clone location, default ~/dev/agent-smith
-#   SMITH_REF    branch or tag, default main
+#   AWINO_REPO   repository URL, for a fork (falls back to SMITH_REPO)
+#   AWINO_DIR    clone location (falls back to SMITH_DIR, default ~/dev/awino)
+#   AWINO_REF    branch or tag (falls back to SMITH_REF, default main)
 
 set -euo pipefail
 
 # Copy mode works on network shares and Docker volumes where hardlinking fails.
 export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
 
-REPO="${SMITH_REPO:-https://github.com/Lukematic/agent-smith.git}"
-DIR="${SMITH_DIR:-$HOME/dev/agent-smith}"
-REF="${SMITH_REF:-main}"
+REPO="${AWINO_REPO:-${SMITH_REPO:-https://github.com/Lukematic/agent-smith.git}}"
+DIR="${AWINO_DIR:-${SMITH_DIR:-$HOME/dev/awino}}"
+REF="${AWINO_REF:-${SMITH_REF:-main}}"
 SCOPE_ARG=""
 
 for arg in "$@"; do
@@ -39,7 +39,7 @@ warn() { printf "${YELLOW}  WARN  %s${NC}\n" "$1"; }
 bad()  { printf "${RED}  FAIL  %s${NC}\n" "$1"; }
 
 echo
-echo "Agent Smith bootstrap"
+echo "A.W.I.N.O. bootstrap"
 echo "  repo: $REPO"
 echo "  into: $DIR"
 echo
@@ -93,7 +93,7 @@ fi
 
 printf "${GREEN}BOOTSTRAP COMPLETE${NC}\n"
 echo
-echo "Smith lives at: $DIR"
+echo "A.W.I.N.O. lives at: $DIR"
 echo "Update it with: cd $DIR && git pull"
 echo
 echo "First commands, in any project:"

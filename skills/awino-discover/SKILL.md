@@ -4,14 +4,14 @@ name: awino-discover
 description: Mission-first discovery for a raw idea or sparse repository. Reflects the project purpose, asks one frontier question at a time, captures goals tenets expectations non-goals and success criteria, and refuses to rush into a spec before the user confirms intent.
 ---
 
-# Smith Discover
+# A.W.I.N.O. Discover
 
 Use before `awino-rpi` when the user has an idea but the product mission and
 acceptance boundary are not yet explicit.
 
 This composes the strongest portable parts of the local `idea-refine`,
 `requirements-analyst`, and `plan-interrogate` skills without copying their
-framework-specific paths or turning Smith into a giant always-loaded prompt.
+framework-specific paths or turning A.W.I.N.O. into a giant always-loaded prompt.
 
 ## Principles
 
@@ -32,9 +32,9 @@ framework-specific paths or turning Smith into a giant always-loaded prompt.
 Run:
 
 ```bash
-smith context
-smith mission
-smith onboard
+awino context
+awino mission
+awino onboard
 ```
 
 Do not ask for facts already stated in project instructions, metadata, README,
@@ -54,7 +54,7 @@ The required frontier is:
 Ask one unresolved question, then stop. Persist the answer with:
 
 ```bash
-smith onboard --set key="answer"
+awino onboard --set key="answer"
 ```
 
 For list fields (`goals`, `tenets`, `expectations`, `non_goals`), separate items
@@ -88,7 +88,7 @@ Ask the user to choose, combine, or reject. Do not choose silently.
 Once required fields are present:
 
 ```bash
-smith onboard --confirm
+awino onboard --confirm
 ```
 
 This writes `.smith/project.yaml`, the project-local source of truth for confirmed
@@ -120,7 +120,7 @@ Done when:
 Verify with:
 
 ```bash
-smith onboard --json
+awino onboard --json
 ```
 
 Grounding: chapters/4-context/3-context-patterns.md,

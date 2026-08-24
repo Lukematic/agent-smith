@@ -1,10 +1,10 @@
-# REGISTRY.yaml — routing table for Agent Smith
+# REGISTRY.yaml — routing table for A.W.I.N.O.
 # Generated from the live git tree of jayminwest/agentic-engineering-book@main
 # generated_at: 2026-08-21   tree_sha: 686771cc9594c585570ba28b899b8295572a701b
 #
 # THIS FILE IS THE INDEX. It is always loadable.
 # Chapter BODIES are never preloaded — fetch on demand, max 3 per task.
-# Refresh and report drift with: smith update
+# Refresh and report drift with: awino update
 
 version: 1
 source: book
@@ -159,7 +159,7 @@ chapters:
       - {key: 7.2, path: chapters/7-patterns/2-self-improving-experts.md,
          title: Self-Improving Experts,
          tags: [expertise-yaml, improve-command, agent-registry],
-         use_when: building an agent that learns - core for Smith itself}
+         use_when: building an agent that learns - core for A.W.I.N.O. itself}
       - {key: 7.3, path: chapters/7-patterns/3-orchestrator-pattern.md, title: Orchestrator Pattern,
          tags: [capability-minimization, delegation], use_when: authoring a coordinator}
       - {key: 7.4, path: chapters/7-patterns/4-autonomous-loops.md, title: Autonomous Loops,

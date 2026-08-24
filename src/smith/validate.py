@@ -273,6 +273,6 @@ Short body.
 """
 """A deliberately broken artifact.
 
-A validator is not verified by artifacts that pass. ``smith validate --selftest``
+A validator is not verified by artifacts that pass. ``awino validate --selftest``
 runs this through and asserts it blocks.
 """

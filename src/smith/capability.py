@@ -1,6 +1,6 @@
-"""Self-knowledge: what Smith can actually do, verified rather than claimed.
+"""Self-knowledge: what A.W.I.N.O. can actually do, verified rather than claimed.
 
-This module exists because of a real failure. Smith's persona said it "spawns
+This module exists because of a real failure. A.W.I.N.O.'s persona said it "spawns
 scoped subagents" and a skill described how, but no spawn code existed. Nothing
 caught it: prose describing a capability is indistinguishable from prose
 describing an aspiration, and the agent reads both the same way.
@@ -11,12 +11,12 @@ probe fails is reported as absent no matter what any document says.
 
 The three states matter:
 
-- ``REAL``      the probe passed; Smith may claim this
+- ``REAL``      the probe passed; A.W.I.N.O. may claim this
 - ``DEGRADED``  present but limited; the limit must be stated with the claim
 - ``ABSENT``    the probe failed; claiming it is UNGROUNDED_CAPABILITY
 
-The point is not documentation. It is that ``smith limits`` can contradict
-``AGENT_SMITH.md``, and when it does, the probe wins.
+The point is not documentation. It is that ``awino limits`` can contradict
+``AWINO.md``, and when it does, the probe wins.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ class State(StrEnum):
 
 @dataclass(frozen=True)
 class Capability:
-    """One thing Smith might be able to do, and the truth about it."""
+    """One thing A.W.I.N.O. might be able to do, and the truth about it."""
 
     name: str
     state: State
@@ -54,7 +54,7 @@ class Capability:
 
     @property
     def honest_claim(self) -> str:
-        """How Smith is permitted to describe this capability."""
+        """How A.W.I.N.O. is permitted to describe this capability."""
         if self.state is State.REAL:
             return f"can {self.name}"
         if self.state is State.DEGRADED:
@@ -110,7 +110,7 @@ def probe_gate(_paths: SmithPaths) -> Capability:
 def probe_spawn(_paths: SmithPaths) -> Capability:
     """Probe the implementation separately from optional runtime readiness.
 
-    ``spawn.py`` is part of Smith and is testable on every machine. The external
+    ``spawn.py`` is part of A.W.I.N.O. and is testable on every machine. The external
     runner is an adapter selected at runtime. Treating a missing Claude/Goose/Codex
     executable as an absent *product capability* made the repository fail its own
     CI on every clean GitHub runner, even though the implementation and its tests
@@ -171,14 +171,14 @@ def probe_self_improvement(_paths: SmithPaths) -> Capability:
     """Refreshing an index is version tracking, not learning. Say so."""
     return _degraded(
         "keep its knowledge current",
-        "smith update diffs the registry against one upstream repository",
+        "awino update diffs the registry against one upstream repository",
         "it tracks a known source; it does not discover new sources, read papers, "
         "or learn unprompted. There is no trigger and no crawler",
     )
 
 
 def probe_autonomy(paths: SmithPaths) -> Capability:
-    """Smith is harness-level. Claiming loop-level would be wishful labelling."""
+    """A.W.I.N.O. is harness-level. Claiming loop-level would be wishful labelling."""
     hooks = (paths.root / "hooks" / "hooks.json").is_file()
     detail = "SessionStart hook present" if hooks else "no lifecycle hooks"
     return _degraded(
@@ -286,7 +286,7 @@ def summary(capabilities: list[Capability]) -> dict[str, int]:
     }
 
 
-# Claims that appear in Smith's own documents, mapped to the probe that decides
+# Claims that appear in A.W.I.N.O.'s own documents, mapped to the probe that decides
 # whether they are true. Documents drift; probes do not.
 CLAIMED_IN_DOCS: dict[str, Callable[[SmithPaths], Capability]] = {
     "spawns scoped subagents": probe_spawn,

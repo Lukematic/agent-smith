@@ -109,7 +109,7 @@ principle) than as a skill a model reads and might skip.
 
 `skills/harness-engineering/SKILL.md`'s **Locked / Editable / Append-only /
 Human-controlled** surface taxonomy is a cleaner, more general restatement of
-something `AGENT_SMITH.md` §2.4 (tool restriction as forcing function) and
+something `AWINO.md` §2.4 (tool restriction as forcing function) and
 `enforce.py`'s gate contracts already encode implicitly, but never named this
 explicitly for skill authors.
 

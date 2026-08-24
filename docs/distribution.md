@@ -1,6 +1,6 @@
 # Distribution
 
-How to share Agent Smith, and why it is packaged this way.
+How to share A.W.I.N.O., and why it is packaged this way.
 
 ---
 
@@ -17,7 +17,7 @@ curl -fsSL https://raw.githubusercontent.com/Lukematic/agent-smith/main/bootstra
 ```
 
 That clones the repo, installs `uv` if missing, creates an isolated environment,
-links Smith into the agent harness, and verifies the result. No pip, no global
+links A.W.I.N.O. into the agent harness, and verifies the result. No pip, no global
 Python packages, no version conflicts with anything already installed.
 
 ---
@@ -43,7 +43,7 @@ The deciding factor is that **A.W.I.N.O. is not primarily a Python library.** Th
 package therefore treats its non-Python bundle as required runtime data rather
 than optional package data.
 
-A second factor: **Smith is meant to be edited.** Its lessons ledger accumulates
+A second factor: **A.W.I.N.O. is meant to be edited.** Its lessons ledger accumulates
 your project's rules. A pip install is a read-only artifact that a reinstall
 replaces; a clone is a working copy that `git pull` updates while keeping what you
 added.
@@ -58,7 +58,7 @@ awino route "what is a harness"
 ## What a recipient gets
 
 ```
-~/dev/agent-smith/              the clone, editable, updated with git pull
+~/dev/awino/              the clone, editable, updated with git pull
   .venv/                        isolated environment, never touches system Python
 
 ~/.agents/plugins/agent-smith   symlink to the clone, so skills load
@@ -76,24 +76,24 @@ supports `--auto-update`.
 ### 1. Bootstrap script, for someone who has nothing
 
 Handles git clone, uv installation, environment setup, harness linking, and
-verification. Use this when sending Smith to a colleague.
+verification. Use this when sending A.W.I.N.O. to a colleague.
 
 ```powershell
 irm https://raw.githubusercontent.com/Lukematic/agent-smith/main/bootstrap.ps1 | iex
 ```
 
-Optional environment variables: `SMITH_DIR` for the clone location, `SMITH_REPO`
+Optional environment variables: `AWINO_DIR` for the clone location, `AWINO_REPO`
 for a fork.
 
 ### 2. Clone and install, for someone who already has git and uv
 
 ```bash
 git clone https://github.com/Lukematic/agent-smith.git
-cd agent-smith
+cd awino
 ./install.sh        # or ./install.ps1 on Windows
 ```
 
-### 3. Vendored, for a team that wants Smith pinned inside one repository
+### 3. Vendored, for a team that wants A.W.I.N.O. pinned inside one repository
 
 ```bash
 cd your-project
@@ -102,8 +102,8 @@ cd .smith && ./install.sh --local
 ```
 
 `--local` installs to `./.agents/` instead of `~/.agents/`, so the install travels
-with the repository. Use this when a team must share one Smith version exactly;
-otherwise prefer the global install, since one shared Smith avoids
+with the repository. Use this when a team must share one A.W.I.N.O. version exactly;
+otherwise prefer the global install, since one shared A.W.I.N.O. avoids
 `KNOWLEDGE_FORK`.
 
 ---
@@ -138,7 +138,7 @@ git grep -n "C:\\\\Users" -- ':!*.lock' || echo "clean"
 - [ ] Set one version in `pyproject.toml`; confirm `awino --version` and package metadata agree.
 - [ ] Run `just check`, `uv build`, and `uvx twine check dist/*`.
 - [ ] Inspect the wheel and sdist for registry, skills, agents, hooks, and templates.
-- [ ] Install the wheel into an empty temporary environment and smoke `awino` and `smith`.
+- [ ] Install the wheel into an empty temporary environment and smoke canonical `awino` plus the deprecated compatibility command.
 - [ ] Run `awino update-preflight --no-pull`; retain the printed `BACKUP` path.
 - [ ] Prove rollback with `awino rollback <BACKUP>` against temporary project/harness roots.
 - [ ] Confirm canonical docs and installers use `awino`; only compatibility docs use `smith`.
@@ -150,8 +150,8 @@ git grep -n "C:\\\\Users" -- ':!*.lock' || echo "clean"
 ```bash
 git init
 git add -A
-git commit -m "Agent Smith: agentic-engineering harness with a gate ledger"
-gh repo create agent-smith --public --source=. --push
+git commit -m "A.W.I.N.O.: agentic-engineering harness with a gate ledger"
+gh repo create awino --public --source=. --push
 ```
 
 Recipients then use the bootstrap line at the top of this document.
@@ -168,7 +168,7 @@ git push --tags
 ## Updating an install
 
 ```bash
-cd ~/dev/agent-smith
+cd ~/dev/awino
 git pull
 uv sync --all-groups     # only if dependencies changed
 awino update-preflight   # backup, then fast-forward only

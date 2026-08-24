@@ -4,7 +4,7 @@ description: Use when asked a conceptual agentic-engineering question such as wh
 allowed-tools: Read, Glob, Grep, Bash
 ---
 
-# Smith Consult
+# A.W.I.N.O. Consult
 
 Answer a concept question from the living book — grounded, cited, and cheap.
 
@@ -120,13 +120,13 @@ present, and any durable rule written to memory.
 Verify with the exact command and paste its output:
 
 ```bash
-smith route "<the question>"     # confirms routing without spending budget
-smith status                     # confirms cache age and lesson count
+awino route "<the question>"     # confirms routing without spending budget
+awino status                     # confirms cache age and lesson count
 ```
 
 If a run is open, record the consult so knowledge use is auditable:
 
 ```bash
-smith gate skill awino-consult
+awino gate skill awino-consult
 ```
 

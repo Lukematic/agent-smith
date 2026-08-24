@@ -22,6 +22,7 @@ from smith.paths import SmithPaths
 # Files that belong at the root. Anything else is clutter until proven otherwise.
 ROOT_ALLOWED = frozenset(
     {
+        "AWINO.md",
         "AGENT_SMITH.md",
         "README.md",
         "bootstrap.ps1",
@@ -64,7 +65,7 @@ ROOT_ALLOWED_DIRS = frozenset(
         "tests",
     }
 )
-# Directories Smith never inspects. The venv is not our clutter, and walking it
+# Directories A.W.I.N.O. never inspects. The venv is not our clutter, and walking it
 # turns a hygiene check into 49 findings of noise, which trains you to ignore it.
 IGNORED_TREES = frozenset(
     {
@@ -107,7 +108,7 @@ class Clutter:
 
 
 class Tidier:
-    """Detects and archives clutter inside a Smith installation."""
+    """Detects and archives clutter inside an A.W.I.N.O. installation."""
 
     def __init__(self, paths: SmithPaths) -> None:
         self.paths = paths

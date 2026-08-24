@@ -1,14 +1,14 @@
-"""Filesystem layout for Agent Smith.
+"""Filesystem layout for A.W.I.N.O.
 
 Two roots, deliberately separated:
 
-- **Smith home** holds knowledge, skills, doctrine, and cross-project lessons.
+- **A.W.I.N.O. home** holds knowledge, skills, doctrine, and cross-project lessons.
   It is shared and must never be forked per project.
 - **Target project** holds the run ledger, plans, and project-local memory. It is
   whatever repository the work is actually about.
 
 Conflating them causes the two symmetric failures: writing a project's ledger into
-Smith pollutes the shared install, and copying Smith into each project forks the
+A.W.I.N.O. pollutes the shared install, and copying A.W.I.N.O. into each project forks the
 knowledge base. One place knows the difference, and that is this module.
 """
 
@@ -32,27 +32,27 @@ PROJECT_MARKERS = (
 
 @dataclass(frozen=True)
 class SmithPaths:
-    """Resolved locations inside a Smith installation."""
+    """Resolved locations inside an A.W.I.N.O. installation."""
 
     root: Path
 
     @classmethod
     def discover(cls, start: Path | None = None) -> SmithPaths:
-        """Find the Smith home directory.
+        """Find the A.W.I.N.O. home directory.
 
         Resolution order, most explicit first:
 
-        1. ``SMITH_HOME`` if set, so a caller can always be unambiguous.
+        1. ``AWINO_HOME`` if set, with deprecated ``SMITH_HOME`` fallback.
         2. Walking upward from ``start``, which succeeds when invoked inside a clone.
         3. The package's own parent, which succeeds when running from a source tree.
         4. The bundled data inside an installed wheel, which is the only option when
-           Smith was installed with pip or uv tool and no clone exists.
+           A.W.I.N.O. was installed with pip or uv tool and no clone exists.
 
         The bundle fallback matters because a wheel install has no repository. Without
         it the CLI would import fine and then fail on the first command that needs the
         knowledge registry, which is a confusing failure for a correct installation.
         """
-        override = os.environ.get("SMITH_HOME")
+        override = os.environ.get("AWINO_HOME") or os.environ.get("SMITH_HOME")
         if override:
             candidate = Path(override).expanduser().resolve()
             if cls._is_home(candidate):
@@ -86,7 +86,7 @@ class SmithPaths:
 
     @property
     def writable_home(self) -> Path:
-        """Where Smith may write when installed as a wheel.
+        """Where A.W.I.N.O. may write when installed as a wheel.
 
         A clone writes in place. A bundle cannot, so durable memory is redirected to
         ``~/.smith`` rather than silently written into site-packages.
@@ -111,6 +111,14 @@ class SmithPaths:
     @property
     def sources(self) -> Path:
         return self.knowledge / "SOURCES.yaml"
+
+    @property
+    def constitution(self) -> Path:
+        """Canonical constitution, with fallback for pre-A.W.I.N.O. installs."""
+        canonical = self.root / "AWINO.md"
+        if canonical.exists():
+            return canonical
+        return self.root / "AGENT_SMITH.md"
 
     @property
     def cache(self) -> Path:
@@ -167,7 +175,7 @@ class SmithPaths:
         return self.root / "docs"
 
     def ensure_scaffold(self) -> list[Path]:
-        """Create every directory Smith expects. Returns those newly created."""
+        """Create every directory A.W.I.N.O. expects. Returns those newly created."""
         wanted = [
             self.knowledge,
             self.cache,
@@ -193,9 +201,9 @@ class SmithPaths:
 class ProjectPaths:
     """The repository the work is actually about.
 
-    Distinct from Smith home. Runs, plans, and project-local memory live here so
-    that a shared Smith install never accumulates one project's state, and a
-    project never needs a copy of Smith.
+    Distinct from A.W.I.N.O. home. Runs, plans, and project-local memory live here so
+    that a shared A.W.I.N.O. install never accumulates one project's state, and a
+    project never needs a copy of A.W.I.N.O.
     """
 
     root: Path
@@ -205,14 +213,14 @@ class ProjectPaths:
     def discover(cls, start: Path | None = None, home: SmithPaths | None = None) -> ProjectPaths:
         """Find the repository containing ``start``.
 
-        ``SMITH_PROJECT`` overrides everything, which matters when an agent runs
+        ``AWINO_PROJECT`` overrides everything; deprecated ``SMITH_PROJECT`` is a fallback.
         with a working directory that is not the project it is editing.
 
-        Smith home is skipped as a candidate unless nothing else matches. Smith has
+        A.W.I.N.O. home is skipped as a candidate unless nothing else matches. A.W.I.N.O. has
         its own ``pyproject.toml`` and ``.git``, so a naive upward walk from inside
-        it would always stop there and every project would look like Smith itself.
+        it would always stop there and every project would look like A.W.I.N.O. itself.
         """
-        override = os.environ.get("SMITH_PROJECT")
+        override = os.environ.get("AWINO_PROJECT") or os.environ.get("SMITH_PROJECT")
         if override:
             resolved = Path(override).expanduser().resolve()
             return cls(root=resolved, is_smith_home=cls._same(resolved, home))
@@ -229,11 +237,11 @@ class ProjectPaths:
             return cls(root=candidate, is_smith_home=False)
 
         if fallback is not None:
-            # Only Smith home matched, so the work genuinely is on Smith.
+            # Only A.W.I.N.O. home matched, so the work genuinely is on A.W.I.N.O.
             return cls(root=fallback, is_smith_home=True)
 
         # No repository markers anywhere: treat the current directory as the
-        # project rather than silently falling back to Smith home, which would
+        # project rather than silently falling back to A.W.I.N.O. home, which would
         # write another project's state into the shared install.
         return cls(root=here, is_smith_home=cls._same(here, home))
 
@@ -253,7 +261,7 @@ class ProjectPaths:
     # ── project-local state ──────────────────────────────────────────────────
     @property
     def smith_dir(self) -> Path:
-        """Where Smith keeps this project's state. Gitignorable, disposable."""
+        """Where A.W.I.N.O. keeps this project's state. Gitignorable, disposable."""
         return self.root / ".smith"
 
     @property
@@ -262,7 +270,7 @@ class ProjectPaths:
 
     @property
     def memory(self) -> Path:
-        """Project-local memory. Conventions here, doctrine in Smith home."""
+        """Project-local memory. Conventions here, doctrine in A.W.I.N.O. home."""
         return self.smith_dir / "memory"
 
     @property
@@ -287,7 +295,7 @@ class ProjectPaths:
         return self.root / ".seeds"
 
     def ensure_state(self) -> list[Path]:
-        """Create the project-local directories Smith writes to."""
+        """Create the project-local directories A.W.I.N.O. writes to."""
         wanted = [self.smith_dir, self.runs, self.memory]
         created = [d for d in wanted if not d.exists()]
         for d in wanted:
@@ -301,7 +309,7 @@ class ProjectPaths:
 
 @dataclass(frozen=True)
 class Workspace:
-    """Smith home plus the project under work. The pair every command needs."""
+    """A.W.I.N.O. home plus the project under work. The pair every command needs."""
 
     home: SmithPaths
     project: ProjectPaths
@@ -314,19 +322,19 @@ class Workspace:
 
     @property
     def working_on_self(self) -> bool:
-        """True when Smith is the project, which is its own special case.
+        """True when A.W.I.N.O. is the project, which is its own special case.
 
-        Developing Smith is legitimate. Silently treating an unrelated project as
-        Smith is not, so the distinction is explicit rather than incidental.
+        Developing A.W.I.N.O. is legitimate. Silently treating an unrelated project as
+        A.W.I.N.O. is not, so the distinction is explicit rather than incidental.
         """
         return self.project.is_smith_home
 
     @property
     def nested_install(self) -> bool:
-        """True when Smith home sits directly inside the project it is working on.
+        """True when A.W.I.N.O. home sits directly inside the project it is working on.
 
         This is the ordinary layout: a `.smith/` home beside the project's other
-        directories. It matters because the project's state directory and Smith
+        directories. It matters because the project's state directory and A.W.I.N.O.
         home would otherwise be the same path.
         """
         try:
@@ -338,9 +346,9 @@ class Workspace:
     def state_root(self) -> Path:
         """Where this project's runs and local memory live.
 
-        Normally the project's own `.smith/`. When Smith home *is* that directory,
+        Normally the project's own `.smith/`. When A.W.I.N.O. home *is* that directory,
         state moves to `<home>/state/` instead. Writing a project's ledger into
-        Smith's own knowledge or memory directories would mix shared doctrine with
+        A.W.I.N.O.'s own knowledge or memory directories would mix shared doctrine with
         one repository's history, which is the failure this resolves.
         """
         if self.nested_install:

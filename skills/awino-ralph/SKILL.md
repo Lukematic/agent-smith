@@ -3,7 +3,7 @@ name: awino-ralph
 description: Iterative work-review loop with fresh context per iteration and cross-model review. Use when a task has a machine-checkable completion gate and may need several attempts to get right
 ---
 
-# Smith Ralph
+# A.W.I.N.O. Ralph
 
 Standard agent loops rot through **context accumulation**: every failed attempt
 stays in history, so by iteration four the model wades through its own noise
@@ -30,7 +30,7 @@ iterations of two models is `UNBOUNDED_SPEND`.
 ## State contract
 
 All state in `.smith/ralph/`. Nothing else survives an iteration. The state path
-belongs to Agent Smith, not to whichever harness happens to invoke it.
+belongs to A.W.I.N.O., not to whichever harness happens to invoke it.
 
 | File | Purpose |
 | --- | --- |

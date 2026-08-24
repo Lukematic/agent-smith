@@ -57,12 +57,13 @@ build-backend = "hatchling.build"
 packages = ["src/smith"]
 
 # The knowledge registry, skills, persona, and constitution are not Python, but
-# they are what Smith *is*. A wheel carrying only the CLI installs a tool whose
-# knowledge base is missing, so `smith route` and every skill fail immediately.
+# they are what A.W.I.N.O. *is*. A wheel carrying only the CLI installs a tool whose
+# knowledge base is missing, so `awino route` and every skill fail immediately.
 #
 # force-include maps repository paths to package-relative paths, so the data ships
 # inside `smith/_bundle/` and `smith.paths` can find it when no git clone exists.
 [tool.hatch.build.targets.wheel.force-include]
+"AWINO.md" = "smith/_bundle/AWINO.md"
 "AGENT_SMITH.md" = "smith/_bundle/AGENT_SMITH.md"
 "plugin.json" = "smith/_bundle/plugin.json"
 "knowledge/REGISTRY.yaml" = "smith/_bundle/knowledge/REGISTRY.yaml"
@@ -87,6 +88,7 @@ include = [
     "knowledge/REGISTRY.yaml",
     "knowledge/SOURCES.yaml",
     "memory/lessons.md",
+    "AWINO.md",
     "AGENT_SMITH.md",
     "README.md",
     "justfile",
