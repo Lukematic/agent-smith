@@ -528,8 +528,10 @@ class Ledger:
     def note_skill(
         self, run_id: str, skill: str, *, state: str = "loaded", reason: str = ""
     ) -> Run:
+        if state not in {"loaded", "used", "recommended"}:
+            raise LedgerError(f"invalid skill state {state!r}")
         run = self.load(run_id)
-        if skill not in run.skills_loaded:
+        if state in {"loaded", "used"} and skill not in run.skills_loaded:
             run.skills_loaded.append(skill)
         item = SkillEvent(
             name=skill,

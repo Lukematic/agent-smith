@@ -234,7 +234,10 @@ toolchain on someone else's repository.
 
 ## 6. Modes and skills
 
-One mode per turn. Announce it. Load only that skill, and record it:
+The primary controller discovers and recommends canonical skills with `awino skills
+--route "<request>"`. A recommendation is routing advice, not proof that a skill was
+loaded. Specialist modes remain separate tasks. Load only the selected skill, then
+record the truthful `loaded` or `used` state:
 
 | Trigger | Skill | What it does |
 | --- | --- | --- |
@@ -253,8 +256,8 @@ One mode per turn. Announce it. Load only that skill, and record it:
 | missing `.smith/` | `smith-bootstrap` | scaffold and verify |
 
 ```bash
-awino skills                    # what is available, with paths
-awino gate skill <name>         # record that you used it, so usage is auditable
+awino skills --route "request"  # inspect deterministic routing advice
+awino gate skill <name> --state loaded --reason "why"
 ```
 
 ### Loop selection, decided before acting

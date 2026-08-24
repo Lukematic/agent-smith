@@ -380,6 +380,13 @@ class TestSkillAudit:
         assert loaded.skill_events[0].reason == "planned work"
         assert loaded.skills_loaded == ["smith-rpi"]
 
+    def test_recommendation_does_not_claim_skill_loaded(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.QUESTION, "route only")
+        ledger.note_skill(run.run_id, "awino-rpi", state="recommended", reason="complex change")
+        loaded = ledger.load(run.run_id)
+        assert loaded.skills_loaded == []
+        assert loaded.skill_events[0].state == "recommended"
+
 
 class TestWeakeningDetection:
     def test_deleted_assertion_in_test_file_is_caught(self) -> None:

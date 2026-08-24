@@ -28,6 +28,7 @@ from smith import (
     modes,
     onboarding,
     seeds,
+    skill_catalog,
     spawn,
     watch,
 )
@@ -81,6 +82,15 @@ def _workspace() -> Workspace:
 def _toolchain(workspace: Workspace | None = None) -> Toolchain:
     """Toolchain of the project under work, not of Smith."""
     return Toolchain((workspace or _workspace()).project.root)
+
+
+def _skill_catalog() -> skill_catalog.SkillCatalog:
+    workspace = _workspace()
+    return skill_catalog.SkillCatalog(
+        workspace.project.root / ".kilo" / "skills",
+        Path.home() / ".config" / "kilo" / "skills",
+        workspace.home.skills,
+    )
 
 
 def _echo(message: str) -> None:
@@ -864,29 +874,56 @@ def ladder() -> None:
 def skills(
     paths_only: bool = typer.Option(False, "--paths", help="Print absolute paths, one per line"),
     as_json_output: bool = typer.Option(False, "--json", help="Machine-readable output"),
+    route: str | None = typer.Option(None, "--route", help="Recommend a skill for this request"),
 ) -> None:
-    """List every skill with its absolute path.
+    """List canonical skills, optionally recommending one for a request.
 
     This is how Smith learns where its own skills live at load time rather than
     hardcoding a directory that moves when the install location changes.
     """
     paths = _paths()
-    found = []
-    for skill in sorted(paths.skills.glob("*/SKILL.md")):
-        text = skill.read_text(encoding="utf-8")
-        name_match = re.search(r"^name:\s*(.+)$", text, re.MULTILINE)
-        desc_match = re.search(r"^description:\s*(.+)$", text, re.MULTILINE)
-        found.append(
-            {
-                "name": (name_match.group(1).strip() if name_match else skill.parent.name),
-                "namespaced": f"awino:{name_match.group(1).strip() if name_match else skill.parent.name}",
-                "path": str(skill),
-                "description": (desc_match.group(1).strip() if desc_match else ""),
-            }
-        )
+    catalog = _skill_catalog()
+    found = [
+        {
+            "name": item.name,
+            "namespaced": f"awino:{item.name}",
+            "path": str(item.path),
+            "description": item.description,
+            "source": item.source,
+        }
+        for item in catalog.skills
+    ]
+    recommendation = catalog.recommend(route) if route is not None else None
+    routed = None
+    if recommendation is not None:
+        routed = {
+            "name": recommendation.skill.name,
+            "score": recommendation.score,
+            "matched_name": recommendation.matched_name,
+            "matched_description": recommendation.matched_description,
+        }
+        ledger = _ledger()
+        current = ledger.inspect_current()
+        if current.status == "active" and current.run_id is not None:
+            ledger.note_skill(
+                current.run_id,
+                recommendation.skill.name,
+                state="recommended",
+                reason=route or "",
+            )
 
     if as_json_output:
-        _echo(json.dumps({"root": str(paths.root), "count": len(found), "skills": found}, indent=2))
+        _echo(
+            json.dumps(
+                {
+                    "root": str(paths.root),
+                    "count": len(found),
+                    "skills": found,
+                    "recommendation": routed,
+                },
+                indent=2,
+            )
+        )
         return
     if paths_only:
         for item in found:
@@ -898,7 +935,17 @@ def skills(
     width = max((len(i["name"]) for i in found), default=0)
     for item in found:
         summary = item["description"].split(". ")[0][:80]
-        _echo(f"  {item['name']:<{width}}  {summary}")
+        _echo(f"  {item['name']:<{width}}  [{item['source']}] {summary}")
+    if route is not None:
+        _echo("")
+        if routed is None:
+            _echo("NO_RECOMMENDATION  no positive request-word match")
+        else:
+            matches = sorted(set(routed["matched_name"]) | set(routed["matched_description"]))
+            _echo(
+                f"RECOMMENDED  {routed['name']}  score={routed['score']} "
+                f"matched={','.join(matches)}"
+            )
     _echo("")
     _echo("Load one by name in a session, or record usage with: awino gate skill <name>")
 
@@ -2047,16 +2094,30 @@ def gate_status(
 
 @gate_app.command("skill")
 def gate_skill(
-    name: str = typer.Argument(..., help="Skill that was loaded"),
+    name: str = typer.Argument(..., help="Canonical skill name or legacy alias"),
     run_id: str = typer.Option(None, "--run", help="Run id, defaults to current"),
+    state: str = typer.Option("loaded", "--state", help="Truthful state: loaded or used"),
+    reason: str = typer.Option("", "--reason", help="Why the skill was loaded or used"),
 ) -> None:
-    """Record that a skill was loaded, so skill usage is auditable after the fact."""
+    """Validate and persist truthful skill loading or usage evidence."""
+    if state not in {"loaded", "used"}:
+        _echo("REFUSED  --state must be loaded or used")
+        raise typer.Exit(2)
+    resolution = _skill_catalog().resolve(name)
+    if resolution is None:
+        _echo(f"REFUSED  unknown skill {name!r}; inspect canonical names with: awino skills")
+        raise typer.Exit(2)
+    if resolution.deprecated_alias:
+        typer.echo(
+            f"DEPRECATED_SKILL_ALIAS  {name} -> {resolution.skill.name}",
+            err=True,
+        )
     resolved = _resolve_run(run_id)
     try:
-        run = _ledger().note_skill(resolved, name)
+        run = _ledger().note_skill(resolved, resolution.skill.name, state=state, reason=reason)
     except LedgerError as exc:
         _ledger_error(exc)
-    _echo(f"SKILL_LOADED  {name}  (total {len(run.skills_loaded)})")
+    _echo(f"SKILL_{state.upper()}  {resolution.skill.name}  (total {len(run.skills_loaded)})")
 
 
 @gate_app.command("contracts")

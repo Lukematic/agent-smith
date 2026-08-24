@@ -139,3 +139,37 @@ def test_issue_is_validated_linked_and_started_on_first_execution(
     assert recorded.exit_code == 0, recorded.stdout
     assert cli._ledger().load(run_id).issue_started_at is not None
     assert started == ["ISSUE-1"]
+
+
+def test_skills_route_and_gate_are_truthful_subprocess_workflows(tmp_path: Path) -> None:
+    skill = tmp_path / ".kilo" / "skills" / "awino-local" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text(
+        "---\nname: awino-local\ndescription: Analyze local widgets\n---\n",
+        encoding="utf-8",
+    )
+    opened = run_cli(tmp_path, "gate", "open", "question", "widget work")
+    assert opened.returncode == 0, opened.stdout + opened.stderr
+
+    routed = run_cli(tmp_path, "skills", "--route", "analyze widgets", "--json")
+    assert routed.returncode == 0, routed.stdout + routed.stderr
+    assert '"name": "awino-local"' in routed.stdout
+    status = run_cli(tmp_path, "gate", "status")
+    assert "skills loaded: none recorded" in status.stdout
+
+    unknown = run_cli(tmp_path, "gate", "skill", "not-real", "--state", "used")
+    assert unknown.returncode == 2
+    assert "unknown skill" in unknown.stdout
+
+    used = run_cli(
+        tmp_path,
+        "gate",
+        "skill",
+        "awino-local",
+        "--state",
+        "used",
+        "--reason",
+        "analyzed widgets",
+    )
+    assert used.returncode == 0, used.stdout + used.stderr
+    assert "SKILL_USED  awino-local" in used.stdout
