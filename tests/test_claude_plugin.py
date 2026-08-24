@@ -56,6 +56,12 @@ def test_repository_exposes_only_the_awino_agent() -> None:
     assert agent_files == ["awino.md"]
 
 
+def test_awino_agent_uses_a_portable_claude_model_alias() -> None:
+    agent = (ROOT / "agents" / "awino.md").read_text(encoding="utf-8")
+    assert "model: sonnet" in agent
+    assert "model: claude-sonnet" not in agent
+
+
 def test_plugin_uses_official_root_and_never_initializes_project_state() -> None:
     plugin_files = [
         ROOT / ".claude-plugin" / "plugin.json",
