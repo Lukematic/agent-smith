@@ -274,6 +274,7 @@ One rule: **docs live in `docs/`, code in `src/`, nothing loose at the root.**
 | --- | --- |
 | [docs/install.md](docs/install.md) | installing, and pointing any harness at the persona |
 | [docs/enforcement.md](docs/enforcement.md) | agents ignore instructions and you want the mechanism |
+| [docs/updates/vip-workflow-live-test.md](docs/updates/vip-workflow-live-test.md) | reproducing the seed 17fa subprocess acceptance workflow |
 | [docs/deployment.md](docs/deployment.md) | deciding global vs per-repo install |
 | [docs/architecture.md](docs/architecture.md) | understanding the five layers and phases |
 | [docs/harness.md](docs/harness.md) | which mental model fires when, and the guides/sensors inventory |

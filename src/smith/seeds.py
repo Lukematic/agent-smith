@@ -251,7 +251,8 @@ class Seeds:
         if isinstance(payload, list):
             rows = payload
         else:
-            rows = payload.get("issues") or payload.get("results") or []
+            issue = payload.get("issue")
+            rows = payload.get("issues") or payload.get("results") or ([issue] if issue else [])
         return [Issue.from_json(row) for row in rows if isinstance(row, dict)]
 
     # ── reads ────────────────────────────────────────────────────────────────

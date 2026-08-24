@@ -141,6 +141,24 @@ def test_issue_is_validated_linked_and_started_on_first_execution(
     assert started == ["ISSUE-1"]
 
 
+def test_seeds_show_wrapper_is_parsed() -> None:
+    payload = {
+        "success": True,
+        "command": "show",
+        "issue": {
+            "id": "ISSUE-1",
+            "title": "Tracked",
+            "status": "open",
+            "type": "task",
+            "priority": 2,
+        },
+    }
+
+    issues = cli.seeds.Seeds._issues_from(payload)
+
+    assert [issue.id for issue in issues] == ["ISSUE-1"]
+
+
 def test_skills_route_and_gate_are_truthful_subprocess_workflows(tmp_path: Path) -> None:
     skill = tmp_path / ".kilo" / "skills" / "awino-local" / "SKILL.md"
     skill.parent.mkdir(parents=True)
