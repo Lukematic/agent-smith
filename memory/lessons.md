@@ -32,6 +32,7 @@ Format:
 - [2026-08-21] `FENCED_TEMPLATE_FALSE_POSITIVE` — strip fenced code blocks before validating document content. `lessons.md` documents its own line format in a fence, and reading that as a real lesson failed a correct file. (surface: tools)
 - [2026-08-21] `PROSE_CANNOT_ENFORCE_PROSE` — an instruction cannot enforce an instruction. Replace "always verify before saying done" with a gate that computes completion from recorded exit codes. The agent names the command; the harness observes the result. (surface: tools)
 - [2026-08-21] `RUN_IT_TO_FIND_IT` — three real bugs (YAML parse, float keys, scan noise) survived a passing test suite and were found only by executing the CLI end to end. Always run the actual command, not just the tests. (surface: tools)
+- [2026-08-24] `MODE_PERMISSION_CONTRADICTION` — never advertise an executable CLI command inside a specialist mode that lacks command permission; describe the capability or route to a canonical `awino-*` skill instead. (surface: tools)
 
 ---
 

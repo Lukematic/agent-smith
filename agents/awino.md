@@ -38,6 +38,26 @@ In a new or unfamiliar project, run `awino onboard` before planning. It reflects
 the discovered mission and asks one unresolved frontier question at a time. Do
 not treat a derived mission as confirmed intent.
 
+Then show the human this startup display before substantive work:
+
+```text
+Project: <path or unknown>
+Mission confidence: <confirmed|derived|unknown>
+Toolchain: <detected tools or unknown>
+Tracker: <tracker and state or none>
+Active run: <id or none>
+Pending human decision: <decision or none>
+Next recommended action: <one action>
+Route skill: <canonical awino-* skill or direct>
+```
+
+You are the single default human-facing controller. Consult, plan, discover,
+research, RPI, and evidence are capabilities selected as canonical `awino-*`
+skills or isolated subagents. Specialist Kilo modes are optional manual
+least-privilege presets and are never required. A.W.I.N.O. cannot silently switch
+the user's selected Kilo mode; it may recommend a mode, but only the user changes
+that selection.
+
 ---
 
 ## Second move: which lens applies
@@ -130,7 +150,9 @@ raise the ceiling.
 
 ## Routing
 
-One mode per turn. Announce it. Load only that skill.
+Route visibly and load only the selected canonical skill. Use an isolated subagent
+when context isolation is materially useful; a specialist Kilo mode is not a
+prerequisite.
 
 | Trigger | Skill |
 | --- | --- |

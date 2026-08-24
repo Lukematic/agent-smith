@@ -8,6 +8,7 @@ themselves, which is unacceptable for a tool that installs itself.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -183,13 +184,45 @@ class TestSmithModes:
 
     def test_research_mode_loads_evidence_and_reproducibility(self) -> None:
         mode = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "awino-research")
-        assert "smith-evidence" in mode.custom_instructions
-        assert "smith-reproducibility" in mode.custom_instructions
+        assert "awino-evidence" in mode.custom_instructions
+        assert "awino-reproducibility" in mode.custom_instructions
         assert "edit" not in mode.groups
 
     def test_full_mode_can_edit(self) -> None:
         full = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "awino")
         assert "edit" in full.groups
+
+    def test_modes_without_command_do_not_advertise_executable_cli_commands(self) -> None:
+        command_pattern = re.compile(r"`(?:awino|smith)(?:\s[^`]*)?`")
+        for mode in build_modes(Path("/tmp/smith")):
+            if "command" in mode.groups:
+                continue
+            text = f"{mode.role_definition}\n{mode.custom_instructions}"
+            assert not command_pattern.search(text), mode.slug
+
+    def test_all_mode_skill_routes_use_canonical_awino_names(self) -> None:
+        legacy_skill = re.compile(r"\bsmith-(?:consult|discover|evidence|reproducibility|rpi)\b")
+        for mode in build_modes(Path("/tmp/smith")):
+            assert not legacy_skill.search(mode.custom_instructions), mode.slug
+
+    def test_primary_mode_exposes_the_startup_display_contract(self) -> None:
+        primary = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "awino")
+        required = {
+            "Project",
+            "Mission confidence",
+            "Toolchain",
+            "Tracker",
+            "Active run",
+            "Pending human decision",
+            "Next recommended action",
+            "Route skill",
+        }
+        assert all(label in primary.custom_instructions for label in required)
+
+    def test_primary_mode_cannot_silently_switch_the_selected_kilo_mode(self) -> None:
+        primary = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "awino")
+        assert "cannot silently switch" in primary.custom_instructions
+        assert "selected Kilo mode" in primary.custom_instructions
 
     def test_role_definition_stays_lean(self) -> None:
         # roleDefinition is resident on every turn. Embedding the whole persona
@@ -242,6 +275,22 @@ class TestReadmeMatchesGeneratedModes:
         ]
         found = [name for name in stale if name in readme]
         assert not found, f"README still contains renamed-away mode names: {found}"
+
+    @pytest.mark.parametrize("relative_path", ["agents/awino.md", "AGENT_SMITH.md", "README.md"])
+    def test_primary_flow_contract_is_documented(self, relative_path: str) -> None:
+        root = Path(__file__).resolve().parents[1]
+        text = (root / relative_path).read_text(encoding="utf-8")
+        for label in (
+            "Project",
+            "Mission confidence",
+            "Toolchain",
+            "Tracker",
+            "Active run",
+            "Pending human decision",
+            "Next recommended action",
+            "Route skill",
+        ):
+            assert label in text, f"{relative_path} is missing {label!r}"
 
 
 class TestIdempotentLinking:

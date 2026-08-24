@@ -32,6 +32,25 @@ Then read, in order:
 1. `.smith/memory/lessons.md` — **binding rules that override your defaults.**
 2. `.smith/knowledge/REGISTRY.yaml` — the index. Index only, never chapter bodies.
 
+The primary startup display is a contract, not optional narration:
+
+```text
+Project: <path or unknown>
+Mission confidence: <confirmed|derived|unknown>
+Toolchain: <detected tools or unknown>
+Tracker: <tracker and state or none>
+Active run: <id or none>
+Pending human decision: <decision or none>
+Next recommended action: <one action>
+Route skill: <canonical awino-* skill or direct>
+```
+
+A.W.I.N.O. is the single default human-facing controller. Consult, plan,
+discover, research, RPI, and evidence are capabilities selected as canonical
+`awino-*` skills or isolated subagents. Optional Kilo specialist modes are manual
+least-privilege presets and are never required. A.W.I.N.O. cannot silently switch
+the user's selected Kilo mode; only the user controls that selection.
+
 Open every reply with:
 
 ```
@@ -241,19 +260,19 @@ record the truthful `loaded` or `used` state:
 
 | Trigger | Skill | What it does |
 | --- | --- | --- |
-| raw idea, sparse repo, unclear mission | `smith-discover` | one-question-at-a-time mission and requirements handshake |
-| "what is X", "how should I do X" | `smith-consult` | grounded answer, ≤3 files, every claim cited |
-| "my agent does X wrong" | `smith-triage` | named mode, surface, structural fix, recurrence block |
-| factual research, RAG, scientific synthesis | `smith-evidence` | evidence sufficiency and citation release gate |
-| scientific/data/agent pipeline | `smith-reproducibility` | run IDs, snapshots, config/prompt versions, audit trail |
-| complex multi-file change | `smith-rpi` | research → plan → implement, one goal per session |
-| needs many attempts, has a gate | `smith-ralph` | fresh context per iteration, cross-model review |
-| independent parallel work | `smith-delegate` | disjoint ownership, verified independently |
-| "make me an agent" | `smith-author-agent` | reuse search, spec, staging, lint |
-| "I need a tool for X" | `smith-author-tool` | skill vs hook vs script vs recipe vs MCP gate |
-| "remember this" | `smith-memory` | dual-write: MCP for recall, file for audit |
-| "update yourself" | `smith-self-update` | registry drift, lesson re-verification |
-| missing `.smith/` | `smith-bootstrap` | scaffold and verify |
+| raw idea, sparse repo, unclear mission | `awino-discover` | one-question-at-a-time mission and requirements handshake |
+| "what is X", "how should I do X" | `awino-consult` | grounded answer, ≤3 files, every claim cited |
+| "my agent does X wrong" | `awino-triage` | named mode, surface, structural fix, recurrence block |
+| factual research, RAG, scientific synthesis | `awino-evidence` | evidence sufficiency and citation release gate |
+| scientific/data/agent pipeline | `awino-reproducibility` | run IDs, snapshots, config/prompt versions, audit trail |
+| complex multi-file change | `awino-rpi` | research → plan → implement, one goal per session |
+| needs many attempts, has a gate | `awino-ralph` | fresh context per iteration, cross-model review |
+| independent parallel work | `awino-delegate` | disjoint ownership, verified independently |
+| "make me an agent" | `awino-author-agent` | reuse search, spec, staging, lint |
+| "I need a tool for X" | `awino-author-tool` | skill vs hook vs script vs recipe vs MCP gate |
+| "remember this" | `awino-memory` | dual-write: MCP for recall, file for audit |
+| "update yourself" | `awino-self-update` | registry drift, lesson re-verification |
+| missing `.smith/` | `awino-bootstrap` | scaffold and verify |
 
 ```bash
 awino skills --route "request"  # inspect deterministic routing advice
@@ -264,11 +283,11 @@ awino gate skill <name> --state loaded --reason "why"
 
 ```
 1-2 files, well understood?          -> direct edit, no ceremony
-Mission or product intent unclear?   -> smith-discover / awino onboard
-Do not understand it yet?            -> smith-rpi research, then STOP for review
-Machine-checkable gate, many tries?  -> smith-ralph
-Single ordered pass?                 -> smith-rpi plan then implement
-Disjoint parallel workstreams?       -> smith-delegate
+Mission or product intent unclear?   -> awino-discover / awino onboard
+Do not understand it yet?            -> awino-rpi research, then STOP for review
+Machine-checkable gate, many tries?  -> awino-ralph
+Single ordered pass?                 -> awino-rpi plan then implement
+Disjoint parallel workstreams?       -> awino-delegate
 ```
 
 State the choice and the reason in one line. RPI on a two-line fix is

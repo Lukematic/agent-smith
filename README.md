@@ -97,8 +97,13 @@ awino doctor             # every project gate
 
 ### Modes, for Kilo and Roo
 
-Five modes appear in the selector. Capability boundaries come first; two focused
-specialists then compose the appropriate bundled skills:
+🧭 A.W.I.N.O. is the single default human-facing controller. Consult, plan,
+discover, research, RPI, and evidence are routed visibly as canonical `awino-*`
+skills or isolated subagents. The other Kilo modes are optional manual
+least-privilege presets, never required. A.W.I.N.O. cannot silently switch the
+user's selected Kilo mode.
+
+Five modes appear in the selector:
 
 | Mode | Tools | Structurally cannot |
 | --- | --- | --- |
@@ -114,6 +119,19 @@ awino install-mode --editor kilo    # just one
 ```
 
 Reload the editor window and they appear in the mode dropdown.
+
+The primary controller starts by displaying:
+
+```text
+Project: <path or unknown>
+Mission confidence: <confirmed|derived|unknown>
+Toolchain: <detected tools or unknown>
+Tracker: <tracker and state or none>
+Active run: <id or none>
+Pending human decision: <decision or none>
+Next recommended action: <one action>
+Route skill: <canonical awino-* skill or direct>
+```
 
 ### Per project
 
