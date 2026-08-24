@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "awino",
+  "displayName": "A.W.I.N.O.",
+  "version": "0.3.0",
+  "description": "Agentic workflow orchestration with explicit plans, evidence, and completion gates.",
+  "author": {
+    "name": "Luke Awino",
+    "url": "https://github.com/Lukematic"
+  },
+  "homepage": "https://github.com/Lukematic/agent-smith",
+  "repository": "https://github.com/Lukematic/agent-smith",
+  "license": "MIT",
+  "keywords": ["agents", "workflow", "verification", "harness"]
+}

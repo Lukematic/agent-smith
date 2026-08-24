@@ -5,6 +5,7 @@
 # which is a confusing failure mode for a recipient whose only mistake was
 # cloning on the wrong platform.
 *.sh text eol=lf
+bin/awino text eol=lf
 justfile text eol=lf
 
 # PowerShell is Windows-first and tolerates either, so keep it native.

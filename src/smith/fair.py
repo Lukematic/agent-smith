@@ -103,8 +103,14 @@ KNOWN: dict[str, tuple[str, str, str, str]] = {
     "hooks": (
         "Lifecycle hooks that run as code rather than as instructions.",
         "Discovered automatically by the agent harness from `hooks.json`.",
-        "JSON manifest pointing at commands. `${PLUGIN_ROOT}` resolves to the install directory.",
+        "JSON manifest pointing at commands. `${CLAUDE_PLUGIN_ROOT}` resolves to the install directory.",
         "Edit with care: hooks execute local commands on every session, so they are a trust boundary.",
+    ),
+    "bin": (
+        "Cross-platform launchers for the optional deterministic A.W.I.N.O. CLI.",
+        "Claude Code adds this directory to the Bash tool PATH while the plugin is enabled.",
+        "POSIX shell and Windows command scripts.",
+        "Never install dependencies; report DEGRADED with an explicit remedy when unavailable.",
     ),
     "templates": (
         "Scaffolding for authored artifacts, with `{{PLACEHOLDER}}` slots.",
@@ -183,6 +189,8 @@ def is_exempt(directory: Path, root: Path) -> str | None:
         parts = directory.relative_to(root).parts
     except ValueError:
         return "outside the project"
+    if directory == root / "agents" and (directory / "awino.md").is_file():
+        return "native plugin agent definition is self-describing"
     for part in parts:
         if part in EXEMPT:
             return EXEMPT[part]

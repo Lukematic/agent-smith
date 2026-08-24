@@ -33,6 +33,7 @@ Format:
 - [2026-08-21] `PROSE_CANNOT_ENFORCE_PROSE` — an instruction cannot enforce an instruction. Replace "always verify before saying done" with a gate that computes completion from recorded exit codes. The agent names the command; the harness observes the result. (surface: tools)
 - [2026-08-21] `RUN_IT_TO_FIND_IT` — three real bugs (YAML parse, float keys, scan noise) survived a passing test suite and were found only by executing the CLI end to end. Always run the actual command, not just the tests. (surface: tools)
 - [2026-08-24] `MODE_PERMISSION_CONTRADICTION` — never advertise an executable CLI command inside a specialist mode that lacks command permission; describe the capability or route to a canonical `awino-*` skill instead. (surface: tools)
+- [2026-08-24] `PLUGIN_TRUST_BYPASS` — install native plugins only through an explicit user plugin action; never turn a pasted URL into agent-driven global mutation, and never initialize project state during plugin install. (surface: tools)
 
 ---
 

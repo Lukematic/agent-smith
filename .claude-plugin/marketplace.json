@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "awino",
+  "owner": {
+    "name": "Luke Awino",
+    "url": "https://github.com/Lukematic"
+  },
+  "description": "Official A.W.I.N.O. plugins",
+  "plugins": [
+    {
+      "name": "awino",
+      "source": "./",
+      "description": "Agentic workflow orchestration with explicit plans, evidence, and completion gates.",
+      "version": "0.3.0",
+      "author": {
+        "name": "Luke Awino"
+      },
+      "homepage": "https://github.com/Lukematic/agent-smith",
+      "repository": "https://github.com/Lukematic/agent-smith",
+      "license": "MIT",
+      "skills": [
+        "./skills/awino-author-agent",
+        "./skills/awino-author-tool",
+        "./skills/awino-bootstrap",
+        "./skills/awino-consult",
+        "./skills/awino-delegate",
+        "./skills/awino-discover",
+        "./skills/awino-evidence",
+        "./skills/awino-memory",
+        "./skills/awino-ralph",
+        "./skills/awino-reproducibility",
+        "./skills/awino-rpi",
+        "./skills/awino-self-update",
+        "./skills/awino-triage"
+      ],
+      "strict": true
+    }
+  ]
+}

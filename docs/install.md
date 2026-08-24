@@ -4,7 +4,43 @@ From a GitHub URL to a working agent, and what to do first.
 
 ---
 
-## One line
+## Native Claude Code plugin
+
+Run these commands yourself in Claude Code:
+
+```text
+/plugin marketplace add Lukematic/agent-smith
+/plugin install awino@awino
+/reload-plugins
+```
+
+Native CLI equivalents:
+
+```bash
+claude plugin marketplace add Lukematic/agent-smith
+claude plugin install awino@awino
+```
+
+Merely pasting the repository URL into chat cannot safely trigger installation.
+Plugin installation crosses a user trust boundary, so one explicit user action is
+required. The agent must not simulate consent by running a global Bash installer.
+
+The plugin supplies the `awino` agent and exactly 13 canonical `awino-*` skills. It
+does not initialize `.seeds` or `.smith`. A.W.I.N.O. asks before project setup and
+uses `awino work-init` after approval.
+
+The native agent and skills work without the Python CLI. Deterministic ledger,
+mission, and gate commands require `uv` and Python 3.12 or later. Plugin launchers
+do not install them; they emit a clear `DEGRADED` result and setup command instead.
+
+Update with `claude plugin update awino@awino`, uninstall with
+`claude plugin uninstall awino@awino`, and run `/reload-plugins` after updates.
+Claude Code 2.1.186 or later is required for this release's plugin `settings.json`
+default-agent behavior; on older versions, select `awino` manually.
+
+---
+
+## Standalone CLI bootstrap
 
 **Windows (PowerShell 7+)**
 
@@ -18,7 +54,7 @@ irm https://raw.githubusercontent.com/Lukematic/agent-smith/main/bootstrap.ps1 |
 curl -fsSL https://raw.githubusercontent.com/Lukematic/agent-smith/main/bootstrap.sh | sh
 ```
 
-That clones the repository, installs `uv` if missing, builds an isolated
+This optional standalone route clones the repository, installs `uv` if missing, builds an isolated
 environment, installs the persona and skills into every agent harness it finds, and
 verifies the result. It refuses loudly rather than half-succeeding, because a
 partial install produces an agent answering confidently from a broken knowledge

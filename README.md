@@ -11,7 +11,37 @@ remain unsatisfied.
 - **Integrating or operating A.W.I.N.O.:** [Agent and harness guide](docs/agent-guide.md)
 - **All documentation:** [Documentation index](docs/README.md)
 
-Install from a clone:
+## Install in Claude Code
+
+Plugin installation is a user trust action. A URL pasted into chat cannot safely
+authorize global installation, and the agent must not work around that boundary with
+a global Bash mutation. Run these commands yourself in Claude Code:
+
+```text
+/plugin marketplace add Lukematic/agent-smith
+/plugin install awino@awino
+/reload-plugins
+```
+
+Native CLI equivalents are:
+
+```bash
+claude plugin marketplace add Lukematic/agent-smith
+claude plugin install awino@awino
+```
+
+The native install provides the `awino` agent and all 13 canonical `awino-*` skills
+automatically. It does not initialize `.seeds` or `.smith`, install Python, or run a
+global shell installer. The deterministic gate ledger is an optional CLI layer and
+requires `uv` plus Python 3.12 or later; its launcher prints `DEGRADED` and the exact
+setup command when unavailable, without silently installing anything.
+
+After reload, select the `awino` agent. In a new project, let it ask before running
+`awino work-init`.
+
+## Standalone CLI install
+
+For the deterministic ledger CLI and non-Claude harness integrations, install from a clone:
 
 ```bash
 git clone https://github.com/Lukematic/agent-smith.git awino
@@ -32,6 +62,9 @@ In each new project, begin with:
 ```bash
 awino onboard
 ```
+
+For a fresh project with no tracker state, A.W.I.N.O. asks first and then uses
+`awino work-init`; plugin installation itself never creates project state.
 
 The canonical operating constitution is [`AWINO.md`](AWINO.md).
 

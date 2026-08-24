@@ -1,0 +1,20 @@
+#!/bin/sh
+set -u
+
+PLUGIN_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+
+if ! command -v uv >/dev/null 2>&1; then
+  echo "DEGRADED: A.W.I.N.O. agent and skills are active, but the deterministic ledger CLI needs uv and Python." >&2
+  echo "Install uv, then explicitly run: uv sync --directory \"$PLUGIN_ROOT\" --frozen" >&2
+  [ "${1:-}" = "hook" ] && exit 0
+  exit 1
+fi
+
+if [ ! -x "$PLUGIN_ROOT/.venv/bin/awino" ] && [ ! -f "$PLUGIN_ROOT/.venv/Scripts/awino.exe" ]; then
+  echo "DEGRADED: A.W.I.N.O. agent and skills are active, but the deterministic ledger CLI environment is not prepared." >&2
+  echo "Nothing was installed automatically. Explicitly run: uv sync --directory \"$PLUGIN_ROOT\" --frozen" >&2
+  [ "${1:-}" = "hook" ] && exit 0
+  exit 1
+fi
+
+exec uv run --no-sync --directory "$PLUGIN_ROOT" awino "$@"

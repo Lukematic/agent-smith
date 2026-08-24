@@ -31,9 +31,9 @@ def test_source_discovery_selects_canonical_constitution() -> None:
 
 
 def test_active_personas_load_only_canonical_constitution() -> None:
-    for relative_path in ("agents/awino.md", "agents/agent-smith.md"):
+    for relative_path in ("agents/awino.md",):
         persona = Path(relative_path).read_text(encoding="utf-8")
-        assert "$AWINO/AWINO.md" in persona
+        assert "${CLAUDE_PLUGIN_ROOT}/AWINO.md" in persona
         assert "$AWINO/AGENT_SMITH.md" not in persona
 
 

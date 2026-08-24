@@ -63,7 +63,11 @@ def _allowed_residue(path: Path, line: str) -> bool:
         line = line.replace(".smith", "")
 
     # The current repository URL and explicit migration/compatibility behavior remain old-named.
-    if "agent-smith" in line and ("github.com" in line or "raw.githubusercontent.com" in line):
+    if "agent-smith" in line and (
+        "github.com" in line
+        or "raw.githubusercontent.com" in line
+        or "marketplace add Lukematic/agent-smith" in line
+    ):
         return True
     if "agent-smith" in line and any(
         token in line

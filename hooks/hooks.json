@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run --directory ${PLUGIN_ROOT} awino hook"
+            "command": "awino hook"
           }
         ]
       }

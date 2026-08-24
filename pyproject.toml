@@ -66,6 +66,9 @@ packages = ["src/smith"]
 "AWINO.md" = "smith/_bundle/AWINO.md"
 "AGENT_SMITH.md" = "smith/_bundle/AGENT_SMITH.md"
 "plugin.json" = "smith/_bundle/plugin.json"
+".claude-plugin" = "smith/_bundle/.claude-plugin"
+"settings.json" = "smith/_bundle/settings.json"
+"bin" = "smith/_bundle/bin"
 "knowledge/REGISTRY.yaml" = "smith/_bundle/knowledge/REGISTRY.yaml"
 "knowledge/SOURCES.yaml" = "smith/_bundle/knowledge/SOURCES.yaml"
 "skills" = "smith/_bundle/skills"
@@ -93,6 +96,9 @@ include = [
     "README.md",
     "justfile",
     "plugin.json",
+    ".claude-plugin",
+    "settings.json",
+    "bin",
     "install.ps1",
     "install.sh",
     "bootstrap.ps1",

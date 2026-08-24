@@ -31,6 +31,7 @@ ROOT_ALLOWED = frozenset(
         "install.sh",
         "justfile",
         "plugin.json",
+        "settings.json",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
@@ -43,6 +44,7 @@ ROOT_ALLOWED_DIRS = frozenset(
     {
         ".git",
         ".github",
+        ".claude-plugin",
         ".venv",
         ".ruff_cache",
         ".pytest_cache",
@@ -54,6 +56,7 @@ ROOT_ALLOWED_DIRS = frozenset(
         "emitted",
         "assignments",
         "backups",
+        "bin",
         "hooks",
         "knowledge",
         "memory",
