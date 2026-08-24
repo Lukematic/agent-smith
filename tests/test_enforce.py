@@ -150,12 +150,18 @@ class TestRunSerialization:
         assert loaded.skills_loaded == ["smith-rpi"]
         assert loaded.plan_decisions == []
         assert loaded.checkpoints == []
+        assert loaded.issue_id is None
+        assert loaded.issue_started_at is None
+
+    def test_issue_link_is_persisted_without_starting_work(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.QUESTION, "linked work", issue_id="issue-123")
+        loaded = ledger.load(run.run_id)
+        assert loaded.issue_id == "issue-123"
+        assert loaded.issue_started_at is None
 
 
 class TestPlanApproval:
-    def test_approval_binds_plan_hash_and_scope(
-        self, ledger: Ledger, tmp_path: Path
-    ) -> None:
+    def test_approval_binds_plan_hash_and_scope(self, ledger: Ledger, tmp_path: Path) -> None:
         plan = tmp_path / "plan.md"
         plan.write_text("# Approved plan\n", encoding="utf-8")
         run = ledger.open(
@@ -208,9 +214,7 @@ class TestPlanApproval:
     def test_scope_edit_invalidates_approval(self, ledger: Ledger, tmp_path: Path) -> None:
         plan = tmp_path / "plan.md"
         plan.write_text("plan", encoding="utf-8")
-        run = ledger.open(
-            TaskClass.CODE_CHANGE, "planned", file_scope=["one.py"], plan_path=plan
-        )
+        run = ledger.open(TaskClass.CODE_CHANGE, "planned", file_scope=["one.py"], plan_path=plan)
         ledger.approve_plan(run.run_id, "reviewer")
         run = ledger.load(run.run_id)
         run.file_scope.append("two.py")
@@ -229,9 +233,7 @@ class TestPlanApproval:
         assert ledger.validate_plan(run.run_id) == [f"plan is {decision}"]
 
     def test_missing_plan_cannot_be_decided(self, ledger: Ledger, tmp_path: Path) -> None:
-        run = ledger.open(
-            TaskClass.CODE_CHANGE, "planned", plan_path=tmp_path / "missing.md"
-        )
+        run = ledger.open(TaskClass.CODE_CHANGE, "planned", plan_path=tmp_path / "missing.md")
         with pytest.raises(LedgerError, match="plan does not exist"):
             ledger.approve_plan(run.run_id, "reviewer")
 
@@ -349,9 +351,7 @@ class TestThreeStrikes:
         run = ledger.open(TaskClass.RESEARCH, "attested")
         for _ in range(3):
             ledger.attest(run.run_id, Gate.RESEARCHED, "reviewed")
-        subprocess_run = Mock(
-            return_value=Mock(returncode=0, stdout="", stderr="")
-        )
+        subprocess_run = Mock(return_value=Mock(returncode=0, stdout="", stderr=""))
         monkeypatch.setattr("smith.enforce.subprocess.run", subprocess_run)
         ledger.record(run.run_id, Gate.RESEARCHED, "allowed")
         subprocess_run.assert_called_once()

@@ -40,6 +40,20 @@ def _run_smith(
     )
 
 
+def _open_code_run(project: Path, smith_home: Path, objective: str, scope: str):
+    plan = project / "plan.md"
+    plan.write_text("# Plan\n", encoding="utf-8")
+    opened = _run_smith(
+        ["gate", "open", "code-change", objective, "--scope", scope, "--plan", str(plan)],
+        project,
+        smith_home,
+    )
+    if opened.returncode == 0:
+        approved = _run_smith(["gate", "plan", "approve", "--by", "test"], project, smith_home)
+        assert approved.returncode == 0, approved.stdout + approved.stderr
+    return opened
+
+
 @pytest.fixture
 def smith_home() -> Path:
     return Path(__file__).resolve().parents[1]
@@ -70,11 +84,7 @@ class TestGateRecordUsesTargetProject:
     def test_tested_gate_runs_the_projects_own_tests_not_smiths(
         self, toy_project: Path, smith_home: Path
     ) -> None:
-        opened = _run_smith(
-            ["gate", "open", "code-change", "toy change", "--scope", "tests/test_toy.py"],
-            toy_project,
-            smith_home,
-        )
+        opened = _open_code_run(toy_project, smith_home, "toy change", "tests/test_toy.py")
         assert opened.returncode == 0, opened.stdout + opened.stderr
 
         recorded = _run_smith(
@@ -104,11 +114,7 @@ class TestGateRecordUsesTargetProject:
             encoding="utf-8",
         )
 
-        opened = _run_smith(
-            ["gate", "open", "code-change", "broken change", "--scope", "tests/test_broken.py"],
-            project,
-            smith_home,
-        )
+        opened = _open_code_run(project, smith_home, "broken change", "tests/test_broken.py")
         assert opened.returncode == 0, opened.stdout + opened.stderr
 
         recorded = _run_smith(
@@ -128,11 +134,7 @@ class TestGateCheckFailsLoudlyWithoutGit:
         self, toy_project: Path, smith_home: Path
     ) -> None:
         # toy_project deliberately has no .git directory.
-        opened = _run_smith(
-            ["gate", "open", "code-change", "toy change", "--scope", "tests/test_toy.py"],
-            toy_project,
-            smith_home,
-        )
+        opened = _open_code_run(toy_project, smith_home, "toy change", "tests/test_toy.py")
         assert opened.returncode == 0, opened.stdout + opened.stderr
 
         checked = _run_smith(["gate", "check", "--diff-base", "HEAD"], toy_project, smith_home)
@@ -154,11 +156,7 @@ class TestGateCheckFailsLoudlyWithoutGit:
             check=True,
         )
 
-        opened = _run_smith(
-            ["gate", "open", "code-change", "toy change", "--scope", "tests/test_toy.py"],
-            toy_project,
-            smith_home,
-        )
+        opened = _open_code_run(toy_project, smith_home, "toy change", "tests/test_toy.py")
         assert opened.returncode == 0, opened.stdout + opened.stderr
 
         checked = _run_smith(["gate", "check", "--diff-base", "HEAD"], toy_project, smith_home)

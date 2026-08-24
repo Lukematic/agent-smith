@@ -168,6 +168,8 @@ class Run:
     skills_loaded: list[str] = field(default_factory=list)
     schema_version: int = 2
     plan_path: str | None = None
+    issue_id: str | None = None
+    issue_started_at: str | None = None
     plan_decisions: list[PlanDecisionRecord] = field(default_factory=list)
     checkpoints: list[Checkpoint] = field(default_factory=list)
     skill_events: list[SkillEvent] = field(default_factory=list)
@@ -184,6 +186,8 @@ class Run:
         values.setdefault("file_scope", [])
         values.setdefault("skills_loaded", [])
         values.setdefault("plan_path", None)
+        values.setdefault("issue_id", None)
+        values.setdefault("issue_started_at", None)
         values["plan_decisions"] = [
             PlanDecisionRecord(**item) for item in values.get("plan_decisions", [])
         ]
@@ -250,6 +254,7 @@ class Ledger:
         file_scope: list[str] | None = None,
         extra_gates: list[Gate] | None = None,
         plan_path: Path | None = None,
+        issue_id: str | None = None,
     ) -> Run:
         run_id = f"{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
         required = list(CONTRACTS[task_class]) + list(extra_gates or [])
@@ -261,6 +266,7 @@ class Ledger:
             required=[str(g) for g in dict.fromkeys(required)],
             file_scope=file_scope or [],
             plan_path=str(plan_path) if plan_path is not None else None,
+            issue_id=issue_id,
         )
         self.run_dir(run_id).mkdir(parents=True, exist_ok=True)
         self._meta(run_id).write_text(json.dumps(run.to_dict(), indent=2), encoding="utf-8")
@@ -281,9 +287,7 @@ class Ledger:
         return Run.from_dict(json.loads(meta.read_text(encoding="utf-8")))
 
     def save(self, run: Run) -> None:
-        self._meta(run.run_id).write_text(
-            json.dumps(run.to_dict(), indent=2), encoding="utf-8"
-        )
+        self._meta(run.run_id).write_text(json.dumps(run.to_dict(), indent=2), encoding="utf-8")
 
     def inspect_current(self) -> CurrentInspection:
         """Inspect CURRENT without mistaking a closed or missing run for active work."""
@@ -354,9 +358,7 @@ class Ledger:
             )
         return item
 
-    def approve_plan(
-        self, run_id: str, approver: str, reason: str = ""
-    ) -> PlanDecisionRecord:
+    def approve_plan(self, run_id: str, approver: str, reason: str = "") -> PlanDecisionRecord:
         return self.decide_plan(run_id, PlanDecision.APPROVED, approver, reason)
 
     def validate_plan(self, run_id: str) -> list[str]:
@@ -457,9 +459,7 @@ class Ledger:
                 raise LedgerError(f"PLAN_INVALID: {'; '.join(plan_problems)}")
         prior = [e for e in self.evidence(run_id) if e.gate == str(gate)]
         failures = [
-            item
-            for item in prior
-            if not item.passed and not item.command.startswith("ATTEST ")
+            item for item in prior if not item.passed and not item.command.startswith("ATTEST ")
         ]
         if len(failures) >= MAX_ATTEMPTS:
             raise LedgerError(
@@ -505,6 +505,10 @@ class Ledger:
         reader can always tell executed proof from asserted proof.
         """
         run = self.load(run_id)
+        if run.schema_version >= 2 and run.plan_path is not None and gate != Gate.PLANNED:
+            plan_problems = self.validate_plan(run_id)
+            if plan_problems:
+                raise LedgerError(f"PLAN_INVALID: {'; '.join(plan_problems)}")
         if run.schema_version >= 2 and run.plan_path is not None and gate == Gate.PLANNED:
             raise LedgerError("planned evidence must be created by approve_plan")
         prior = [e for e in self.evidence(run_id) if e.gate == str(gate)]

@@ -35,6 +35,8 @@ from smith.enforce import (
     CONTRACTS,
     Gate,
     Ledger,
+    LedgerError,
+    PlanDecision,
     TaskClass,
     adjudicate,
     detect_scope_violations,
@@ -54,6 +56,7 @@ app = typer.Typer(
 gate_app = typer.Typer(
     no_args_is_help=True, help="Run ledger. Completion is computed, never claimed."
 )
+gate_plan_app = typer.Typer(no_args_is_help=True, help="Review the current run's plan.")
 
 
 def deprecated_smith_entry() -> None:
@@ -61,7 +64,10 @@ def deprecated_smith_entry() -> None:
     if os.environ.get("AWINO_SUPPRESS_DEPRECATION") != "1":
         typer.echo("DEPRECATED: 'smith' is the former command name; use 'awino'.", err=True)
     app()
+
+
 app.add_typer(gate_app, name="gate")
+gate_app.add_typer(gate_plan_app, name="plan")
 
 
 def _paths() -> SmithPaths:
@@ -1114,7 +1120,7 @@ def work_init_command(
 
 @app.command("work-close")
 def work_close_command(
-    issue_id: str = typer.Argument(..., help="Issue to close"),
+    issue_id: str = typer.Argument(None, help="Issue to close; inferred from the run when omitted"),
     run_id: str = typer.Option(None, "--run", help="Run whose evidence justifies closure"),
     force: bool = typer.Option(
         False, "--force", help="Close despite unmet gates, recorded as such"
@@ -1138,9 +1144,18 @@ def work_close_command(
     verdict = None
     evidence: list = []
     if resolved:
-        run = ledger.load(resolved)
+        try:
+            run = ledger.load(resolved)
+            _require_valid_plan(ledger, resolved)
+        except LedgerError as exc:
+            _ledger_error(exc)
+        issue_id = issue_id or run.issue_id
         evidence = ledger.evidence(resolved)
         verdict = adjudicate(run, evidence)
+
+    if not issue_id:
+        _echo("NO_ISSUE  pass an issue id or link one with gate open --issue")
+        raise typer.Exit(2)
 
     check = seeds.check_closure(issue_id, verdict, evidence)
     _echo(f"issue:    {issue_id}")
@@ -1648,6 +1663,47 @@ def _resolve_run(run_id: str | None) -> str:
     return resolved
 
 
+def _ledger_error(exc: LedgerError) -> None:
+    _echo(f"REFUSED  {exc}")
+    raise typer.Exit(1) from None
+
+
+def _validate_issue(issue_id: str) -> seeds.Issue:
+    tracker = seeds.Seeds(_workspace().project.root)
+    state, reason = tracker.state()
+    if not state.usable:
+        _echo(f"ISSUE_UNAVAILABLE  {reason}")
+        raise typer.Exit(2)
+    issue = tracker.show(issue_id)
+    if issue is None:
+        _echo(f"ISSUE_NOT_FOUND  {issue_id}")
+        raise typer.Exit(2)
+    if not issue.open:
+        _echo(f"ISSUE_CLOSED  {issue_id} status={issue.status}")
+        raise typer.Exit(2)
+    return issue
+
+
+def _require_valid_plan(ledger: Ledger, run_id: str) -> None:
+    run = ledger.load(run_id)
+    if run.schema_version < 2 or Gate.PLANNED not in run.required:
+        return
+    problems = ledger.validate_plan(run_id)
+    if problems:
+        raise LedgerError(f"PLAN_INVALID: {'; '.join(problems)}")
+
+
+def _start_linked_issue(ledger: Ledger, run_id: str) -> None:
+    run = ledger.load(run_id)
+    if run.issue_id is None or run.issue_started_at is not None:
+        return
+    result = seeds.Seeds(_workspace().project.root).start(run.issue_id)
+    if not result.ok:
+        raise LedgerError(f"could not start issue {run.issue_id}: {result.detail}")
+    run.issue_started_at = datetime.now(UTC).isoformat()
+    ledger.save(run)
+
+
 @gate_app.command("open")
 def gate_open(
     task_class: TaskClass = typer.Argument(..., help="What kind of work this is"),
@@ -1656,15 +1712,38 @@ def gate_open(
     also: list[Gate] = typer.Option(
         None, "--also", help="Extra gate beyond the contract. Repeatable."
     ),
+    plan: Path = typer.Option(None, "--plan", help="Plan file reviewed before execution."),
+    issue: str = typer.Option(None, "--issue", help="Open Seeds issue served by this run."),
 ) -> None:
     """Open a run and print the gates it must satisfy before it can close."""
+    required = list(CONTRACTS[task_class]) + list(also or [])
+    if Gate.PLANNED in required and plan is None:
+        _echo("PLAN_REQUIRED  schema v2 runs containing the planned gate require --plan")
+        raise typer.Exit(2)
+    plan_path = None
+    if plan is not None:
+        plan_path = plan if plan.is_absolute() else _workspace().project.root / plan
+        plan_path = plan_path.resolve()
+        if not plan_path.is_file():
+            _echo(f"PLAN_NOT_FOUND  {plan_path}")
+            raise typer.Exit(2)
+    linked_issue = _validate_issue(issue) if issue else None
     run = _ledger().open(
-        task_class, objective, file_scope=list(scope or []), extra_gates=list(also or [])
+        task_class,
+        objective,
+        file_scope=list(scope or []),
+        extra_gates=list(also or []),
+        plan_path=plan_path,
+        issue_id=linked_issue.id if linked_issue else None,
     )
     _echo(f"RUN {run.run_id}  class={run.task_class}")
     _echo(f"objective: {run.objective}")
     if run.file_scope:
         _echo(f"scope: {', '.join(run.file_scope)}")
+    if run.plan_path:
+        _echo(f"plan: {run.plan_path}")
+    if run.issue_id:
+        _echo(f"issue: {run.issue_id}")
     if not run.required:
         _echo("gates: none for this class")
         return
@@ -1673,6 +1752,106 @@ def gate_open(
         _echo(f"  [ ] {gate}")
     _echo("")
     _echo('Record each with: awino gate record <gate> --cmd "<command>"')
+
+
+def _plan_decision(decision: PlanDecision, run_id: str | None, by: str, reason: str) -> None:
+    resolved = _resolve_run(run_id)
+    try:
+        item = _ledger().decide_plan(resolved, decision, by, reason)
+    except LedgerError as exc:
+        _ledger_error(exc)
+    _echo(f"PLAN_{decision.upper()}  {item.plan_path}")
+    _echo(f"sha256: {item.plan_sha256}")
+    _echo(f"scope: {', '.join(item.approved_scope) or '(none)'}")
+
+
+@gate_plan_app.command("approve")
+def gate_plan_approve(
+    by: str = typer.Option(..., "--by", help="Person approving the plan."),
+    reason: str = typer.Option("", "--reason"),
+    run_id: str = typer.Option(None, "--run"),
+) -> None:
+    """Approve the exact current plan bytes and file scope."""
+    _plan_decision(PlanDecision.APPROVED, run_id, by, reason)
+
+
+@gate_plan_app.command("hold")
+def gate_plan_hold(
+    by: str = typer.Option(..., "--by"),
+    reason: str = typer.Option("", "--reason"),
+    run_id: str = typer.Option(None, "--run"),
+) -> None:
+    """Hold a plan until its concerns are resolved."""
+    _plan_decision(PlanDecision.HELD, run_id, by, reason)
+
+
+@gate_plan_app.command("reject")
+def gate_plan_reject(
+    by: str = typer.Option(..., "--by"),
+    reason: str = typer.Option("", "--reason"),
+    run_id: str = typer.Option(None, "--run"),
+) -> None:
+    """Reject the current plan."""
+    _plan_decision(PlanDecision.REJECTED, run_id, by, reason)
+
+
+@gate_plan_app.command("status")
+def gate_plan_status(run_id: str = typer.Option(None, "--run")) -> None:
+    """Show whether the current plan approval remains valid."""
+    resolved = _resolve_run(run_id)
+    ledger = _ledger()
+    try:
+        run = ledger.load(resolved)
+        problems = ledger.validate_plan(resolved)
+    except LedgerError as exc:
+        _ledger_error(exc)
+    latest = run.plan_decisions[-1] if run.plan_decisions else None
+    _echo(f"PLAN  {run.plan_path or '(none)'}")
+    _echo(f"decision: {latest.decision if latest else 'none'}")
+    _echo("VALID" if not problems else f"INVALID  {'; '.join(problems)}")
+
+
+@gate_app.command("checkpoint")
+def gate_checkpoint(
+    phase: str = typer.Option(..., "--phase"),
+    summary: str = typer.Option(..., "--summary"),
+    next_action: str = typer.Option(..., "--next"),
+    pending: str = typer.Option(None, "--pending", help="Decision requiring human input."),
+    option: list[str] = typer.Option(None, "--option", help="Allowed decision. Repeatable."),
+    run_id: str = typer.Option(None, "--run"),
+) -> None:
+    """Persist resumable continuation state for a run."""
+    resolved = _resolve_run(run_id)
+    try:
+        item = _ledger().checkpoint(
+            resolved,
+            phase,
+            summary,
+            next_action,
+            pending_decision=pending,
+            options=list(option or []),
+        )
+    except LedgerError as exc:
+        _ledger_error(exc)
+    _echo(f"CHECKPOINT  {item.checkpoint_id} phase={item.phase}")
+    if item.pending_decision:
+        _echo(f"pending: {item.pending_decision}")
+        _echo(f"options: {', '.join(item.options)}")
+
+
+@gate_app.command("decide")
+def gate_decide(
+    selection: str = typer.Argument(..., help="One declared checkpoint option."),
+    by: str = typer.Option(..., "--by"),
+    run_id: str = typer.Option(None, "--run"),
+) -> None:
+    """Resolve the current checkpoint decision."""
+    resolved = _resolve_run(run_id)
+    try:
+        item = _ledger().resolve_checkpoint(resolved, selection, by)
+    except LedgerError as exc:
+        _ledger_error(exc)
+    _echo(f"DECIDED  {item.checkpoint_id}  {selection}  by={by}")
 
 
 @gate_app.command("record")
@@ -1689,13 +1868,21 @@ def gate_record(
         _echo("Provide exactly one of --cmd or --attest")
         raise typer.Exit(2)
 
+    try:
+        _require_valid_plan(ledger, resolved)
+        if attest:
+            item = ledger.attest(resolved, gate, attest)
+        else:
+            _start_linked_issue(ledger, resolved)
+            item = ledger.record(resolved, gate, cmd, cwd=_workspace().project.root)
+    except LedgerError as exc:
+        _ledger_error(exc)
+
     if attest:
-        item = ledger.attest(resolved, gate, attest)
         _echo(f"ATTESTED  {gate}  {attest}")
         _echo("Attestations are weaker than executed evidence and are reported as such.")
         return
 
-    item = ledger.record(resolved, gate, cmd, cwd=_workspace().project.root)
     verdict = "PASS" if item.passed else "FAIL"
     _echo(f"{verdict}  {gate}  exit={item.exit_code}  {item.duration_ms}ms  attempt={item.attempt}")
     _echo(f"command: {item.command}")
@@ -1720,7 +1907,10 @@ def gate_check(
     """Run the independent checks that do not trust the agent's word."""
     resolved = _resolve_run(run_id)
     ledger = _ledger()
-    run = ledger.load(resolved)
+    try:
+        run = ledger.load(resolved)
+    except LedgerError as exc:
+        _ledger_error(exc)
     root = _workspace().project.root
     problems = 0
 
@@ -1796,7 +1986,11 @@ def gate_close(
     """Attempt to close a run. Refuses unless every gate is satisfied by evidence."""
     resolved = _resolve_run(run_id)
     ledger = _ledger()
-    run = ledger.load(resolved)
+    try:
+        run = ledger.load(resolved)
+        _require_valid_plan(ledger, resolved)
+    except LedgerError as exc:
+        _ledger_error(exc)
     verdict = adjudicate(run, ledger.evidence(resolved))
 
     _echo(f"RUN {verdict.run_id}  class={verdict.task_class}")
@@ -1831,7 +2025,10 @@ def gate_status(
     """Show gate progress for a run without attempting to close it."""
     resolved = _resolve_run(run_id)
     ledger = _ledger()
-    run = ledger.load(resolved)
+    try:
+        run = ledger.load(resolved)
+    except LedgerError as exc:
+        _ledger_error(exc)
     evidence = ledger.evidence(resolved)
     verdict = adjudicate(run, evidence)
     _echo(f"RUN {run.run_id}  class={run.task_class}  objective: {run.objective}")
@@ -1855,7 +2052,10 @@ def gate_skill(
 ) -> None:
     """Record that a skill was loaded, so skill usage is auditable after the fact."""
     resolved = _resolve_run(run_id)
-    run = _ledger().note_skill(resolved, name)
+    try:
+        run = _ledger().note_skill(resolved, name)
+    except LedgerError as exc:
+        _ledger_error(exc)
     _echo(f"SKILL_LOADED  {name}  (total {len(run.skills_loaded)})")
 
 
@@ -1868,6 +2068,45 @@ def gate_contracts() -> None:
             _echo(f"  - {gate}")
         if not gates:
             _echo("  (none)")
+
+
+@app.command("resume")
+def resume_command() -> None:
+    """Show the active run's durable continuation state and next action."""
+    ledger = _ledger()
+    inspected = ledger.inspect_current()
+    if inspected.status == "none":
+        _echo('NO_RUN  open one first: awino gate open <task-class> "<objective>"')
+        raise typer.Exit(2)
+    if inspected.status == "broken":
+        _echo(f"BROKEN_CURRENT  no run metadata for {inspected.run_id}")
+        raise typer.Exit(1)
+    run = inspected.run
+    if run is None:
+        _echo("BROKEN_CURRENT  current run could not be loaded")
+        raise typer.Exit(1)
+    _echo(f"RUN {run.run_id}  status={inspected.status}  class={run.task_class}")
+    _echo(f"objective: {run.objective}")
+    if run.issue_id:
+        state = "started" if run.issue_started_at else "linked"
+        _echo(f"issue: {run.issue_id} ({state})")
+    if run.plan_path:
+        problems = ledger.validate_plan(run.run_id)
+        _echo(f"plan: {'valid' if not problems else 'invalid'}  {run.plan_path}")
+        for problem in problems:
+            _echo(f"  ! {problem}")
+    if not run.checkpoints:
+        _echo("checkpoint: none")
+        return
+    checkpoint = run.checkpoints[-1]
+    _echo(f"checkpoint: {checkpoint.checkpoint_id} phase={checkpoint.phase}")
+    _echo(f"summary: {checkpoint.summary}")
+    if checkpoint.pending_decision and checkpoint.selected_decision is None:
+        _echo(f"PENDING  {checkpoint.pending_decision}")
+        _echo(f"options: {', '.join(checkpoint.options)}")
+    elif checkpoint.selected_decision:
+        _echo(f"decision: {checkpoint.selected_decision} by {checkpoint.decided_by}")
+    _echo(f"next: {checkpoint.next_action}")
 
 
 if __name__ == "__main__":
