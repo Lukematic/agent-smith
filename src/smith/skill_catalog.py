@@ -117,6 +117,9 @@ class SkillCatalog:
         for name in tuple(discovered):
             if name.startswith("smith-") and f"awino-{name.removeprefix('smith-')}" in discovered:
                 del discovered[name]
+        # Older project installs could place the former persona in the skills
+        # directory. A persona is not a routable workflow capability.
+        discovered.pop("agent-smith", None)
         return discovered
 
 
