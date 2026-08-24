@@ -100,6 +100,17 @@ RUNG_SIGNALS: tuple[tuple[Rung, re.Pattern[str], str], ...] = (
     (
         Rung.HARNESS,
         re.compile(
+            r"\b(run|execute|process|build|deploy|debug|fix|repair|finish|verify|validate|test)\b"
+            r".*\b(stage|pipeline|workflow|job|service|application|app|code|tests?|output|data)\b"
+            r"|\b(stage|pipeline|workflow|job|service|application|app|code|tests?|output|data)\b"
+            r".*\b(run|execute|process|build|deploy|debug|fix|repair|finish|verify|validate|test)\b",
+            re.I,
+        ),
+        "requests execution and verification inside one project's working environment",
+    ),
+    (
+        Rung.HARNESS,
+        re.compile(
             # Two independent signals, because practitioners phrase this many ways.
             #
             # 1. Repetition: "keeps <verb>ing", "always", "every time". The verb is

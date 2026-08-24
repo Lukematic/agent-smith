@@ -53,6 +53,16 @@ def code_change_evidence(*, executed: bool) -> list[Evidence]:
 
 
 class TestLeverageLadder:
+    def test_pipeline_run_and_verification_is_harness_work(self) -> None:
+        verdict = detect_rung(
+            "run and verify the nps_whmmo silver stage after the bronze stage fix"
+        )
+        assert verdict.actual is Rung.HARNESS
+        assert "execution and verification" in verdict.reason
+
+    def test_prompt_rewrite_remains_prompt_work(self) -> None:
+        assert detect_rung("rewrite this prompt to be shorter").actual is Rung.PROMPT
+
     """The common error is treating a higher-rung problem at a lower rung."""
 
     @pytest.mark.parametrize(
