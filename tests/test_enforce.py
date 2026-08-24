@@ -6,7 +6,9 @@ tested; a ledger can.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -15,6 +17,7 @@ from smith.enforce import (
     Gate,
     Ledger,
     LedgerError,
+    PlanDecision,
     TaskClass,
     adjudicate,
     detect_scope_violations,
@@ -119,6 +122,191 @@ class TestEvidenceIsReal:
             ledger.load("does-not-exist")
 
 
+class TestRunSerialization:
+    def test_new_runs_use_versioned_run_json(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.QUESTION, "versioned")
+        stored = json.loads(ledger._meta(run.run_id).read_text(encoding="utf-8"))
+        assert stored["schema_version"] == 2
+
+    def test_legacy_run_json_loads_with_defaults(self, ledger: Ledger) -> None:
+        run_id = "legacy"
+        ledger.run_dir(run_id).mkdir(parents=True)
+        ledger._meta(run_id).write_text(
+            json.dumps(
+                {
+                    "run_id": run_id,
+                    "task_class": "research",
+                    "objective": "old work",
+                    "opened_at": "2026-01-01T00:00:00+00:00",
+                    "required": ["researched"],
+                    "skills_loaded": ["smith-rpi"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        loaded = ledger.load(run_id)
+        assert loaded.schema_version == 1
+        assert loaded.file_scope == []
+        assert loaded.skills_loaded == ["smith-rpi"]
+        assert loaded.plan_decisions == []
+        assert loaded.checkpoints == []
+
+
+class TestPlanApproval:
+    def test_approval_binds_plan_hash_and_scope(
+        self, ledger: Ledger, tmp_path: Path
+    ) -> None:
+        plan = tmp_path / "plan.md"
+        plan.write_text("# Approved plan\n", encoding="utf-8")
+        run = ledger.open(
+            TaskClass.CODE_CHANGE,
+            "planned work",
+            file_scope=["src/smith/enforce.py"],
+            plan_path=plan,
+        )
+        decision = ledger.approve_plan(run.run_id, "reviewer", "scope reviewed")
+        assert decision.decision == PlanDecision.APPROVED
+        assert len(decision.plan_sha256) == 64
+        assert decision.approved_scope == ["src/smith/enforce.py"]
+        assert ledger.validate_plan(run.run_id) == []
+        assert ledger.load(run.run_id).plan_decisions == [decision]
+
+    def test_plan_edit_invalidates_approval(self, ledger: Ledger, tmp_path: Path) -> None:
+        plan = tmp_path / "plan.md"
+        plan.write_text("first", encoding="utf-8")
+        run = ledger.open(TaskClass.CODE_CHANGE, "planned", plan_path=plan)
+        ledger.approve_plan(run.run_id, "reviewer")
+        plan.write_text("changed", encoding="utf-8")
+        assert ledger.validate_plan(run.run_id) == ["approved plan hash no longer matches"]
+
+    def test_invalid_approval_refuses_before_subprocess(
+        self,
+        ledger: Ledger,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        plan = tmp_path / "plan.md"
+        plan.write_text("first", encoding="utf-8")
+        run = ledger.open(TaskClass.CODE_CHANGE, "planned", plan_path=plan)
+        ledger.approve_plan(run.run_id, "reviewer")
+        plan.write_text("changed", encoding="utf-8")
+        subprocess_run = Mock()
+        monkeypatch.setattr("smith.enforce.subprocess.run", subprocess_run)
+        with pytest.raises(LedgerError, match="PLAN_INVALID"):
+            ledger.record(run.run_id, Gate.TESTED, "must-not-run")
+        subprocess_run.assert_not_called()
+
+    def test_planned_attestation_requires_hash_bound_approval(
+        self, ledger: Ledger, tmp_path: Path
+    ) -> None:
+        plan = tmp_path / "plan.md"
+        plan.write_text("plan", encoding="utf-8")
+        run = ledger.open(TaskClass.CODE_CHANGE, "planned", plan_path=plan)
+        with pytest.raises(LedgerError, match="approve_plan"):
+            ledger.attest(run.run_id, Gate.PLANNED, "trust me")
+
+    def test_scope_edit_invalidates_approval(self, ledger: Ledger, tmp_path: Path) -> None:
+        plan = tmp_path / "plan.md"
+        plan.write_text("plan", encoding="utf-8")
+        run = ledger.open(
+            TaskClass.CODE_CHANGE, "planned", file_scope=["one.py"], plan_path=plan
+        )
+        ledger.approve_plan(run.run_id, "reviewer")
+        run = ledger.load(run.run_id)
+        run.file_scope.append("two.py")
+        ledger.save(run)
+        assert ledger.validate_plan(run.run_id) == ["approved scope no longer matches"]
+
+    @pytest.mark.parametrize("decision", [PlanDecision.HELD, PlanDecision.REJECTED])
+    def test_hold_and_reject_supersede_approval(
+        self, ledger: Ledger, tmp_path: Path, decision: PlanDecision
+    ) -> None:
+        plan = tmp_path / "plan.md"
+        plan.write_text("plan", encoding="utf-8")
+        run = ledger.open(TaskClass.CODE_CHANGE, "planned", plan_path=plan)
+        ledger.approve_plan(run.run_id, "reviewer")
+        ledger.decide_plan(run.run_id, decision, "reviewer", "needs work")
+        assert ledger.validate_plan(run.run_id) == [f"plan is {decision}"]
+
+    def test_missing_plan_cannot_be_decided(self, ledger: Ledger, tmp_path: Path) -> None:
+        run = ledger.open(
+            TaskClass.CODE_CHANGE, "planned", plan_path=tmp_path / "missing.md"
+        )
+        with pytest.raises(LedgerError, match="plan does not exist"):
+            ledger.approve_plan(run.run_id, "reviewer")
+
+
+class TestCheckpoints:
+    def test_pending_decision_and_resolution_survive_reload(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.QUESTION, "choose")
+        checkpoint = ledger.checkpoint(
+            run.run_id,
+            "planning",
+            "tradeoff found",
+            "wait for selection",
+            pending_decision="Choose storage",
+            options=["json", "sqlite"],
+        )
+        resolved = ledger.resolve_checkpoint(run.run_id, "json", "reviewer")
+        assert resolved.checkpoint_id == checkpoint.checkpoint_id
+        loaded = ledger.load(run.run_id)
+        assert loaded.checkpoints[-1].selected_decision == "json"
+        assert loaded.checkpoints[-1].decided_by == "reviewer"
+
+    def test_cannot_replace_an_unresolved_decision(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.QUESTION, "choose")
+        ledger.checkpoint(
+            run.run_id,
+            "planning",
+            "first",
+            "wait",
+            pending_decision="Choose",
+            options=["a"],
+        )
+        with pytest.raises(LedgerError, match="pending decision"):
+            ledger.checkpoint(
+                run.run_id,
+                "planning",
+                "second",
+                "wait",
+                pending_decision="Choose again",
+                options=["b"],
+            )
+
+    def test_resolution_must_be_a_declared_option(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.QUESTION, "choose")
+        ledger.checkpoint(
+            run.run_id,
+            "planning",
+            "choice",
+            "wait",
+            pending_decision="Choose",
+            options=["a", "b"],
+        )
+        with pytest.raises(LedgerError, match="declared option"):
+            ledger.resolve_checkpoint(run.run_id, "c", "reviewer")
+
+
+class TestCurrentInspection:
+    def test_active_current_is_distinguished_from_stale(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.QUESTION, "inspect")
+        active = ledger.inspect_current()
+        assert active.status == "active"
+        assert active.run == run
+        run.closed_at = "2026-01-01T00:00:00+00:00"
+        ledger.save(run)
+        stale = ledger.inspect_current()
+        assert stale.status == "stale"
+        assert stale.run == run
+
+    def test_missing_current_target_is_broken(self, ledger: Ledger) -> None:
+        ledger.base.mkdir(parents=True)
+        ledger._current().write_text("missing", encoding="utf-8")
+        inspected = ledger.inspect_current()
+        assert inspected.status == "broken"
+        assert inspected.run is None
+
+
 class TestThreeStrikes:
     def test_third_failure_escalates(self, ledger: Ledger) -> None:
         run = ledger.open(TaskClass.RESEARCH, "flaky")
@@ -143,6 +331,31 @@ class TestThreeStrikes:
         verdict = adjudicate(run, ledger.evidence(run.run_id))
         assert verdict.can_close
 
+    def test_fourth_attempt_is_refused_before_subprocess(
+        self, ledger: Ledger, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        run = ledger.open(TaskClass.RESEARCH, "terminal failure")
+        for _ in range(3):
+            ledger.record(run.run_id, Gate.RESEARCHED, "exit 1")
+        subprocess_run = Mock()
+        monkeypatch.setattr("smith.enforce.subprocess.run", subprocess_run)
+        with pytest.raises(LedgerError, match="THREE_STRIKES"):
+            ledger.record(run.run_id, Gate.RESEARCHED, "must-not-run")
+        subprocess_run.assert_not_called()
+
+    def test_attestations_do_not_consume_strikes(
+        self, ledger: Ledger, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        run = ledger.open(TaskClass.RESEARCH, "attested")
+        for _ in range(3):
+            ledger.attest(run.run_id, Gate.RESEARCHED, "reviewed")
+        subprocess_run = Mock(
+            return_value=Mock(returncode=0, stdout="", stderr="")
+        )
+        monkeypatch.setattr("smith.enforce.subprocess.run", subprocess_run)
+        ledger.record(run.run_id, Gate.RESEARCHED, "allowed")
+        subprocess_run.assert_called_once()
+
 
 class TestSkillAudit:
     def test_loaded_skills_are_recorded(self, ledger: Ledger) -> None:
@@ -156,6 +369,16 @@ class TestSkillAudit:
         ledger.note_skill(run.run_id, "smith-rpi")
         ledger.note_skill(run.run_id, "smith-rpi")
         assert ledger.load(run.run_id).skills_loaded == ["smith-rpi"]
+
+    def test_skill_events_are_persisted(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.CODE_CHANGE, "skill history")
+        ledger.note_skill(run.run_id, "smith-rpi", state="used", reason="planned work")
+        loaded = ledger.load(run.run_id)
+        assert len(loaded.skill_events) == 1
+        assert loaded.skill_events[0].name == "smith-rpi"
+        assert loaded.skill_events[0].state == "used"
+        assert loaded.skill_events[0].reason == "planned work"
+        assert loaded.skills_loaded == ["smith-rpi"]
 
 
 class TestWeakeningDetection:

@@ -22,7 +22,7 @@ import re
 import subprocess
 import time
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -54,6 +54,14 @@ class TaskClass(StrEnum):
     REFACTOR = "refactor"
     AUTHORING = "authoring"
     RESEARCH = "research"
+
+
+class PlanDecision(StrEnum):
+    """A durable human decision about the run's plan."""
+
+    APPROVED = "approved"
+    HELD = "held"
+    REJECTED = "rejected"
 
 
 # Which gates each task class must satisfy. This table is the contract: it is
@@ -108,6 +116,45 @@ class Evidence:
         return self.exit_code == 0
 
 
+@dataclass(frozen=True)
+class PlanDecisionRecord:
+    """A decision bound to the exact plan bytes and declared file scope."""
+
+    decision: str
+    plan_path: str
+    plan_sha256: str
+    approved_scope: list[str]
+    approver: str
+    reason: str
+    decided_at: str
+
+
+@dataclass(frozen=True)
+class Checkpoint:
+    """Durable continuation state, including any human decision boundary."""
+
+    checkpoint_id: str
+    phase: str
+    summary: str
+    next_action: str
+    pending_decision: str | None
+    options: list[str]
+    selected_decision: str | None
+    decided_by: str | None
+    created_at: str
+    decided_at: str | None
+
+
+@dataclass(frozen=True)
+class SkillEvent:
+    """A durable record of a skill being loaded or used."""
+
+    name: str
+    state: str
+    reason: str
+    recorded_at: str
+
+
 @dataclass
 class Run:
     """One unit of work with a declared contract and an evidence ledger."""
@@ -119,8 +166,45 @@ class Run:
     required: list[str] = field(default_factory=list)
     file_scope: list[str] = field(default_factory=list)
     skills_loaded: list[str] = field(default_factory=list)
+    schema_version: int = 2
+    plan_path: str | None = None
+    plan_decisions: list[PlanDecisionRecord] = field(default_factory=list)
+    checkpoints: list[Checkpoint] = field(default_factory=list)
+    skill_events: list[SkillEvent] = field(default_factory=list)
+    escalated_gates: list[str] = field(default_factory=list)
     closed_at: str | None = None
     verdict: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, object]) -> Run:
+        """Load both legacy flat runs and the current nested schema."""
+        values = dict(data)
+        values.setdefault("schema_version", 1)
+        values.setdefault("required", [])
+        values.setdefault("file_scope", [])
+        values.setdefault("skills_loaded", [])
+        values.setdefault("plan_path", None)
+        values["plan_decisions"] = [
+            PlanDecisionRecord(**item) for item in values.get("plan_decisions", [])
+        ]
+        values["checkpoints"] = [Checkpoint(**item) for item in values.get("checkpoints", [])]
+        values["skill_events"] = [SkillEvent(**item) for item in values.get("skill_events", [])]
+        values.setdefault("escalated_gates", [])
+        values.setdefault("closed_at", None)
+        values.setdefault("verdict", None)
+        return cls(**values)
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class CurrentInspection:
+    """Whether CURRENT identifies active work or an unusable pointer."""
+
+    status: str
+    run_id: str | None
+    run: Run | None
 
 
 class LedgerError(RuntimeError):
@@ -165,6 +249,7 @@ class Ledger:
         *,
         file_scope: list[str] | None = None,
         extra_gates: list[Gate] | None = None,
+        plan_path: Path | None = None,
     ) -> Run:
         run_id = f"{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
         required = list(CONTRACTS[task_class]) + list(extra_gates or [])
@@ -175,9 +260,10 @@ class Ledger:
             opened_at=datetime.now(UTC).isoformat(),
             required=[str(g) for g in dict.fromkeys(required)],
             file_scope=file_scope or [],
+            plan_path=str(plan_path) if plan_path is not None else None,
         )
         self.run_dir(run_id).mkdir(parents=True, exist_ok=True)
-        self._meta(run_id).write_text(json.dumps(asdict(run), indent=2), encoding="utf-8")
+        self._meta(run_id).write_text(json.dumps(run.to_dict(), indent=2), encoding="utf-8")
         self._evidence(run_id).touch()
         self._current().write_text(run_id, encoding="utf-8")
         return run
@@ -192,10 +278,24 @@ class Ledger:
         meta = self._meta(run_id)
         if not meta.is_file():
             raise LedgerError(f"no such run {run_id!r}")
-        return Run(**json.loads(meta.read_text(encoding="utf-8")))
+        return Run.from_dict(json.loads(meta.read_text(encoding="utf-8")))
 
     def save(self, run: Run) -> None:
-        self._meta(run.run_id).write_text(json.dumps(asdict(run), indent=2), encoding="utf-8")
+        self._meta(run.run_id).write_text(
+            json.dumps(run.to_dict(), indent=2), encoding="utf-8"
+        )
+
+    def inspect_current(self) -> CurrentInspection:
+        """Inspect CURRENT without mistaking a closed or missing run for active work."""
+        run_id = self.current_id()
+        if run_id is None:
+            return CurrentInspection("none", None, None)
+        try:
+            run = self.load(run_id)
+        except LedgerError:
+            return CurrentInspection("broken", run_id, None)
+        status = "active" if run.closed_at is None else "stale"
+        return CurrentInspection(status, run_id, run)
 
     def evidence(self, run_id: str) -> list[Evidence]:
         path = self._evidence(run_id)
@@ -211,6 +311,137 @@ class Ledger:
         with self._evidence(run_id).open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(asdict(item)) + "\n")
 
+    # ── plan and continuation state ─────────────────────────────────────────
+    def decide_plan(
+        self,
+        run_id: str,
+        decision: PlanDecision,
+        approver: str,
+        reason: str = "",
+    ) -> PlanDecisionRecord:
+        run = self.load(run_id)
+        if run.plan_path is None:
+            raise LedgerError("run has no plan path")
+        plan = Path(run.plan_path)
+        if not plan.is_file():
+            raise LedgerError(f"plan does not exist: {plan}")
+        item = PlanDecisionRecord(
+            decision=str(decision),
+            plan_path=run.plan_path,
+            plan_sha256=hashlib.sha256(plan.read_bytes()).hexdigest(),
+            approved_scope=list(run.file_scope),
+            approver=approver,
+            reason=reason,
+            decided_at=datetime.now(UTC).isoformat(),
+        )
+        run.plan_decisions.append(item)
+        self.save(run)
+        if decision == PlanDecision.APPROVED:
+            note = f"approved {run.plan_path} {item.plan_sha256}"
+            prior = [e for e in self.evidence(run_id) if e.gate == str(Gate.PLANNED)]
+            self.append(
+                run_id,
+                Evidence(
+                    gate=str(Gate.PLANNED),
+                    command=f"ATTEST {note}",
+                    exit_code=0,
+                    output_hash=hashlib.sha256(note.encode("utf-8")).hexdigest()[:12],
+                    output_head=note[:OUTPUT_KEEP_CHARS],
+                    duration_ms=0,
+                    recorded_at=datetime.now(UTC).isoformat(),
+                    attempt=len(prior) + 1,
+                ),
+            )
+        return item
+
+    def approve_plan(
+        self, run_id: str, approver: str, reason: str = ""
+    ) -> PlanDecisionRecord:
+        return self.decide_plan(run_id, PlanDecision.APPROVED, approver, reason)
+
+    def validate_plan(self, run_id: str) -> list[str]:
+        """Return every reason the latest plan decision is not currently valid."""
+        run = self.load(run_id)
+        if run.plan_path is None:
+            return ["run has no plan path"]
+        if not run.plan_decisions:
+            return ["plan has no decision"]
+        decision = run.plan_decisions[-1]
+        if decision.decision != PlanDecision.APPROVED:
+            return [f"plan is {decision.decision}"]
+        plan = Path(run.plan_path)
+        if not plan.is_file():
+            return ["approved plan no longer exists"]
+        problems: list[str] = []
+        current_hash = hashlib.sha256(plan.read_bytes()).hexdigest()
+        if current_hash != decision.plan_sha256:
+            problems.append("approved plan hash no longer matches")
+        if run.file_scope != decision.approved_scope:
+            problems.append("approved scope no longer matches")
+        if run.plan_path != decision.plan_path:
+            problems.append("approved plan path no longer matches")
+        return problems
+
+    def checkpoint(
+        self,
+        run_id: str,
+        phase: str,
+        summary: str,
+        next_action: str,
+        *,
+        pending_decision: str | None = None,
+        options: list[str] | None = None,
+    ) -> Checkpoint:
+        run = self.load(run_id)
+        if pending_decision is not None and not options:
+            raise LedgerError("a pending decision requires at least one option")
+        if any(
+            item.pending_decision is not None and item.selected_decision is None
+            for item in run.checkpoints
+        ):
+            raise LedgerError("resolve the pending decision before another checkpoint")
+        item = Checkpoint(
+            checkpoint_id=uuid.uuid4().hex[:12],
+            phase=phase,
+            summary=summary,
+            next_action=next_action,
+            pending_decision=pending_decision,
+            options=list(options or []),
+            selected_decision=None,
+            decided_by=None,
+            created_at=datetime.now(UTC).isoformat(),
+            decided_at=None,
+        )
+        run.checkpoints.append(item)
+        self.save(run)
+        return item
+
+    def resolve_checkpoint(self, run_id: str, selection: str, decided_by: str) -> Checkpoint:
+        run = self.load(run_id)
+        index = next(
+            (
+                index
+                for index in range(len(run.checkpoints) - 1, -1, -1)
+                if run.checkpoints[index].pending_decision is not None
+                and run.checkpoints[index].selected_decision is None
+            ),
+            None,
+        )
+        if index is None:
+            raise LedgerError("run has no pending decision")
+        pending = run.checkpoints[index]
+        if selection not in pending.options:
+            raise LedgerError(f"{selection!r} is not a declared option")
+        resolved = replace(
+            pending,
+            selected_decision=selection,
+            decided_by=decided_by,
+            decided_at=datetime.now(UTC).isoformat(),
+        )
+        run.checkpoints[index] = resolved
+        self.save(run)
+        return resolved
+
     # ── the part that cannot be faked ────────────────────────────────────────
     def record(self, run_id: str, gate: Gate, command: str, cwd: Path | None = None) -> Evidence:
         """Execute ``command`` and record its real result against ``gate``.
@@ -219,7 +450,21 @@ class Ledger:
         asymmetry is the whole mechanism: a model can claim a test passed, but it
         cannot produce a zero exit code from a failing suite.
         """
+        run = self.load(run_id)
+        if run.schema_version >= 2 and run.plan_path is not None and gate != Gate.PLANNED:
+            plan_problems = self.validate_plan(run_id)
+            if plan_problems:
+                raise LedgerError(f"PLAN_INVALID: {'; '.join(plan_problems)}")
         prior = [e for e in self.evidence(run_id) if e.gate == str(gate)]
+        failures = [
+            item
+            for item in prior
+            if not item.passed and not item.command.startswith("ATTEST ")
+        ]
+        if len(failures) >= MAX_ATTEMPTS:
+            raise LedgerError(
+                f"THREE_STRIKES on {gate}. Open a new run; this run cannot execute another attempt."
+            )
         attempt = len(prior) + 1
 
         started = time.monotonic()
@@ -246,6 +491,11 @@ class Ledger:
             attempt=attempt,
         )
         self.append(run_id, item)
+        if not item.passed and len(failures) + 1 >= MAX_ATTEMPTS:
+            run = self.load(run_id)
+            if str(gate) not in run.escalated_gates:
+                run.escalated_gates.append(str(gate))
+                self.save(run)
         return item
 
     def attest(self, run_id: str, gate: Gate, note: str) -> Evidence:
@@ -254,6 +504,9 @@ class Ledger:
         Attestations are marked with exit code 0 but a synthetic command so a
         reader can always tell executed proof from asserted proof.
         """
+        run = self.load(run_id)
+        if run.schema_version >= 2 and run.plan_path is not None and gate == Gate.PLANNED:
+            raise LedgerError("planned evidence must be created by approve_plan")
         prior = [e for e in self.evidence(run_id) if e.gate == str(gate)]
         item = Evidence(
             gate=str(gate),
@@ -268,11 +521,24 @@ class Ledger:
         self.append(run_id, item)
         return item
 
-    def note_skill(self, run_id: str, skill: str) -> Run:
+    def note_skill(
+        self, run_id: str, skill: str, *, state: str = "loaded", reason: str = ""
+    ) -> Run:
         run = self.load(run_id)
         if skill not in run.skills_loaded:
             run.skills_loaded.append(skill)
-            self.save(run)
+        item = SkillEvent(
+            name=skill,
+            state=state,
+            reason=reason,
+            recorded_at=datetime.now(UTC).isoformat(),
+        )
+        if not any(
+            event.name == skill and event.state == state and event.reason == reason
+            for event in run.skill_events
+        ):
+            run.skill_events.append(item)
+        self.save(run)
         return run
 
 
@@ -309,9 +575,10 @@ class Verdict:
 def adjudicate(run: Run, evidence: list[Evidence]) -> Verdict:
     """Compute whether a run may close, from the ledger alone."""
     latest: dict[str, Evidence] = {}
-    counts: dict[str, int] = {}
+    failed_executions: dict[str, int] = {}
     for item in evidence:
-        counts[item.gate] = counts.get(item.gate, 0) + 1
+        if not item.passed and not item.command.startswith("ATTEST "):
+            failed_executions[item.gate] = failed_executions.get(item.gate, 0) + 1
         prior = latest.get(item.gate)
         if prior is None or item.attempt >= prior.attempt:
             latest[item.gate] = item
@@ -330,7 +597,7 @@ def adjudicate(run: Run, evidence: list[Evidence]) -> Verdict:
         if not item.passed:
             failing.append(gate)
             # A gate retried past the ceiling is not a gate to keep hammering.
-            if counts.get(gate, 0) >= MAX_ATTEMPTS:
+            if failed_executions.get(gate, 0) >= MAX_ATTEMPTS:
                 exceeded.append(gate)
             continue
         satisfied.append(gate)
