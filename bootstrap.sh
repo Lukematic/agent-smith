@@ -52,9 +52,11 @@ ok "git present"
 # ── clone or update ──────────────────────────────────────────────────────────
 step "Fetching the repository"
 if [ -d "$DIR/.git" ]; then
-    # An existing clone may carry local lessons, so pull rather than replace it.
+    [ -z "$(git -C "$DIR" status --porcelain)" ] || { bad "existing clone is dirty; refusing pull"; exit 1; }
     git -C "$DIR" fetch --quiet origin
-    git -C "$DIR" checkout --quiet "$REF"
+    COUNTS="$(git -C "$DIR" rev-list --left-right --count 'HEAD...@{u}')"
+    AHEAD="${COUNTS%%[[:space:]]*}"
+    [ "$AHEAD" -eq 0 ] || { bad "existing clone has local/diverged commits; refusing pull"; exit 1; }
     git -C "$DIR" pull --quiet --ff-only
     ok "updated the existing clone at $DIR"
 else

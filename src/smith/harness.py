@@ -35,6 +35,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from smith import ownership
+
 
 class Harness(StrEnum):
     CLAUDE = "claude"
@@ -219,12 +221,21 @@ def _link_or_copy(source: Path, destination: Path, *, overwrite: bool = False) -
     a copy are the documented fallbacks. The difference matters: a link updates on
     git pull, a copy needs reinstalling.
     """
-    if not overwrite and _already_linked(destination, source):
+    # Kept for CLI compatibility; ownership safety applies even when requested.
+    del overwrite
+    if _already_linked(destination, source):
         return "SKIPPED", "already linked, git pull keeps it current"
 
     if destination.exists() or destination.is_symlink():
-        # A real directory, or a link pointing somewhere else. Replace it: the
-        # alternative is a stale install that silently disagrees with the clone.
+        root = destination.parent
+        owned = ownership.entry(root, destination)
+        if not owned:
+            return "FAILED", "existing destination is not installer-owned; refusing replacement"
+        if not ownership.unchanged(root, destination):
+            saved = ownership.backup(destination)
+            return "FAILED", f"installer-owned destination was modified; backup: {saved}"
+        if owned.get("kind") == "copy" and ownership.sha256_path(source) == owned.get("sha256"):
+            return "SKIPPED", "installer-owned copy already current"
         try:
             _unlink_any(destination)
         except OSError as exc:
@@ -253,7 +264,8 @@ def _link_or_copy(source: Path, destination: Path, *, overwrite: bool = False) -
         shutil.copytree(source, destination)
     except OSError as exc:
         return "FAILED", str(exc)
-    return "COPIED", "re-run install after a git pull to refresh"
+    ownership.record(destination.parent, destination, "copy")
+    return "COPIED", "installer-owned copy; re-run install after a git pull to refresh"
 
 
 def _split_frontmatter(text: str) -> tuple[dict[str, str], str]:
@@ -344,10 +356,11 @@ def install(
         return [Action(label, persona_source, "FAILED", "agents/awino.md is missing")]
 
     destination = target.persona_path
-    destination.parent.mkdir(parents=True, exist_ok=True)
     try:
-        destination.write_text(_persona_for(target.harness, persona_source), encoding="utf-8")
-        actions.append(Action(label, destination, "INSTALLED", "persona"))
+        outcome, detail = ownership.safe_write(
+            target.root, destination, _persona_for(target.harness, persona_source), "persona"
+        )
+        actions.append(Action(label, destination, outcome, detail))
     except OSError as exc:
         actions.append(Action(label, destination, "FAILED", str(exc)))
         return actions

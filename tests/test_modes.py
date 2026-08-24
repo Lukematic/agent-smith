@@ -320,7 +320,7 @@ class TestIdempotentLinking:
             # A copy cannot be detected as current, so it is refreshed instead.
             assert second == "COPIED"
 
-    def test_link_pointing_elsewhere_is_replaced(self, tmp_path: Path) -> None:
+    def test_foreign_link_pointing_elsewhere_is_refused(self, tmp_path: Path) -> None:
         from smith.harness import _link_or_copy
 
         old = tmp_path / "old"
@@ -333,9 +333,9 @@ class TestIdempotentLinking:
 
         _link_or_copy(old, destination)
         outcome, _ = _link_or_copy(new, destination)
-        assert outcome in {"LINKED", "COPIED"}
-        assert (destination / "marker-new").exists()
-        assert not (destination / "marker-old").exists()
+        assert outcome == "FAILED"
+        assert (destination / "marker-old").exists()
+        assert not (destination / "marker-new").exists()
 
 
 class TestHarnessFrontmatter:

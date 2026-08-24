@@ -27,6 +27,8 @@ from pathlib import Path
 
 import yaml
 
+from smith import ownership
+
 SLUG_PATTERN = re.compile(r"^[a-zA-Z0-9-]+$")
 VALID_GROUPS = frozenset({"read", "edit", "command", "mcp", "modes"})
 
@@ -216,6 +218,10 @@ def install(mode: Mode, target: ModeTarget, *, force: bool = False) -> tuple[str
     if index is not None and not force:
         return "SKIPPED", f"{mode.slug} already present, use --force to overwrite"
 
+    if index is not None and force and not ownership.unchanged(target.path.parent, target.path):
+        saved = ownership.backup(target.path)
+        return "FAILED", f"owned mode file changed or ownership unknown; backup: {saved}"
+
     payload = mode.to_dict()
     if index is None:
         existing.append(payload)
@@ -225,7 +231,10 @@ def install(mode: Mode, target: ModeTarget, *, force: bool = False) -> tuple[str
         outcome = "UPDATED"
 
     try:
+        if target.path.exists() and not ownership.entry(target.path.parent, target.path):
+            ownership.backup(target.path)
         _dump(target.path, existing)
+        ownership.record(target.path.parent, target.path, "modes")
     except OSError as exc:
         return "FAILED", str(exc)
     return outcome, f"{len(existing)} mode(s) in file"

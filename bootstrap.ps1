@@ -102,11 +102,20 @@ Ok "git present"
 Step "Fetching the repository"
 if (Test-Path (Join-Path $Dir ".git")) {
     Push-Location $Dir
-    # An existing clone may carry local lessons, so pull rather than replace it.
-    git fetch --quiet origin
-    git checkout --quiet $Ref
-    git pull --quiet --ff-only
-    Ok "updated the existing clone at $Dir"
+    $dirty = & git status --porcelain
+    if ($LASTEXITCODE -ne 0) { Pop-Location; Bad "git status failed"; exit 1 }
+    if ($dirty) { Pop-Location; Bad "existing clone is dirty; run 'awino update-preflight' after installing uv"; exit 1 }
+    & git fetch --quiet origin
+    if ($LASTEXITCODE -ne 0) { Pop-Location; Bad "git fetch failed"; exit 1 }
+    $counts = & git rev-list --left-right --count "HEAD...@{u}"
+    if ($LASTEXITCODE -ne 0) { Pop-Location; Bad "cannot compare clone with upstream"; exit 1 }
+    $ahead, $behind = $counts -split '\s+'
+    if ([int]$ahead -ne 0) { Pop-Location; Bad "existing clone has local/diverged commits; refusing pull"; exit 1 }
+    if ([int]$behind -ne 0) {
+        & git pull --quiet --ff-only
+        if ($LASTEXITCODE -ne 0) { Pop-Location; Bad "fast-forward pull failed"; exit 1 }
+    }
+    Ok "updated the existing clone at $Dir (run 'awino update-preflight' for backup-first updates)"
     Pop-Location
 } else {
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Dir) | Out-Null
@@ -144,6 +153,7 @@ Push-Location $Dir
 try {
     $installArgs = @()
     if ($Local) { $installArgs += @('-Scope', 'local') }
+    if ($NoTools) { $installArgs += '-NoTools' }
     & (Join-Path $Dir "install.ps1") @installArgs
     $installFailed = $LASTEXITCODE -ne 0
 } finally {

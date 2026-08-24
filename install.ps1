@@ -193,7 +193,7 @@ if ($NoLink) {
     # selector and declares tool groups the editor enforces. Skipping this step
     # left a fresh clone with no modes at all, which is the bug this fixes.
     Write-Step "Installing selectable modes (Kilo, Roo)"
-    $modeArgs = @('install-mode', '--force')
+    $modeArgs = @('install-mode')
     if ($Scope -eq 'local') { $modeArgs += @('--scope', 'project') }
 
     $modeOut = & uv run smith @modeArgs 2>&1

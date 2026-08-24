@@ -163,7 +163,7 @@ else
     # selector and declares tool groups the editor enforces. Skipping this step
     # left a fresh clone with no modes at all, which is the bug this fixes.
     step "Installing selectable modes (Kilo, Roo)"
-    if uv run smith install-mode --force $INSTALL_SCOPE 2>&1 | sed 's/^/  /'; then
+    if uv run smith install-mode $INSTALL_SCOPE 2>&1 | sed 's/^/  /'; then
         ok "modes installed, reload the editor window to see them"
     else
         warn "no Kilo or Roo installation found, skipping modes"

@@ -52,6 +52,7 @@ ROOT_ALLOWED_DIRS = frozenset(
         "docs",
         "emitted",
         "assignments",
+        "backups",
         "hooks",
         "knowledge",
         "memory",
@@ -66,7 +67,16 @@ ROOT_ALLOWED_DIRS = frozenset(
 # Directories Smith never inspects. The venv is not our clutter, and walking it
 # turns a hygiene check into 49 findings of noise, which trains you to ignore it.
 IGNORED_TREES = frozenset(
-    {".git", ".github", ".venv", "node_modules", "archive", "dist", "site-packages"}
+    {
+        ".git",
+        ".github",
+        ".venv",
+        "node_modules",
+        "archive",
+        "backups",
+        "dist",
+        "site-packages",
+    }
 )
 DISPOSABLE_DIRS = ("__pycache__", ".pytest_cache", ".ruff_cache")
 

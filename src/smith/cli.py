@@ -30,6 +30,7 @@ from smith import (
     seeds,
     skill_catalog,
     spawn,
+    updater,
     watch,
 )
 from smith.enforce import (
@@ -176,6 +177,32 @@ def update() -> None:
     )
     if result["added"]:
         _echo("Curate each ADDED path one at a time with tags and use_when. Never bulk-add.")
+
+
+@app.command("update-preflight")
+def update_preflight_command(
+    pull: bool = typer.Option(True, "--pull/--no-pull", help="Fetch and fast-forward after checks"),
+) -> None:
+    """Snapshot user state and safely fast-forward a clean source clone."""
+    workspace = _workspace()
+    mode_paths = [target.path for target in modes.discover(workspace.project.root)]
+    harness_paths = mode_paths + [
+        target.persona_path for target in harness.discover(workspace.project.root)
+    ]
+    if not pull:
+        backup = updater.snapshot(workspace.home.root, workspace.project.root, harness_paths)
+        _echo(f"BACKUP  {backup}")
+        return
+    try:
+        backup = updater.update_preflight(
+            workspace.home.root, workspace.project.root, harness_paths
+        )
+    except updater.PreflightError as exc:
+        _echo(f"BACKUP  {exc.backup}")
+        _echo(f"REFUSED  {exc}")
+        raise typer.Exit(1) from exc
+    _echo(f"BACKUP  {backup}")
+    _echo("UPDATED  source is clean and fast-forwarded")
 
 
 @app.command("watch")
@@ -459,31 +486,19 @@ def link(
 ) -> None:
     """Symlink this repo as a global agent plugin and install the persona."""
     paths = _paths()
-    home = Path.home()
-    plugin_link = home / ".agents" / "plugins" / "awino"
-    agent_target = home / ".agents" / "agents" / "awino.md"
-    agent_source = paths.agents / "agent-smith.md"
+    target = harness.Target(harness.Harness.AGENTS, Path.home() / ".agents", "global")
 
-    _echo(f"plugin: {plugin_link} -> {paths.root}")
-    _echo(f"agent:  {agent_target} <- {agent_source}")
+    _echo(f"plugin: {target.plugin_path} -> {paths.root}")
+    _echo(f"agent:  {target.persona_path} <- {paths.agents / 'awino.md'}")
     if dry_run:
         _echo("DRY_RUN  nothing changed")
         return
 
-    plugin_link.parent.mkdir(parents=True, exist_ok=True)
-    agent_target.parent.mkdir(parents=True, exist_ok=True)
-    if plugin_link.exists() or plugin_link.is_symlink():
-        _echo("SKIP  plugin link already exists")
-    else:
-        try:
-            plugin_link.symlink_to(paths.root, target_is_directory=True)
-            _echo("LINKED  plugin")
-        except OSError as exc:
-            _echo(f"FAILED  symlink needs Developer Mode or admin on Windows: {exc}")
-            raise typer.Exit(1) from exc
-
-    agent_target.write_text(agent_source.read_text(encoding="utf-8"), encoding="utf-8")
-    _echo("INSTALLED  persona")
+    actions = harness.install(paths.root, target)
+    for action in actions:
+        _echo(f"{action.outcome:<10} {action.path}  {action.detail}")
+    if any(action.failed for action in actions):
+        raise typer.Exit(1)
     _echo("Next: start a session and ask '@awino what is a harness?'")
 
 
@@ -534,6 +549,7 @@ def install_command(
         _echo("  awino install --harness claude")
         raise typer.Exit(1)
 
+    failed = False
     for target in chosen:
         _echo(f"TARGET  {target.describe()}")
         if dry_run:
@@ -544,6 +560,8 @@ def install_command(
             continue
         for action in harness.install(smith_home, target, overwrite=overwrite):
             _echo(f"  {action.outcome:<10} {action.path.name}  {action.detail}")
+            if action.failed:
+                failed = True
 
     if pointer and not dry_run:
         markers = ("## A.W.I.N.O.", "## Agent Smith")
@@ -569,6 +587,9 @@ def install_command(
         _echo("")
         _echo("DRY_RUN  nothing changed")
         return
+
+    if failed:
+        raise typer.Exit(1)
 
     _echo("")
     _echo("Verify with:  awino install-status")
@@ -627,6 +648,7 @@ def install_mode_command(
             _echo(f"INVALID  {slug}: {'; '.join(problems)}")
         raise typer.Exit(1)
 
+    failed = False
     for target in chosen:
         _echo(f"TARGET  {target.describe()}")
         for mode in built:
@@ -635,11 +657,15 @@ def install_mode_command(
                 continue
             outcome, detail = modes.install(mode, target, force=force)
             _echo(f"  {outcome:<10} {mode.slug:<22} {detail}")
+            failed = failed or outcome == "FAILED"
 
     if dry_run:
         _echo("")
         _echo("DRY_RUN  nothing changed")
         return
+
+    if failed:
+        raise typer.Exit(1)
 
     _echo("")
     _echo("Reload the editor window, then pick the mode from the selector.")
