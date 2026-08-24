@@ -56,7 +56,7 @@ cd agent-smith
 nothing else can run before the clone.
 
 Nothing touches your system Python. Optional tools never block the install: if
-`just` cannot be installed, every recipe still runs as `uv run smith ...`. Seeds is
+`just` cannot be installed, every recipe still runs as `uv run awino ...`. Seeds is
 only installed when a JavaScript runtime is already present, because pulling in a
 runtime to get an optional tracker would be a large uninvited change.
 
@@ -90,9 +90,9 @@ nothing else to run. Re-running the installer is safe and idempotent.
 ### Verify
 
 ```bash
-smith install-status     # persona and skills, per harness
+awino install-status     # persona and skills, per harness
 smith mode-status        # Kilo and Roo modes
-smith doctor             # every project gate
+awino doctor             # every project gate
 ```
 
 ### Modes, for Kilo and Roo
@@ -109,8 +109,8 @@ specialists then compose the appropriate bundled skills:
 | 🧭 A.W.I.N.O. Research | read, mcp | release unsupported factual synthesis |
 
 ```bash
-smith install-mode                  # every detected editor
-smith install-mode --editor kilo    # just one
+awino install-mode                  # every detected editor
+awino install-mode --editor kilo    # just one
 ```
 
 Reload the editor window and they appear in the mode dropdown.
@@ -135,13 +135,13 @@ permissions are harness-specific. `docs/install.md` lists the known destinations
 ### First five minutes
 
 ```bash
-smith context     # what Smith thinks home and project are
+awino context     # what Smith thinks home and project are
 smith onboard     # mission, user, goals, tenets, expectations, success
-smith doctor      # health, with a remedy per finding
+awino doctor      # health, with a remedy per finding
 smith work        # tracked work, if a tracker exists
 ```
 
-Run `smith context` **first in every new repository.** Every gate command Smith
+Run `awino context` **first in every new repository.** Every gate command Smith
 records comes from that resolution, so a wrong answer there makes every later green
 gate meaningless.
 
@@ -153,7 +153,7 @@ This is the part that fixes "agents never follow instructions".
 
 ```bash
 # 1. Open a run. The task class determines the gates. You do not choose them.
-smith gate open code-change "add retry to the fetch client" --scope src/smith/knowledge.py
+awino gate open code-change "add retry to the fetch client" --scope src/smith/knowledge.py
 
 #    gates required before close:
 #      [ ] planned
@@ -163,15 +163,15 @@ smith gate open code-change "add retry to the fetch client" --scope src/smith/kn
 #      [ ] scope_respected
 
 # 2. Satisfy each gate with a real command. Smith runs it and records the exit code.
-smith gate record planned --attest "docs/plans/2026-08-21-retry.md"
-smith gate record tested  --cmd "uv run pytest"
-smith gate record linted  --cmd "uv run ruff check src tests"
+awino gate record planned --attest "docs/plans/2026-08-21-retry.md"
+awino gate record tested  --cmd "uv run pytest"
+awino gate record linted  --cmd "uv run ruff check src tests"
 
 # 3. Independent checks that do not trust the agent's word.
-smith gate check --diff-base HEAD
+awino gate check --diff-base HEAD
 
 # 4. Try to close. Refused unless every gate holds.
-smith gate close
+awino gate close
 ```
 
 A failing gate refuses:
@@ -189,7 +189,7 @@ You may not report this work as complete.
 | "never weaken a test" | diff is parsed for deleted asserts and added skips |
 | "stay in your file scope" | `git diff --name-only` reconciled against declared scope |
 | "stop after 3 attempts" | attempt counter blocks the gate at 3 |
-| "load the right skill" | `smith gate skill <name>` makes usage auditable |
+| "load the right skill" | `awino gate skill <name>` makes usage auditable |
 
 The agent supplies the command. **Smith supplies the exit code.** A model can
 claim a suite passed; it cannot produce a zero exit code from a failing one.
@@ -211,8 +211,8 @@ just status       # cache age, indexed chapters, binding lessons
 Knowledge and routing:
 
 ```bash
-smith route "what is a harness"      # show chapters, fetch nothing
-smith fetch chapters/6-harnesses/1-what-is-a-harness.md
+awino route "what is a harness"      # show chapters, fetch nothing
+awino fetch chapters/6-harnesses/1-what-is-a-harness.md
 smith drift                          # registry vs upstream
 ```
 

@@ -94,11 +94,11 @@ class Harness(StrEnum):
     def persona_filename(self) -> str:
         """Copilot encodes the artifact type in the filename suffix."""
         return {
-            Harness.CLAUDE: "agent-smith.md",
-            Harness.AGENTS: "agent-smith.md",
-            Harness.KILO: "agent-smith.md",
-            Harness.CURSOR: "agent-smith.mdc",
-            Harness.COPILOT: "agent-smith.chatmode.md",
+            Harness.CLAUDE: "awino.md",
+            Harness.AGENTS: "awino.md",
+            Harness.KILO: "awino.md",
+            Harness.CURSOR: "awino.mdc",
+            Harness.COPILOT: "awino.chatmode.md",
         }[self]
 
     @property
@@ -139,7 +139,7 @@ class Target:
 
     @property
     def plugin_path(self) -> Path:
-        return self.root / "plugins" / "agent-smith"
+        return self.root / "plugins" / "awino"
 
     def describe(self) -> str:
         state = "present" if self.exists else "absent"
@@ -280,7 +280,7 @@ def _persona_for(harness: Harness, source: Path) -> str:
     """
     text = source.read_text(encoding="utf-8")
     fields, body = _split_frontmatter(text)
-    name = fields.get("name", "agent-smith")
+    name = fields.get("name", "awino")
     description = fields.get("description", "Agentic-engineering expert and agent factory")
     model = fields.get("model")
 
@@ -304,7 +304,7 @@ def _persona_for(harness: Harness, source: Path) -> str:
             "mode: primary",
             f"description: {description}",
             "options:",
-            "  displayName: Agent Smith",
+            "  displayName: A.W.I.N.O.",
             f"  id: {name}",
         ]
         if model:
@@ -339,9 +339,9 @@ def install(
     actions: list[Action] = []
     label = f"{target.harness}/{target.scope}"
 
-    persona_source = smith_home / "agents" / "agent-smith.md"
+    persona_source = smith_home / "agents" / "awino.md"
     if not persona_source.is_file():
-        return [Action(label, persona_source, "FAILED", "agents/agent-smith.md is missing")]
+        return [Action(label, persona_source, "FAILED", "agents/awino.md is missing")]
 
     destination = target.persona_path
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -367,7 +367,7 @@ def install(
 
     # File-based harnesses read one directory per skill.
     source_skills = smith_home / "skills"
-    for skill in sorted(source_skills.glob("*/SKILL.md")):
+    for skill in sorted(source_skills.glob("awino-*/SKILL.md")):
         outcome, detail = _link_or_copy(
             skill.parent, target.skills_root / skill.parent.name, overwrite=overwrite
         )
@@ -406,12 +406,12 @@ def pointer_text(smith_home: Path) -> str:
     return f"""## A.W.I.N.O. (Agentic Workflow Intelligence & Navigation Orchestrator)
 
 Agentic-engineering questions, agent authoring, and agent debugging go to
-A.W.I.N.O. (installed under the compatibility name `agent-smith`). Its home is
+A.W.I.N.O., the canonical agent identity. Its home is
 `{smith_home}`.
 
-- Concepts, harness design, failure triage: load `agent-smith`
-- Before any multi-step work: `smith plan "<request>"` then `smith gate open ...`
-- Completion is computed, never claimed: `smith gate close` decides
-- Project purpose and calibration: `smith onboard`
+- Concepts, harness design, failure triage: load `awino`
+- Before any multi-step work: `awino plan "<request>"` then `awino gate open ...`
+- Completion is computed, never claimed: `awino gate close` decides
+- Project purpose and calibration: `awino onboard`
 - Project-local conventions live in this repository, never in A.W.I.N.O.'s home
 """

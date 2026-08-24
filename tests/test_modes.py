@@ -165,30 +165,30 @@ class TestSmithModes:
 
     def test_consult_mode_cannot_edit(self) -> None:
         # The restriction is the whole point: a consult that edits is not a consult.
-        ask = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "agent-smith-ask")
+        ask = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "awino-consult")
         assert "edit" not in ask.groups
         assert "command" not in ask.groups
 
     def test_plan_mode_edits_markdown_only(self) -> None:
-        plan = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "agent-smith-plan")
+        plan = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "awino-plan")
         edit = next(g for g in plan.groups if isinstance(g, list) and g[0] == "edit")
         assert "md" in edit[1]["fileRegex"]
         assert "command" not in plan.groups
 
     def test_discover_mode_is_read_only(self) -> None:
-        mode = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "agent-smith-discover")
+        mode = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "awino-discover")
         assert "edit" not in mode.groups
         assert "command" not in mode.groups
         assert "one unresolved question" in mode.custom_instructions
 
     def test_research_mode_loads_evidence_and_reproducibility(self) -> None:
-        mode = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "agent-smith-research")
+        mode = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "awino-research")
         assert "smith-evidence" in mode.custom_instructions
         assert "smith-reproducibility" in mode.custom_instructions
         assert "edit" not in mode.groups
 
     def test_full_mode_can_edit(self) -> None:
-        full = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "agent-smith")
+        full = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "awino")
         assert "edit" in full.groups
 
     def test_role_definition_stays_lean(self) -> None:
@@ -314,7 +314,7 @@ class TestHarnessFrontmatter:
 
         rendered = self._persona(Harness.KILO, tmp_path)
         assert "mode: primary" in rendered
-        assert "displayName: Agent Smith" in rendered
+        assert "displayName: A.W.I.N.O." in rendered
 
     def test_claude_declares_tools(self, tmp_path: Path) -> None:
         from smith.harness import Harness

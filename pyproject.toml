@@ -1,7 +1,7 @@
 [project]
-name = "smith-harness"
+name = "awino-harness"
 version = "0.3.0"
-description = "Agentic-engineering expert and agent factory with a just-in-time knowledge registry and a gate ledger"
+description = "A.W.I.N.O. agentic workflow orchestrator with a just-in-time knowledge registry and gate ledger"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
@@ -39,8 +39,8 @@ Issues = "https://github.com/Lukematic/agent-smith/issues"
 Documentation = "https://github.com/Lukematic/agent-smith/tree/main/docs"
 
 [project.scripts]
-smith = "smith.cli:app"
 awino = "smith.cli:app"
+smith = "smith.cli:deprecated_smith_entry"
 
 [dependency-groups]
 dev = [

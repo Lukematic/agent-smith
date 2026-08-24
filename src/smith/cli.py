@@ -9,6 +9,7 @@ work in prose, which is the ``MODEL_DOES_DETERMINISM`` guard applied to A.W.I.N.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -53,6 +54,13 @@ app = typer.Typer(
 gate_app = typer.Typer(
     no_args_is_help=True, help="Run ledger. Completion is computed, never claimed."
 )
+
+
+def deprecated_smith_entry() -> None:
+    """Compatibility entry point for the former executable name."""
+    if os.environ.get("AWINO_SUPPRESS_DEPRECATION") != "1":
+        typer.echo("DEPRECATED: 'smith' is the former command name; use 'awino'.", err=True)
+    app()
 app.add_typer(gate_app, name="gate")
 
 
@@ -103,7 +111,7 @@ def route(question: str = typer.Argument(..., help="The question to route")) -> 
     store = KnowledgeStore(_paths())
     keys = store.route(question)
     if not keys:
-        _echo("NO_ROUTE  no registry match. Run 'smith update' in case upstream added a chapter.")
+        _echo("NO_ROUTE  no registry match. Run 'awino update' in case upstream added a chapter.")
         raise typer.Exit(1)
     _echo(f"routing: {question!r}")
     for key in keys[: store.budget]:
@@ -165,7 +173,7 @@ def watch_command(
 
     This is change *detection*, not autonomous learning. It answers "did the
     tree sha change since last check" for the book, overstory, warren, seeds
-    repos, and anything added via `smith watch add`. Nothing is fetched into the
+    repos, and anything added via `awino watch add`. Nothing is fetched into the
     registry and no knowledge is integrated automatically — see docs
     for why that boundary is deliberate.
     """
@@ -203,7 +211,7 @@ def watch_add_command(
     """Add a repo to the watchlist. This is the 'check out this repo' command.
 
     Adding a repo here does not fetch or integrate anything. It only means the
-    repo's tree sha is checked on the next `smith watch`.
+    repo's tree sha is checked on the next `awino watch`.
     """
     if "/" not in repo:
         _echo("REFUSED: expected owner/repo")
@@ -232,7 +240,7 @@ def watch_list_command() -> None:
     """Show every source and watchlisted repo Smith checks for changes."""
     paths = _paths()
     watched = watch.load_watchlist(paths)
-    _echo("CONFIGURED SOURCES (knowledge/SOURCES.yaml, checked by 'smith watch')")
+    _echo("CONFIGURED SOURCES (knowledge/SOURCES.yaml, checked by 'awino watch')")
     import yaml as _yaml
 
     if paths.sources.is_file():
@@ -249,7 +257,7 @@ def watch_list_command() -> None:
             _echo(f"  {entry.id:<30} {entry.note or '(no note)'}")
     else:
         _echo("")
-        _echo("No user-added repos yet. Add one with: smith watch-add owner/repo")
+        _echo("No user-added repos yet. Add one with: awino watch-add owner/repo")
 
 
 @app.command()
@@ -436,8 +444,8 @@ def link(
     """Symlink this repo as a global agent plugin and install the persona."""
     paths = _paths()
     home = Path.home()
-    plugin_link = home / ".agents" / "plugins" / "agent-smith"
-    agent_target = home / ".agents" / "agents" / "agent-smith.md"
+    plugin_link = home / ".agents" / "plugins" / "awino"
+    agent_target = home / ".agents" / "agents" / "awino.md"
     agent_source = paths.agents / "agent-smith.md"
 
     _echo(f"plugin: {plugin_link} -> {paths.root}")
@@ -460,7 +468,7 @@ def link(
 
     agent_target.write_text(agent_source.read_text(encoding="utf-8"), encoding="utf-8")
     _echo("INSTALLED  persona")
-    _echo("Next: start a session and ask '@agent-smith what is a harness?'")
+    _echo("Next: start a session and ask '@awino what is a harness?'")
 
 
 @app.command("install")
@@ -497,7 +505,7 @@ def install_command(
     present = [t for t in targets if t.exists]
     chosen = present or ([t for t in targets if which] if which else [])
 
-    _echo(f"smith home: {smith_home}")
+    _echo(f"A.W.I.N.O. home: {smith_home}")
     _echo(f"project:    {workspace.project.root}")
     _echo("")
 
@@ -507,7 +515,7 @@ def install_command(
             _echo(f"  {target.describe()}")
         _echo("")
         _echo("Create one, or name it explicitly:")
-        _echo("  smith install --harness claude")
+        _echo("  awino install --harness claude")
         raise typer.Exit(1)
 
     for target in chosen:
@@ -522,13 +530,13 @@ def install_command(
             _echo(f"  {action.outcome:<10} {action.path.name}  {action.detail}")
 
     if pointer and not dry_run:
-        marker = "## Agent Smith"
+        markers = ("## A.W.I.N.O.", "## Agent Smith")
         for name in ("AGENTS.md", "CLAUDE.md"):
             path = workspace.project.root / name
             if not path.is_file():
                 continue
             body = path.read_text(encoding="utf-8")
-            if marker in body:
+            if any(marker in body for marker in markers):
                 _echo(f"POINTER    {name} already references Smith")
                 continue
             path.write_text(
@@ -547,7 +555,7 @@ def install_command(
         return
 
     _echo("")
-    _echo("Verify with:  smith install-status")
+    _echo("Verify with:  awino install-status")
     _echo("Then ask your agent:  what is a harness?")
 
 
@@ -556,7 +564,7 @@ def install_mode_command(
     editor: str = typer.Option(None, "--editor", help="kilo, roo, or zoo. Default: all detected."),
     scope: str = typer.Option("global", "--scope", help="global or project"),
     project: bool = typer.Option(False, "--project", help="Shorthand for --scope project"),
-    force: bool = typer.Option(False, "--force", help="Overwrite an existing Smith mode"),
+    force: bool = typer.Option(False, "--force", help="Overwrite an existing A.W.I.N.O. mode"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would happen"),
     emit_json: bool = typer.Option(False, "--json", help="Print the mode definitions instead"),
 ) -> None:
@@ -585,7 +593,7 @@ def install_mode_command(
     available = [t for t in targets if t.exists or t.parent_exists]
     chosen = available or ([t for t in targets if editor] if editor else [])
 
-    _echo(f"smith home: {smith_home}")
+    _echo(f"A.W.I.N.O. home: {smith_home}")
     _echo("")
 
     if not chosen:
@@ -593,7 +601,7 @@ def install_mode_command(
         for target in targets:
             _echo(f"  {target.describe()}")
         _echo("")
-        _echo("Name one explicitly:  smith install-mode --editor kilo")
+        _echo("Name one explicitly:  awino install-mode --editor kilo")
         raise typer.Exit(1)
 
     built = modes.build_modes(smith_home)
@@ -619,12 +627,12 @@ def install_mode_command(
 
     _echo("")
     _echo("Reload the editor window, then pick the mode from the selector.")
-    _echo("Verify with:  smith mode-status")
+    _echo("Verify with:  awino mode-status")
 
 
 @app.command("mode-status")
 def mode_status_command() -> None:
-    """Show where the Smith modes are installed."""
+    """Show where the A.W.I.N.O. modes are installed."""
     workspace = _workspace()
     expected = [mode.slug for mode in modes.build_modes(workspace.home.root)]
     rows = {slug: modes.status(workspace.project.root, slug) for slug in expected}
@@ -645,7 +653,7 @@ def mode_status_command() -> None:
             for slug in slugs:
                 _echo(f"      + {slug}")
     else:
-        _echo("No Smith mode installed. Run: smith install-mode")
+        _echo("No A.W.I.N.O. mode installed. Run: awino install-mode")
 
     globally_complete = {
         label
@@ -664,7 +672,7 @@ def mode_status_command() -> None:
             _echo(f"  {label:<14} {scope:<8} missing {', '.join(slugs)}")
             _echo(f"      {path}")
         _echo("")
-        _echo("  smith install-mode --force")
+        _echo("  awino install-mode --force")
 
 
 @app.command("install-status")
@@ -674,23 +682,23 @@ def install_status_command() -> None:
     rows = harness.status(workspace.project.root)
     installed = [r for r in rows if r[1]]
 
-    _echo(f"smith home: {workspace.home.root}")
+    _echo(f"A.W.I.N.O. home: {workspace.home.root}")
     _echo("")
     if installed:
         _echo("INSTALLED")
         for target, _, detail in installed:
             _echo(f"  {target.harness.label:<22} {target.scope:<8} {detail}")
     else:
-        _echo("Not installed anywhere. Run: smith install")
+        _echo("Not installed anywhere. Run: awino install")
 
     missing = [r for r in rows if not r[1] and r[0].exists]
     if missing:
         _echo("")
-        _echo("HARNESS PRESENT BUT SMITH ABSENT")
+        _echo("HARNESS PRESENT BUT A.W.I.N.O. ABSENT")
         for target, _, _ in missing:
             _echo(f"  {target.harness.label:<22} {target.scope:<8} {target.root}")
         _echo("")
-        _echo("  smith install")
+        _echo("  awino install")
 
 
 @app.command("pointer")
@@ -727,11 +735,11 @@ def hook() -> None:
             )
         )
     if age is None:
-        _echo(f"[agent-smith] cache cold, fetch on demand | lessons: {lessons}")
+        _echo(f"[awino] cache cold, fetch on demand | lessons: {lessons}")
         return
     verdict = "STALE, run 'just update'" if age >= store.stale_days else "fresh"
     _echo(
-        f"[agent-smith] knowledge {age}d old ({verdict}) | cached: {len(store.manifest.entries)} | lessons: {lessons}"
+        f"[awino] knowledge {age}d old ({verdict}) | cached: {len(store.manifest.entries)} | lessons: {lessons}"
     )
 
 
@@ -865,7 +873,7 @@ def skills(
         found.append(
             {
                 "name": (name_match.group(1).strip() if name_match else skill.parent.name),
-                "namespaced": f"agent-smith:{name_match.group(1).strip() if name_match else skill.parent.name}",
+                "namespaced": f"awino:{name_match.group(1).strip() if name_match else skill.parent.name}",
                 "path": str(skill),
                 "description": (desc_match.group(1).strip() if desc_match else ""),
             }
@@ -886,7 +894,7 @@ def skills(
         summary = item["description"].split(". ")[0][:80]
         _echo(f"  {item['name']:<{width}}  {summary}")
     _echo("")
-    _echo("Load one by name in a session, or record usage with: smith gate skill <name>")
+    _echo("Load one by name in a session, or record usage with: awino gate skill <name>")
 
 
 @app.command("fix")
@@ -996,7 +1004,7 @@ def doctor(
         else:
             note = f"doctor {'ok' if not failing else 'FAILING: ' + ', '.join(r.name for r in failing)}"
             if failing:
-                _ledger().record(run_id, Gate.REVIEWED, "uv run smith doctor --fast")
+                _ledger().record(run_id, Gate.REVIEWED, "uv run awino doctor --fast")
             else:
                 _ledger().attest(run_id, Gate.REVIEWED, note)
             _echo(f"RECORDED  {note}")
@@ -1028,7 +1036,7 @@ def work_command(
         _echo("")
         _echo("No tracker, so work is untracked. Smith will not create one unasked.")
         _echo(f"  install: {seeds.INSTALL_HINT}")
-        _echo(f"  init:    {seeds.INIT_HINT}   (or: smith work-init --confirm)")
+        _echo(f"  init:    {seeds.INIT_HINT}   (or: awino work-init --confirm)")
         return
 
     issues = tracker.verification_issues(limit) if verify_only else tracker.ready(limit)
@@ -1046,7 +1054,7 @@ def work_command(
 
     _echo("")
     _echo("Start one with a gated run:")
-    _echo(f'  smith gate open code-change "<objective>" --issue {issues[0].id}')
+    _echo(f'  awino gate open code-change "<objective>" --issue {issues[0].id}')
 
 
 @app.command("work-init")
@@ -1101,7 +1109,7 @@ def work_init_command(
         _echo(f"FAILED  {result.detail}")
         raise typer.Exit(1)
     _echo("INITIALIZED  tracker created")
-    _echo("Next: smith work")
+    _echo("Next: awino work")
 
 
 @app.command("work-close")
@@ -1271,7 +1279,7 @@ def onboard_command(
             _echo(
                 f"REFUSED  unresolved fields: {', '.join(question.key for question in questions)}"
             )
-            _echo("Answer one at a time with: smith onboard --set key=value")
+            _echo("Answer one at a time with: awino onboard --set key=value")
             raise typer.Exit(1)
         intent.source = "confirmed"
         saved = onboarding.save(project, intent)
@@ -1290,7 +1298,7 @@ def onboard_command(
         return
 
     _echo("IDENTITY")
-    _echo(f"  smith home  {workspace.home.root}")
+    _echo(f"  A.W.I.N.O. home  {workspace.home.root}")
     _echo(f"  project     {project}")
     _echo("")
     _echo("MISSION DRAFT")
@@ -1311,12 +1319,12 @@ def onboard_command(
     _echo("")
     _echo(f"TRACKER   {state} ({tracker_reason})")
     if not state.usable:
-        _echo("          optional: smith onboard --with-seeds")
+        _echo("          optional: awino onboard --with-seeds")
 
     if saved:
         _echo("")
         _echo(f"CONFIRMED  {saved}")
-        _echo('NEXT       smith plan "<your first concrete task>"')
+        _echo('NEXT       awino plan "<your first concrete task>"')
         return
 
     _echo("")
@@ -1325,10 +1333,10 @@ def onboard_command(
         _echo("NEXT QUESTION")
         _echo(f"  {question.prompt}")
         _echo(f"  Why: {question.why}")
-        _echo(f'  Answer: smith onboard --set {question.key}="<your answer>"')
+        _echo(f'  Answer: awino onboard --set {question.key}="<your answer>"')
     else:
         _echo("READY TO CONFIRM")
-        _echo("  smith onboard --confirm")
+        _echo("  awino onboard --confirm")
 
 
 @app.command("limits")
@@ -1539,7 +1547,7 @@ def context() -> None:
     chain = _toolchain(workspace)
 
     _echo("IDENTITY")
-    _echo(f"  smith home    {workspace.home.root}")
+    _echo(f"  A.W.I.N.O. home    {workspace.home.root}")
     _echo(f"  project       {workspace.project.root}")
     _echo(
         f"  layout        {'working on Smith itself' if workspace.working_on_self else workspace.describe()}"
@@ -1635,7 +1643,7 @@ def _resolve_run(run_id: str | None) -> str:
     ledger = _ledger()
     resolved = run_id or ledger.current_id()
     if not resolved:
-        _echo('NO_RUN  open one first: smith gate open <task-class> "<objective>"')
+        _echo('NO_RUN  open one first: awino gate open <task-class> "<objective>"')
         raise typer.Exit(2)
     return resolved
 
@@ -1664,7 +1672,7 @@ def gate_open(
     for gate in run.required:
         _echo(f"  [ ] {gate}")
     _echo("")
-    _echo('Record each with: smith gate record <gate> --cmd "<command>"')
+    _echo('Record each with: awino gate record <gate> --cmd "<command>"')
 
 
 @gate_app.command("record")
