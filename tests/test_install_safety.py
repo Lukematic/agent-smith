@@ -108,6 +108,34 @@ def test_manifest_is_deterministic_and_records_hashes(smith_home: Path, tmp_path
     assert payload["entries"]["agents/awino.md"]["sha256"]
 
 
+def test_windows_persona_install_writes_the_exact_hashed_lf_bytes(
+    smith_home: Path, tmp_path: Path
+) -> None:
+    target = Target(Harness.CLAUDE, tmp_path / ".claude", "project")
+    target.root.mkdir()
+
+    first = install(smith_home, target, skills=False)
+    second = install(smith_home, target, skills=False)
+
+    assert first[0].outcome == "INSTALLED"
+    assert second[0].outcome == "SKIPPED"
+    assert b"\r\n" not in target.persona_path.read_bytes()
+
+
+def test_windows_persona_real_edit_is_still_backed_up_and_refused(
+    smith_home: Path, tmp_path: Path
+) -> None:
+    target = Target(Harness.CLAUDE, tmp_path / ".claude", "project")
+    target.root.mkdir()
+    install(smith_home, target, skills=False)
+    target.persona_path.write_bytes(target.persona_path.read_bytes() + b"local edit\n")
+
+    action = install(smith_home, target, skills=False)[0]
+
+    assert action.failed
+    assert "backup:" in action.detail
+
+
 def test_exact_link_is_skipped(tmp_path: Path) -> None:
     source = tmp_path / "source"
     source.mkdir()

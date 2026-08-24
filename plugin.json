@@ -1,5 +1,5 @@
 {
   "name": "awino",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "A.W.I.N.O. agentic workflow orchestrator. Consults a live knowledge registry, triages failures, runs verified workflows, and authors agents, skills, and tools."
 }

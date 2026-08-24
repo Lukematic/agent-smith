@@ -55,7 +55,7 @@ def record(root: Path, destination: Path, kind: str, content_hash: str | None = 
     data["entries"][key] = {"kind": kind, "sha256": content_hash or sha256_path(destination)}
     path = manifest_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="")
 
 
 def unchanged(root: Path, destination: Path) -> bool:
@@ -84,6 +84,9 @@ def safe_write(root: Path, destination: Path, content: str, kind: str) -> tuple[
             saved = backup(destination)
             return "FAILED", f"destination changed or not installer-owned; backup: {saved}"
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(content, encoding="utf-8")
+    # Preserve the exact bytes hashed above. On Windows, text-mode newline
+    # translation would otherwise turn LF into CRLF and make the installer
+    # report its own untouched output as locally modified on the next run.
+    destination.write_text(content, encoding="utf-8", newline="")
     record(root, destination, kind, encoded_hash)
     return "INSTALLED", kind

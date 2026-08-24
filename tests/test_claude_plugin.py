@@ -56,9 +56,10 @@ def test_repository_exposes_only_the_awino_agent() -> None:
     assert agent_files == ["awino.md"]
 
 
-def test_awino_agent_uses_a_portable_claude_model_alias() -> None:
+def test_awino_agent_inherits_the_users_selected_model() -> None:
     agent = (ROOT / "agents" / "awino.md").read_text(encoding="utf-8")
-    assert "model: sonnet" in agent
+    assert "model: inherit" in agent
+    assert "model: sonnet" not in agent
     assert "model: claude-sonnet" not in agent
 
 
