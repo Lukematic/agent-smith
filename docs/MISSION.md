@@ -103,7 +103,7 @@ A.W.I.N.O. is working when a user can:
 ## Relationship to the prior name
 
 This project was built and is still distributed as **Agent Smith** /
-`smith-harness` (PyPI) / `smith` (CLI command). A.W.I.N.O. is the new
+`awino-harness` (PyPI) / `awino` (CLI command). `smith` is the deprecated
 user-facing brand. The rename is deliberately staged (see
 `docs/name-options.txt` for the full migration plan and the other name
 candidates that were considered and preserved):

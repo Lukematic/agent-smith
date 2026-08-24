@@ -18,11 +18,11 @@ install:
 
 # Verify the toolchain is present before anything else runs
 doctor:
-    uv run smith doctor
+    uv run awino doctor
 
 # Fast health check: skips lint, format, and tests
 doctor-fast:
-    uv run smith doctor --fast
+    uv run awino doctor --fast
 
 # Toolchain versions, for debugging a broken environment
 versions:
@@ -59,83 +59,83 @@ check: lint test validate selftest tidy-check
 # Prove the validator still blocks a deliberately broken artifact. A validator
 # verified only against passing input is untested.
 selftest:
-    uv run smith validate --selftest
+    uv run awino validate --selftest
 
 # Everything the doctor checks plus the slow quality gates
 verify:
-    uv run smith doctor
+    uv run awino doctor
 
 # ── knowledge harness ────────────────────────────────────────────────────────
 
 # Diff the local registry against upstream and write a drift report
 drift:
-    uv run smith drift
+    uv run awino drift
 
 # Fetch one knowledge file into the cache with provenance
 fetch PATH:
-    uv run smith fetch "{{PATH}}"
+    uv run awino fetch "{{PATH}}"
 
 # Refresh stale cache entries and report registry drift
 update:
-    uv run smith update
+    uv run awino update
 
 # Show cache size, age, and lesson count
 status:
-    uv run smith status
+    uv run awino status
 
 # ── authoring gates ──────────────────────────────────────────────────────────
 
 # Validate every skill and agent definition. Exits nonzero on FAIL.
 validate:
-    uv run smith validate skills agents emitted
+    uv run awino validate skills agents emitted
 
 # Validate one file with full per-check output
 validate-one PATH:
-    uv run smith validate "{{PATH}}" --verbose
+    uv run awino validate "{{PATH}}" --verbose
 
 # Prove the validator actually blocks bad input
 validate-selftest:
-    uv run smith validate --selftest
+    uv run awino validate --selftest
 
 # ── hygiene ──────────────────────────────────────────────────────────────────
 
 # Repair what is mechanically fixable, report what needs judgement
 fix:
-    uv run smith fix
+    uv run awino fix
 
 # Also archive stray root files
 fix-all:
-    uv run smith fix --aggressive
+    uv run awino fix --aggressive
 
 # List every skill with its path
 skills:
-    uv run smith skills
+    uv run awino skills
 
 # Find clutter: stray docs, orphaned cache, empty dirs, duplicated content
 tidy-check:
-    uv run smith tidy --dry-run
+    uv run awino tidy --dry-run
 
 # Archive clutter to archive/YYYY-MM-DD/ rather than deleting it
 tidy:
-    uv run smith tidy
+    uv run awino tidy
 
 # Delete disposable artifacts. Cache is disposable; memory is not.
 clean:
-    uv run smith clean
+    uv run awino clean
 
 # ── install into the agent harness ───────────────────────────────────────────
 
 # Install the persona and skills into every detected harness
 install-harness:
-    uv run smith install
+    uv run awino install
 
 # Where is Smith installed?
 install-status:
-    uv run smith install-status
+    uv run awino install-status
 
 # Symlink this repo as a global goose plugin plus install the persona
 link:
-    uv run smith link
+    uv run awino link
 
 # What a human reads first
 [private]

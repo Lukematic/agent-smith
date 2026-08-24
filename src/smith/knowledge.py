@@ -42,6 +42,17 @@ class BudgetExceeded(RuntimeError):
     """
 
 
+class FetchError(RuntimeError):
+    """A knowledge file could not be fetched, without exposing an HTTP traceback."""
+
+    def __init__(self, source_id: str, path: str, status_code: int | None = None):
+        detail = f"HTTP {status_code}" if status_code is not None else "network error"
+        super().__init__(f"{source_id}:{path} ({detail})")
+        self.source_id = source_id
+        self.path = path
+        self.status_code = status_code
+
+
 @dataclass(frozen=True)
 class CacheEntry:
     path: str
@@ -164,8 +175,13 @@ class KnowledgeStore:
         url = RAW_BASES[source_id] + path
         client = self._client or httpx.Client(timeout=30.0, follow_redirects=True)
         try:
-            response = client.get(url)
-            response.raise_for_status()
+            try:
+                response = client.get(url)
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                raise FetchError(source_id, path, exc.response.status_code) from None
+            except httpx.RequestError:
+                raise FetchError(source_id, path) from None
             body = response.text
         finally:
             if self._client is None:

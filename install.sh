@@ -69,7 +69,7 @@ ok "dependencies installed into .venv"
 
 # ── 3. just, installed automatically when a package manager is available ─────
 # `just` is convenience rather than a requirement, so a failed install warns and
-# never blocks. Every recipe also runs as `uv run smith ...`.
+# never blocks. Every recipe also runs as `uv run awino ...`.
 #
 # `sudo` is used only for system package managers that require it, and only when
 # a TTY exists so a piped bootstrap never hangs on a password prompt.
@@ -77,7 +77,7 @@ step "Checking just (task runner)"
 if command -v just >/dev/null 2>&1; then
     ok "just present"
 elif [ "$NO_TOOLS" -eq 1 ]; then
-    warn "just not found, skipped by --no-tools. Use 'uv run smith ...' instead"
+    warn "just not found, skipped by --no-tools. Use 'uv run awino ...' instead"
 else
     SUDO=""
     if [ "$(id -u)" -ne 0 ] && [ -t 0 ] && command -v sudo >/dev/null 2>&1; then
@@ -113,7 +113,7 @@ else
     if install_just && command -v just >/dev/null 2>&1; then
         ok "just installed"
     else
-        warn "could not install just automatically. Optional: 'uv run smith ...' works without it"
+        warn "could not install just automatically. Optional: 'uv run awino ...' works without it"
     fi
 fi
 
@@ -139,10 +139,10 @@ fi
 
 # ── 4. self-repair, so a fresh clone is coherent ─────────────────────────────
 step "Regenerating derived files"
-uv run smith fix --no-check | sed 's/^/  /'
+uv run awino fix --no-check | sed 's/^/  /'
 
 # ── 5. harness installation ──────────────────────────────────────────────────
-# Delegated to `smith install`, which detects Claude Code, Goose, Kilo, and Cursor
+# Delegated to `awino install`, which detects Claude Code, Goose, Kilo, and Cursor
 # and adapts to each one's layout. Duplicating that logic in shell would mean two
 # implementations drifting apart, and the shell copy would be the stale one.
 if [ "$NO_LINK" -eq 1 ]; then
@@ -152,18 +152,18 @@ else
     INSTALL_SCOPE=""
     [ "$SCOPE" = "local" ] && INSTALL_SCOPE="--scope project"
 
-    if uv run smith install $INSTALL_SCOPE 2>&1 | sed 's/^/  /'; then
+    if uv run awino install $INSTALL_SCOPE 2>&1 | sed 's/^/  /'; then
         ok "persona and skills installed"
     else
         warn "no supported harness directory found"
-        echo "  Name one explicitly, for example:  uv run smith install --harness claude"
+        echo "  Name one explicitly, for example:  uv run awino install --harness claude"
     fi
 
     # A mode is a separate mechanism from a persona: it appears in the mode
     # selector and declares tool groups the editor enforces. Skipping this step
     # left a fresh clone with no modes at all, which is the bug this fixes.
     step "Installing selectable modes (Kilo, Roo)"
-    if uv run smith install-mode $INSTALL_SCOPE 2>&1 | sed 's/^/  /'; then
+    if uv run awino install-mode $INSTALL_SCOPE 2>&1 | sed 's/^/  /'; then
         ok "modes installed, reload the editor window to see them"
     else
         warn "no Kilo or Roo installation found, skipping modes"
@@ -173,7 +173,7 @@ fi
 # ── 6. verify, never assume ──────────────────────────────────────────────────
 step "Verifying the install"
 DOCTOR_FAILED=0
-uv run smith doctor --fast 2>&1 | sed 's/^/  /' || DOCTOR_FAILED=1
+uv run awino doctor --fast 2>&1 | sed 's/^/  /' || DOCTOR_FAILED=1
 
 step "Running the test suite"
 TESTS_FAILED=0
@@ -182,17 +182,17 @@ uv run pytest -q 2>&1 | tail -2 | sed 's/^/  /' || TESTS_FAILED=1
 echo
 if [ "$DOCTOR_FAILED" -ne 0 ] || [ "$TESTS_FAILED" -ne 0 ]; then
     printf "${RED}INSTALL INCOMPLETE${NC}\n"
-    echo "  Fix what the doctor reported, then run: uv run smith fix"
+    echo "  Fix what the doctor reported, then run: uv run awino fix"
     exit 1
 fi
 
 printf "${GREEN}INSTALL COMPLETE${NC}\n"
 echo
 echo "Next:"
-echo "  In your project:      smith onboard"
-echo "  Then plan work:       smith plan \"<your task>\""
-echo "  Health check:         smith doctor"
-echo "  Available skills:     smith skills"
+echo "  In your project:      awino onboard"
+echo "  Then plan work:       awino plan \"<your task>\""
+echo "  Health check:         awino doctor"
+echo "  Available skills:     awino skills"
 echo
 
 

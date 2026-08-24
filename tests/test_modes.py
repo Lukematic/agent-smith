@@ -392,12 +392,13 @@ class TestHarnessFrontmatter:
         for harness in Harness:
             assert "Body text here." in self._persona(harness, tmp_path)
 
-    def test_kilo_global_root_is_config_kilo(self) -> None:
+    def test_kilo_global_root_is_config_kilo(self, tmp_path: Path, monkeypatch) -> None:
         # ~/.kilo is not where Kilo reads global agents. It is ~/.config/kilo, and
         # the earlier wrong path produced an install that looked successful and
         # did nothing.
         from smith.harness import Harness
 
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
         assert Harness.KILO.global_root.parts[-2:] == (".config", "kilo")
 
     def test_copilot_filename_encodes_the_artifact_type(self) -> None:

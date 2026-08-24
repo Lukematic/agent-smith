@@ -87,7 +87,7 @@ INSTALL_FAILED=0
 echo
 if [ "$INSTALL_FAILED" -ne 0 ]; then
     bad "installation reported problems above"
-    echo "  Fix what the doctor reported, then run: cd $DIR && uv run smith fix"
+    echo "  Fix what the doctor reported, then run: cd $DIR && uv run awino fix"
     exit 1
 fi
 
@@ -97,9 +97,9 @@ echo "Smith lives at: $DIR"
 echo "Update it with: cd $DIR && git pull"
 echo
 echo "First commands, in any project:"
-echo "  smith onboard     mission, user, goals, tenets, expectations"
-echo "  smith plan        choose the right engineering rung and next step"
-echo "  smith doctor      health, with remedies"
+echo "  awino onboard     mission, user, goals, tenets, expectations"
+echo "  awino plan        choose the right engineering rung and next step"
+echo "  awino doctor      health, with remedies"
 echo
 
 

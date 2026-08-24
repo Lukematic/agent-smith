@@ -75,9 +75,9 @@ The installer detects your editors and installs where each one looks:
 | Claude Code | `~/.claude/agents/` | `~/.claude/skills/` | a subagent |
 | Kilo | `~/.config/kilo/agents/` | `~/.config/kilo/skills/` | **a mode, via `mode: primary`** |
 | Roo | `custom_modes.yaml` or `.roomodes` | via modes | **a mode in the selector** |
-| GitHub Copilot | `<VS Code prompts>/agent-smith.chatmode.md` | not supported | a chat mode |
+| GitHub Copilot | `<VS Code prompts>/awino.chatmode.md` | no skills mechanism | a chat mode |
 | Goose | `~/.agents/agents/` | `~/.agents/plugins/` | an agent |
-| Cursor | `.cursor/rules/agent-smith.mdc` | not supported | always-on context |
+| Cursor | `.cursor/rules/awino.mdc` | no skills mechanism | always-on context |
 
 Frontmatter is **rebuilt per harness**, never copied. Each tool validates a
 different shape, and an unexpected or missing field is not always ignored: a Kilo
@@ -91,7 +91,7 @@ nothing else to run. Re-running the installer is safe and idempotent.
 
 ```bash
 awino install-status     # persona and skills, per harness
-smith mode-status        # Kilo and Roo modes
+awino mode-status        # Kilo and Roo modes
 awino doctor             # every project gate
 ```
 
@@ -138,7 +138,7 @@ Route skill: <canonical awino-* skill or direct>
 Add **three lines** to `AGENTS.md`, never a copy of this repo:
 
 ```bash
-smith pointer
+awino pointer
 ```
 
 See [docs/install.md](docs/install.md) for pointing any other tool at the persona,
@@ -154,9 +154,9 @@ permissions are harness-specific. `docs/install.md` lists the known destinations
 
 ```bash
 awino context     # what Smith thinks home and project are
-smith onboard     # mission, user, goals, tenets, expectations, success
+awino onboard     # mission, user, goals, tenets, expectations, success
 awino doctor      # health, with a remedy per finding
-smith work        # tracked work, if a tracker exists
+awino work        # tracked work, if a tracker exists
 ```
 
 Run `awino context` **first in every new repository.** Every gate command Smith
@@ -237,8 +237,8 @@ smith drift                          # registry vs upstream
 Authoring gates:
 
 ```bash
-smith validate skills agents         # every artifact
-smith validate --selftest            # prove the validator blocks bad input
+awino validate skills agents         # every artifact
+awino validate --selftest            # prove the validator blocks bad input
 ```
 
 ---

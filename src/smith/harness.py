@@ -388,10 +388,10 @@ def install(
     return actions
 
 
-def status(project: Path) -> list[tuple[Target, bool, str]]:
+def status(project: Path, targets: list[Target] | None = None) -> list[tuple[Target, bool, str]]:
     """Where Smith is currently installed, and where it is not."""
     out: list[tuple[Target, bool, str]] = []
-    for target in discover(project):
+    for target in targets or discover(project):
         persona = target.persona_path
         if not persona.is_file():
             out.append((target, False, "persona not installed"))
@@ -401,6 +401,10 @@ def status(project: Path) -> list[tuple[Target, bool, str]]:
             out.append(
                 (target, True, "persona and plugin" if linked else "persona only, no plugin")
             )
+            continue
+        if not target.harness.supports_skills:
+            detail = f"persona; {target.harness.label} has no skills mechanism"
+            out.append((target, True, detail))
             continue
         count = (
             len(list(target.skills_root.glob("*/SKILL.md"))) if target.skills_root.is_dir() else 0

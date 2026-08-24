@@ -22,9 +22,12 @@ Python packages, no version conflicts with anything already installed.
 
 ---
 
-## Why not pip
+## Canonical package
 
-`pip install agent-smith` looks like the obvious answer and is the wrong one here.
+The canonical distribution is `awino-harness`. It ships both the `awino` command
+and the deprecated `smith` compatibility alias, plus the bundled registry, skills,
+agents, hooks, and templates. A source clone remains the recommended editable
+installation; a wheel is the reproducible isolated-tool installation.
 
 | Concern | pip | git + uv |
 | --- | --- | --- |
@@ -36,18 +39,19 @@ Python packages, no version conflicts with anything already installed.
 | Contributing a fix | fork, build, publish, wait | edit the clone, it is already live |
 | Publishing overhead | PyPI account, name, release process | `git push` |
 
-The deciding factor is that **Smith is not primarily a Python library.** It is a
-knowledge registry, ten skills, a persona, hooks, and a CLI. The Python part is the
-smallest part. Packaging the whole thing as a wheel to deliver a directory of
-Markdown is the wrong shape.
+The deciding factor is that **A.W.I.N.O. is not primarily a Python library.** The
+package therefore treats its non-Python bundle as required runtime data rather
+than optional package data.
 
 A second factor: **Smith is meant to be edited.** Its lessons ledger accumulates
 your project's rules. A pip install is a read-only artifact that a reinstall
 replaces; a clone is a working copy that `git pull` updates while keeping what you
 added.
 
-`uv tool install` is the closest pip-shaped option and remains reasonable for the
-CLI alone, but it still would not deliver `knowledge/`, `skills/`, or `memory/`.
+```bash
+uv tool install awino-harness
+awino route "what is a harness"
+```
 
 ---
 
@@ -109,6 +113,8 @@ otherwise prefer the global install, since one shared Smith avoids
 ```bash
 just check        # lint, tests, artifact validation, clutter
 just doctor       # every project gate
+uv build          # canonical wheel and sdist
+uvx twine check dist/*
 ```
 
 Then confirm the sharing-specific concerns:
@@ -126,6 +132,18 @@ git grep -n "C:\\\\Users" -- ':!*.lock' || echo "clean"
 ```
 
 ---
+
+## Release checklist
+
+- [ ] Set one version in `pyproject.toml`; confirm `awino --version` and package metadata agree.
+- [ ] Run `just check`, `uv build`, and `uvx twine check dist/*`.
+- [ ] Inspect the wheel and sdist for registry, skills, agents, hooks, and templates.
+- [ ] Install the wheel into an empty temporary environment and smoke `awino` and `smith`.
+- [ ] Run `awino update-preflight --no-pull`; retain the printed `BACKUP` path.
+- [ ] Prove rollback with `awino rollback <BACKUP>` against temporary project/harness roots.
+- [ ] Confirm canonical docs and installers use `awino`; only compatibility docs use `smith`.
+- [ ] Tag only after the artifact and isolated-install checks pass.
+- [ ] Publish through Trusted Publishing; never claim publication from a local build.
 
 ## Publishing
 
@@ -153,24 +171,32 @@ git push --tags
 cd ~/dev/agent-smith
 git pull
 uv sync --all-groups     # only if dependencies changed
-smith doctor             # confirm nothing broke
-smith update             # refresh the knowledge registry against upstream
+awino update-preflight   # backup, then fast-forward only
+awino doctor             # confirm nothing broke
+awino update             # refresh the knowledge registry against upstream
 ```
 
-`smith doctor` after a pull is the important step. It is the difference between
+`awino doctor` after a pull is the important step. It is the difference between
 believing the update worked and knowing it did.
+
+If user-owned state needs restoration, use the exact path printed by preflight:
+
+```bash
+awino rollback ~/.smith/backups/<timestamp>  # project state only
+# Add --include-harness only when intentionally restoring detected editor config.
+```
 
 ---
 
 ## What a recipient should do first
 
 ```bash
-smith context     # what Smith thinks home and project are
-smith mission     # what Smith thinks the project is for
-smith doctor      # health, with remedies
-smith work        # tracked work, if a tracker exists
+awino context     # what A.W.I.N.O. thinks home and project are
+awino mission     # what A.W.I.N.O. thinks the project is for
+awino doctor      # health, with remedies
+awino work        # tracked work, if a tracker exists
 ```
 
-`smith context` first, always. Every gate command Smith records comes from that
+`awino context` first, always. Every gate command A.W.I.N.O. records comes from that
 resolution, so a wrong answer there makes every later green gate meaningless.
 

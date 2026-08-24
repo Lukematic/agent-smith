@@ -64,10 +64,10 @@ jobs:
           path: test-results-${{ matrix.os }}-py${{ matrix.python }}.xml
 
       - name: Validate authored artifacts
-        run: uv run smith validate skills agents
+        run: uv run awino validate skills agents
 
       - name: Validator selftest
-        run: uv run smith validate --selftest
+        run: uv run awino validate --selftest
 
       - name: Project health (diagnostic)
         # Unit tests, lint, artifact validation, and fresh-install behavior are
@@ -76,7 +76,7 @@ jobs:
         # clean hosted runner rather than a reason to reject the source tree.
         if: always()
         continue-on-error: true
-        run: uv run smith doctor --fast
+        run: uv run awino doctor --fast
 
   install:
     name: Fresh install on ${{ matrix.os }}
@@ -105,8 +105,8 @@ jobs:
       - name: Confirm the install is usable
         shell: bash
         run: |
-          uv run smith context
-          uv run smith route "what is a harness"
-          test "$(uv run smith skills --paths | wc -l)" -ge 10
-          uv run smith limits --claims
+          uv run awino context
+          uv run awino route "what is a harness"
+          test "$(uv run awino skills --paths | wc -l)" -ge 10
+          uv run awino limits --claims
 

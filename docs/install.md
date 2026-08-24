@@ -45,9 +45,9 @@ Which does:
 | --- | --- | --- |
 | 1 | install `uv` if absent | `uv --version` |
 | 2 | build `.venv` from the lockfile | `uv sync --frozen` |
-| 3 | regenerate derived files | `smith fix` |
-| 4 | install persona and skills per harness | `smith install-status` |
-| 5 | run every project gate | `smith doctor` |
+| 3 | regenerate derived files | `awino fix` |
+| 4 | install persona and skills per harness | `awino install-status` |
+| 5 | run every project gate | `awino doctor` |
 | 6 | run the test suite | `pytest` |
 
 If step 5 or 6 fails, installation reports `INSTALL INCOMPLETE` and tells you the
@@ -93,7 +93,7 @@ and a stable copy is easier to reason about than a file that changes mid-session
 Check any time:
 
 ```bash
-smith install-status
+awino install-status
 ```
 
 ---
@@ -106,11 +106,11 @@ by hand.
 ### Automatic, for a specific harness
 
 ```bash
-smith install --harness claude      # ~/.claude/
-smith install --harness agents      # ~/.agents/
-smith install --harness kilo        # ~/.config/kilo/
-smith install --harness copilot     # VS Code user prompts directory
-smith install --harness cursor      # ~/.cursor/rules/, frontmatter adapted
+awino install --harness claude      # ~/.claude/
+awino install --harness agents      # ~/.agents/
+awino install --harness kilo        # ~/.config/kilo/
+awino install --harness copilot     # VS Code user prompts directory
+awino install --harness cursor      # ~/.cursor/rules/, frontmatter adapted
 ```
 
 Add `--scope project` to install into the current repository instead of your home
@@ -130,7 +130,7 @@ The persona is `agents/agent-smith.md` in the clone. Point your tool at it:
 | OpenAI Assistants | the `instructions` field |
 | Anything with a system prompt | paste the body, or reference the path |
 
-`smith install --harness cursor` rewrites the frontmatter for you. For everything
+`awino install --harness cursor` rewrites the frontmatter for you. For everything
 else the body is portable as-is.
 
 ### Pointer, for a project that should route to Smith
@@ -139,8 +139,8 @@ The lightest option: three lines in `AGENTS.md` or `CLAUDE.md` that make Smith
 discoverable without copying anything.
 
 ```bash
-smith pointer                 # print the block
-smith install --pointer       # append it to AGENTS.md or CLAUDE.md
+awino pointer                 # print the block
+awino install --pointer       # append it to AGENTS.md or CLAUDE.md
 ```
 
 Prefer this over copying Smith into a project. Copying forks its knowledge base;
@@ -151,14 +151,14 @@ a pointer does not.
 ## First five minutes
 
 ```bash
-smith context     # what Smith thinks home and project are
+awino context     # what Smith thinks home and project are
 smith mission     # what Smith thinks this project is for
-smith doctor      # health, with a remedy per finding
-smith skills      # what is available
-smith work        # tracked work, if a tracker exists
+awino doctor      # health, with a remedy per finding
+awino skills      # what is available
+awino work        # tracked work, if a tracker exists
 ```
 
-Run `smith context` **first, in every new repository.** Every gate command Smith
+Run `awino context` **first, in every new repository.** Every gate command Smith
 records comes from that resolution, so a wrong answer there makes every later green
 gate meaningless.
 
@@ -175,7 +175,7 @@ It should cite specific chapter paths and open at most three knowledge files.
 ## First real task
 
 ```bash
-smith plan "add retry logic to the fetch client"
+awino plan "add retry logic to the fetch client"
 ```
 
 That reports which rung the request actually sits on, where the binding constraint
@@ -199,7 +199,7 @@ Smith discovers your project's real commands, so you do not have to use its
 toolchain:
 
 ```bash
-smith context     # shows the detected install, lint, and test commands
+awino context     # shows the detected install, lint, and test commands
 ```
 
 ---
@@ -210,11 +210,11 @@ smith context     # shows the detected install, lint, and test commands
 cd ~/dev/agent-smith
 git pull
 uv sync --all-groups     # only if dependencies changed
-smith doctor             # confirm nothing broke
-smith update             # refresh knowledge against upstream
+awino doctor             # confirm nothing broke
+awino update             # refresh knowledge against upstream
 ```
 
-Skills update automatically via the links. `smith doctor` after a pull is the
+Skills update automatically via the links. `awino doctor` after a pull is the
 difference between believing the update worked and knowing it did.
 
 ---
@@ -227,7 +227,7 @@ The installer edits `PATH` for future shells. Open a new terminal, or
 
 **Symlinks fail on Windows**
 Smith falls back to a directory junction, then to a copy. A copy needs
-`smith install` re-run after each `git pull`; the output tells you which you got.
+`awino install` re-run after each `git pull`; the output tells you which you got.
 
 **`smith` is not recognized**
 It lives in the clone's environment. Use `uv run smith ...` from the clone, or
@@ -235,13 +235,13 @@ It lives in the clone's environment. Use `uv run smith ...` from the clone, or
 
 **`No global harness directories found`**
 No supported tool is installed yet. Name one explicitly with
-`smith install --harness claude`, which creates the directory.
+`awino install --harness claude`, which creates the directory.
 
 **The doctor fails right after install**
-Run `smith fix`. It repairs what is mechanically fixable and reports what needs
+Run `awino fix`. It repairs what is mechanically fixable and reports what needs
 judgement. Anything left is a real problem with a stated remedy.
 
 **Smith thinks the wrong directory is the project**
 Set `SMITH_PROJECT=/path/to/project`, or run from inside the project. Confirm with
-`smith context`.
+`awino context`.
 

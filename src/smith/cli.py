@@ -14,6 +14,7 @@ import re
 import subprocess
 import sys
 from datetime import UTC, datetime
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import typer
@@ -44,7 +45,7 @@ from smith.enforce import (
     detect_scope_violations,
     detect_test_weakening,
 )
-from smith.knowledge import BudgetExceeded, KnowledgeStore
+from smith.knowledge import BudgetExceeded, FetchError, KnowledgeStore
 from smith.paths import SmithPaths, Workspace
 from smith.tidy import Finding, Tidier
 from smith.toolchain import Toolchain
@@ -59,6 +60,33 @@ gate_app = typer.Typer(
     no_args_is_help=True, help="Run ledger. Completion is computed, never claimed."
 )
 gate_plan_app = typer.Typer(no_args_is_help=True, help="Review the current run's plan.")
+
+
+def _version() -> str:
+    try:
+        return version("awino-harness")
+    except PackageNotFoundError:
+        return "0+unknown"
+
+
+def version_callback(value: bool) -> None:
+    if value:
+        _echo(f"awino {_version()}")
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version_requested: bool = typer.Option(
+        False,
+        "--version",
+        callback=version_callback,
+        is_eager=True,
+        help="Show the installed A.W.I.N.O. version and exit.",
+    ),
+) -> None:
+    """A.W.I.N.O. command group."""
+    del version_requested
 
 
 def deprecated_smith_entry() -> None:
@@ -116,6 +144,9 @@ def fetch(
     except BudgetExceeded as exc:
         _echo(f"BUDGET_EXCEEDED  {exc}")
         raise typer.Exit(2) from exc
+    except FetchError as exc:
+        _echo(f"FETCH_FAILED  {exc}")
+        raise typer.Exit(1) from exc
     entry = store.manifest.get(source, path)
     sha = entry.sha if entry else "unknown"
     size = entry.bytes if entry else 0
@@ -203,6 +234,33 @@ def update_preflight_command(
         raise typer.Exit(1) from exc
     _echo(f"BACKUP  {backup}")
     _echo("UPDATED  source is clean and fast-forwarded")
+
+
+@app.command("rollback")
+def rollback_command(
+    backup: Path = typer.Argument(..., help="BACKUP path from update-preflight"),
+    include_harness: bool = typer.Option(
+        False,
+        "--include-harness",
+        help="Also restore detected harness files; project state is the safe default.",
+    ),
+) -> None:
+    """Restore user-owned project and harness state from a preflight backup."""
+    workspace = _workspace()
+    harness_paths: list[Path] = []
+    if include_harness:
+        mode_paths = [target.path for target in modes.discover(workspace.project.root)]
+        harness_paths = mode_paths + [
+            target.persona_path for target in harness.discover(workspace.project.root)
+        ]
+    try:
+        restored = updater.restore(backup, workspace.project.root, harness_paths)
+    except FileNotFoundError as exc:
+        _echo(f"ROLLBACK_FAILED  {exc}")
+        raise typer.Exit(1) from exc
+    for path in restored:
+        _echo(f"RESTORED  {path}")
+    _echo(f"ROLLBACK_COMPLETE  restored={len(restored)}")
 
 
 @app.command("watch")
@@ -1533,19 +1591,31 @@ def delegate_command(
     re-running the check.
     """
     workspace = _workspace()
-    payload = json.loads(plan_file.read_text(encoding="utf-8"))
-    assignments = [
-        spawn.Assignment(
-            agent_id=item["id"],
-            role=spawn.Role(item.get("role", "builder")),
-            objective=item["objective"],
-            file_scope=item.get("scope", []),
-            context_paths=item.get("context", []),
-            verification=item.get("verify", ""),
-            depends_on=item.get("depends_on", []),
-        )
-        for item in payload["assignments"]
-    ]
+    schema_help = (
+        '{"assignments":[{"id":"worker","role":"builder","objective":"...",'
+        '"scope":["path"],"context":[],"verify":"command","depends_on":[]}]}'
+    )
+    try:
+        payload = json.loads(plan_file.read_text(encoding="utf-8"))
+        items = payload["assignments"]
+        if not isinstance(items, list) or not items:
+            raise ValueError("assignments must be a non-empty array")
+        assignments = [
+            spawn.Assignment(
+                agent_id=item["id"],
+                role=spawn.Role(item.get("role", "builder")),
+                objective=item["objective"],
+                file_scope=item.get("scope", []),
+                context_paths=item.get("context", []),
+                verification=item.get("verify", ""),
+                depends_on=item.get("depends_on", []),
+            )
+            for item in items
+        ]
+    except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+        _echo(f"INVALID_PLAN  {exc}")
+        _echo(f"Expected schema: {schema_help}")
+        raise typer.Exit(2) from exc
 
     invalid = [(a.agent_id, a.problems()) for a in assignments if a.problems()]
     if invalid:

@@ -57,8 +57,8 @@ The installer detects and adapts to supported harnesses:
 Check what was found:
 
 ```bash
-smith install-status
-smith mode-status
+awino install-status
+awino mode-status
 ```
 
 ---
@@ -66,7 +66,7 @@ smith mode-status
 ## First command in a project
 
 ```bash
-smith onboard
+awino onboard
 ```
 
 It:
@@ -82,18 +82,18 @@ It:
 Example:
 
 ```bash
-smith onboard --set primary_user="working scientists reviewing literature"
-smith onboard --set goals="search open indexes; inspect evidence; cited synthesis"
-smith onboard --set tenets="no claim without source IDs; no credentials on disk"
-smith onboard --set expectations="free hosting; simple web UI; BYOK or local model"
-smith onboard --set success_metric="a scientist can review and trace every claim"
-smith onboard --confirm
+awino onboard --set primary_user="working scientists reviewing literature"
+awino onboard --set goals="search open indexes; inspect evidence; cited synthesis"
+awino onboard --set tenets="no claim without source IDs; no credentials on disk"
+awino onboard --set expectations="free hosting; simple web UI; BYOK or local model"
+awino onboard --set success_metric="a scientist can review and trace every claim"
+awino onboard --confirm
 ```
 
 Then:
 
 ```bash
-smith plan "build the first useful slice"
+awino plan "build the first useful slice"
 ```
 
 ---
@@ -104,7 +104,7 @@ A repository may add a short pointer to `AGENTS.md`, `CLAUDE.md`, `.goosehints`,
 or the harness-specific equivalent:
 
 ```bash
-smith pointer
+awino pointer
 ```
 
 The pointer says where Smith is installed and that agentic-engineering tasks should
@@ -123,7 +123,7 @@ If a harness is not detected:
 4. Grant only the tools appropriate to the intended role.
 
 The Markdown body is portable. Frontmatter and permission schemas are not, which
-is why `smith install` rebuilds them per harness.
+is why `awino install` rebuilds them per harness.
 
 ---
 
@@ -133,10 +133,10 @@ is why `smith install` rebuilds them per harness.
 cd <your-agent-smith-clone>
 git pull
 uv sync --all-groups
-smith install --overwrite
-smith install-mode --force
-smith doctor
-smith update
+awino install --overwrite
+awino install-mode --force
+awino doctor
+awino update
 ```
 
 Linked skills update with the clone. Personas and mode files are regenerated to
@@ -168,7 +168,7 @@ source-grounded project evidence requiring domain review.
 
 ```text
 1–2 well-understood files                 -> direct
-Mission or user outcome unclear           -> smith-discover / smith onboard
+Mission or user outcome unclear           -> smith-discover / awino onboard
 Codebase not understood                   -> smith-rpi research, then stop
 Clear machine-checkable gate, many tries  -> smith-ralph
 Independent disjoint workstreams          -> smith-delegate

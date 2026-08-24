@@ -80,3 +80,24 @@ def update_preflight(source: Path, project: Path, harness_paths: list[Path]) -> 
         if pull.returncode != 0:
             raise PreflightError(f"fast-forward pull failed: {pull.stderr.strip()}", backup)
     return backup
+
+
+def restore(backup: Path, project: Path, harness_paths: list[Path]) -> list[Path]:
+    """Restore user-owned project and harness files from a preflight snapshot."""
+    if not backup.is_dir():
+        raise FileNotFoundError(f"backup does not exist: {backup}")
+    restored: list[Path] = []
+    project_backup = backup / "project"
+    if project_backup.is_dir():
+        for item in sorted(project_backup.rglob("*")):
+            if item.is_file():
+                destination = project / item.relative_to(project_backup)
+                _copy(item, destination)
+                restored.append(destination)
+    harness_backup = backup / "harness"
+    for destination in harness_paths:
+        source = harness_backup / destination.name
+        if source.exists():
+            _copy(source, destination)
+            restored.append(destination)
+    return restored

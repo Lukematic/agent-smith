@@ -3,7 +3,7 @@
 # Trusted Publishing (OIDC) means no API token is stored in this repository. PyPI
 # verifies the workflow's identity directly, so there is no long-lived secret to
 # leak or rotate. Configure it once at
-# https://pypi.org/manage/project/smith-harness/settings/publishing/
+# https://pypi.org/manage/project/awino-harness/settings/publishing/
 #
 # The gates run before the build on purpose. Publishing an artifact that fails its
 # own test suite is the exact PREMATURE_COMPLETION this project exists to prevent,
@@ -59,15 +59,15 @@ jobs:
           path: test-results.xml
 
       - name: Validate authored artifacts
-        run: uv run smith validate skills agents
+        run: uv run awino validate skills agents
 
       - name: Prove the validator still blocks bad input
-        run: uv run smith validate --selftest
+        run: uv run awino validate --selftest
 
       - name: Project health (diagnostic)
         if: always()
         continue-on-error: true
-        run: uv run smith doctor --fast
+        run: uv run awino doctor --fast
 
   build:
     name: Build and verify the distribution
@@ -87,11 +87,11 @@ jobs:
         # missing, which fails on first use. Asserting the contents here is cheaper
         # than discovering it after release.
         run: |
-          uv tool install --from dist/*.whl smith-harness
+          uv tool install --from dist/*.whl awino-harness
           cd "$(mktemp -d)"
-          smith route "what is a harness" | tee routed.txt
+          awino route "what is a harness" | tee routed.txt
           grep -q "6-harnesses" routed.txt
-          test "$(smith skills --paths | wc -l)" -ge 10
+          test "$(awino skills --paths | wc -l)" -ge 10
           echo "wheel is self-sufficient"
 
       - name: Check distribution metadata
@@ -109,7 +109,7 @@ jobs:
     if: github.event_name == 'release' || inputs.dry_run == false
     environment:
       name: pypi
-      url: https://pypi.org/p/smith-harness
+      url: https://pypi.org/p/awino-harness
     permissions:
       # Required for Trusted Publishing. No PyPI token lives in this repository.
       id-token: write

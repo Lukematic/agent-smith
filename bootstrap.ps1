@@ -163,7 +163,7 @@ try {
 Write-Host ""
 if ($installFailed) {
     Bad "installation reported problems above"
-    Write-Host "  Fix what the doctor reported, then run: cd $Dir; uv run smith fix" -ForegroundColor Yellow
+    Write-Host "  Fix what the doctor reported, then run: cd $Dir; uv run awino fix" -ForegroundColor Yellow
     exit 1
 }
 
@@ -173,9 +173,9 @@ Write-Host "Smith lives at: $Dir" -ForegroundColor White
 Write-Host "Update it with: cd $Dir; git pull" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "First commands, in any project:" -ForegroundColor White
-Write-Host "  smith onboard     mission, user, goals, tenets, expectations"
-Write-Host "  smith plan        choose the right engineering rung and next step"
-Write-Host "  smith doctor      health, with remedies"
+Write-Host "  awino onboard     mission, user, goals, tenets, expectations"
+Write-Host "  awino plan        choose the right engineering rung and next step"
+Write-Host "  awino doctor      health, with remedies"
 Write-Host ""
 
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from smith.updater import PreflightError, update_preflight
+from smith.updater import PreflightError, restore, update_preflight
 
 
 def git(cwd: Path, *args: str) -> None:
@@ -87,3 +87,23 @@ def test_local_commit_refuses_pull_as_diverged(tmp_path: Path) -> None:
 
     with pytest.raises(PreflightError, match="diverged/local commits"):
         update_preflight(source, tmp_path / "project", harness_paths=[])
+
+
+def test_restore_recovers_project_and_harness_state(tmp_path: Path) -> None:
+    source, _ = repo(tmp_path)
+    project = tmp_path / "project"
+    memory = project / ".smith" / "memory"
+    memory.mkdir(parents=True)
+    lesson = memory / "lessons.md"
+    lesson.write_text("before\n", encoding="utf-8")
+    harness = tmp_path / "custom_modes.yaml"
+    harness.write_text("before\n", encoding="utf-8")
+    backup = update_preflight(source, project, harness_paths=[harness])
+    lesson.write_text("after\n", encoding="utf-8")
+    harness.write_text("after\n", encoding="utf-8")
+
+    restored = restore(backup, project, harness_paths=[harness])
+
+    assert restored == [lesson, harness]
+    assert lesson.read_text(encoding="utf-8") == "before\n"
+    assert harness.read_text(encoding="utf-8") == "before\n"

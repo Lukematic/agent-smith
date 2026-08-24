@@ -92,12 +92,12 @@ try {
 
 # ── 3. just, installed automatically when a package manager is available ─────
 # `just` is convenience rather than a requirement, so a failed install is a warning
-# and never blocks. Every recipe also runs as `uv run smith ...`.
+# and never blocks. Every recipe also runs as `uv run awino ...`.
 Write-Step "Checking just (task runner)"
 if (Get-Command just -ErrorAction SilentlyContinue) {
     Write-Ok "just present"
 } elseif ($NoTools) {
-    Write-Warn2 "just not found, skipped by -NoTools. Use 'uv run smith ...' instead"
+    Write-Warn2 "just not found, skipped by -NoTools. Use 'uv run awino ...' instead"
 } else {
     # winget first: it is present on current Windows and needs no toolchain.
     # cargo is the fallback for machines that have Rust but not winget.
@@ -129,7 +129,7 @@ if (Get-Command just -ErrorAction SilentlyContinue) {
         Write-Warn2 "$($candidate.Name) reported success but just is not yet on PATH"
     }
     if (-not $installed) {
-        Write-Warn2 "could not install just automatically. Optional: 'uv run smith ...' works without it"
+        Write-Warn2 "could not install just automatically. Optional: 'uv run awino ...' works without it"
     }
 }
 
@@ -163,10 +163,10 @@ if (Get-Command sd -ErrorAction SilentlyContinue) {
 
 # ── 4. self-repair, so a fresh clone is coherent ─────────────────────────────
 Write-Step "Regenerating derived files"
-uv run smith fix --no-check | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+uv run awino fix --no-check | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
 
 # ── 5. harness installation ──────────────────────────────────────────────────
-# Delegated to `smith install`, which detects Claude Code, Goose, Kilo, and Cursor
+# Delegated to `awino install`, which detects Claude Code, Goose, Kilo, and Cursor
 # and adapts to each one's layout. Duplicating that logic in shell would mean two
 # implementations drifting apart, and the shell copy would be the stale one.
 if ($NoLink) {
@@ -177,7 +177,7 @@ if ($NoLink) {
     $installArgs = @('install')
     if ($Scope -eq 'local') { $installArgs += @('--scope', 'project') }
 
-    $output = & uv run smith @installArgs 2>&1
+    $output = & uv run awino @installArgs 2>&1
     $installOk = $LASTEXITCODE -eq 0
     $output | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
 
@@ -185,7 +185,7 @@ if ($NoLink) {
         Write-Ok "persona and skills installed"
     } else {
         Write-Warn2 "no supported harness directory found"
-        Write-Host "  Name one explicitly, for example:  uv run smith install --harness claude" -ForegroundColor Yellow
+        Write-Host "  Name one explicitly, for example:  uv run awino install --harness claude" -ForegroundColor Yellow
     }
 
     # ── 5b. selectable modes for Kilo and Roo ────────────────────────────────
@@ -196,7 +196,7 @@ if ($NoLink) {
     $modeArgs = @('install-mode')
     if ($Scope -eq 'local') { $modeArgs += @('--scope', 'project') }
 
-    $modeOut = & uv run smith @modeArgs 2>&1
+    $modeOut = & uv run awino @modeArgs 2>&1
     $modeOk = $LASTEXITCODE -eq 0
     $modeOut | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
     if ($modeOk) {
@@ -208,7 +208,7 @@ if ($NoLink) {
 
 # ── 6. verify, never assume ──────────────────────────────────────────────────
 Write-Step "Verifying the install"
-$doctor = uv run smith doctor --fast 2>&1
+$doctor = uv run awino doctor --fast 2>&1
 $doctor | ForEach-Object { Write-Host "  $_" }
 $doctorFailed = $LASTEXITCODE -ne 0
 
@@ -221,15 +221,15 @@ Pop-Location
 Write-Host ""
 if ($doctorFailed -or $testsFailed) {
     Write-Host "INSTALL INCOMPLETE" -ForegroundColor Red
-    Write-Host "  Fix what the doctor reported, then run: uv run smith fix" -ForegroundColor Yellow
+    Write-Host "  Fix what the doctor reported, then run: uv run awino fix" -ForegroundColor Yellow
     exit 1
 }
 
 Write-Host "INSTALL COMPLETE" -ForegroundColor Green
 Write-Host ""
 Write-Host "Next:" -ForegroundColor White
-Write-Host "  In your project:      smith onboard"
-Write-Host "  Then plan work:       smith plan `"<your task>`""
-Write-Host "  Health check:         smith doctor"
-Write-Host "  Available skills:     smith skills"
+Write-Host "  In your project:      awino onboard"
+Write-Host "  Then plan work:       awino plan `"<your task>`""
+Write-Host "  Health check:         awino doctor"
+Write-Host "  Available skills:     awino skills"
 Write-Host ""
