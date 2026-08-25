@@ -578,6 +578,61 @@ class Verdict:
         return ""
 
 
+@dataclass(frozen=True)
+class ScoreItem:
+    """One inspectable score contribution derived from ledger state."""
+
+    name: str
+    points: int
+    evidence: str
+
+
+@dataclass(frozen=True)
+class RunScore:
+    """Advisory session score. It never changes whether a run may close."""
+
+    total: int
+    items: list[ScoreItem]
+    grade: str
+
+
+def score_run(run: Run, evidence: list[Evidence], verdict: Verdict) -> RunScore:
+    """Compute an anti-gaming score only from recorded, inspectable events."""
+    items: list[ScoreItem] = []
+    approved = [item for item in run.plan_decisions if item.decision == PlanDecision.APPROVED]
+    if approved:
+        items.append(ScoreItem("approved_plan", 15, approved[-1].plan_sha256))
+    executed_passes = [
+        item for item in evidence if item.passed and not item.command.startswith("ATTEST ")
+    ]
+    if executed_passes:
+        items.append(
+            ScoreItem(
+                "executed_verification",
+                10,
+                ", ".join(f"{item.gate}:{item.output_hash}" for item in executed_passes),
+            )
+        )
+    if verdict.can_close:
+        items.append(
+            ScoreItem("clean_completion", 45, f"{len(verdict.satisfied)} required gates satisfied")
+        )
+    failures = [item for item in evidence if not item.passed]
+    if failures:
+        items.append(ScoreItem("failed_attempts", -5 * len(failures), f"{len(failures)} recorded"))
+    if verdict.attested_only:
+        items.append(
+            ScoreItem(
+                "assertion_only_evidence",
+                -20,
+                ", ".join(verdict.attested_only),
+            )
+        )
+    total = sum(item.points for item in items)
+    grade = "verified" if verdict.can_close and executed_passes else "incomplete"
+    return RunScore(total=total, items=items, grade=grade)
+
+
 def adjudicate(run: Run, evidence: list[Evidence]) -> Verdict:
     """Compute whether a run may close, from the ledger alone."""
     latest: dict[str, Evidence] = {}

@@ -22,6 +22,7 @@ from smith.enforce import (
     adjudicate,
     detect_scope_violations,
     detect_test_weakening,
+    score_run,
 )
 
 
@@ -68,6 +69,24 @@ class TestRefusal:
         verdict = adjudicate(run, ledger.evidence(run.run_id))
         assert not verdict.can_close
         assert "GATE_FAILING" in verdict.blocked_reason
+
+    def test_score_rewards_executed_clean_completion(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.RESEARCH, "investigate")
+        ledger.record(run.run_id, Gate.RESEARCHED, "exit 0")
+        evidence = ledger.evidence(run.run_id)
+        score = score_run(run, evidence, adjudicate(run, evidence))
+        assert score.total == 55
+        assert score.grade == "verified"
+
+    def test_score_penalizes_attestation_only(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.AUTHORING, "author")
+        ledger.attest(run.run_id, Gate.PLANNED, "plan exists")
+        ledger.attest(run.run_id, Gate.VALIDATED, "looks valid")
+        ledger.attest(run.run_id, Gate.LESSON_RECORDED, "lesson noted")
+        evidence = ledger.evidence(run.run_id)
+        score = score_run(run, evidence, adjudicate(run, evidence))
+        assert score.total < 45
+        assert any(item.name == "assertion_only_evidence" for item in score.items)
 
     def test_closes_when_every_gate_passes(self, ledger: Ledger) -> None:
         run = ledger.open(TaskClass.RESEARCH, "investigate")

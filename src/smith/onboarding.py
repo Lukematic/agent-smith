@@ -39,6 +39,19 @@ ONBOARDING_FILE = ".smith/project.yaml"
 
 
 @dataclass
+class WorkflowPolicy:
+    """Project-specific workflow rules, including mechanically enforceable ones."""
+
+    one_task_per_session: bool = True
+    planning_interview: str = "adaptive-grill"
+    issue_required: bool = False
+    issue_pattern: str = ""
+    base_branch: str = ""
+    branch_pattern: str = ""
+    changelog_file: str = ""
+
+
+@dataclass
 class ProjectIntent:
     """Human-confirmed project intent, kept local to the project."""
 
@@ -49,6 +62,7 @@ class ProjectIntent:
     expectations: list[str] = field(default_factory=list)
     non_goals: list[str] = field(default_factory=list)
     success_metric: str = ""
+    workflow: WorkflowPolicy = field(default_factory=WorkflowPolicy)
     confirmed_at: str = ""
     confirmed_by: str = "human"
     source: str = "confirmed"
@@ -130,9 +144,13 @@ def load(project: Path) -> ProjectIntent | None:
     if not path.is_file():
         return None
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    return ProjectIntent(
-        **{k: v for k, v in data.items() if k in ProjectIntent.__dataclass_fields__}
-    )
+    values = {k: v for k, v in data.items() if k in ProjectIntent.__dataclass_fields__}
+    workflow = values.get("workflow") or {}
+    if isinstance(workflow, dict):
+        values["workflow"] = WorkflowPolicy(
+            **{k: v for k, v in workflow.items() if k in WorkflowPolicy.__dataclass_fields__}
+        )
+    return ProjectIntent(**values)
 
 
 def save(project: Path, intent: ProjectIntent) -> Path:
@@ -178,6 +196,33 @@ def apply(intent: ProjectIntent, key: str, value: str) -> ProjectIntent:
     else:
         setattr(intent, key, value.strip())
     return intent
+
+
+def remember(intent: ProjectIntent, kind: str, value: str) -> ProjectIntent:
+    """Store one explicit durable fact in its project-intent field."""
+    normalized = kind.strip().lower().replace("_", "-")
+    scalar = {
+        "mission": "mission",
+        "primary-user": "primary_user",
+        "success-metric": "success_metric",
+    }
+    plural = {
+        "goal": "goals",
+        "tenet": "tenets",
+        "expectation": "expectations",
+        "non-goal": "non_goals",
+    }
+    if normalized in scalar:
+        setattr(intent, scalar[normalized], value.strip())
+        return intent
+    if normalized in plural:
+        field_name = plural[normalized]
+        items = getattr(intent, field_name)
+        cleaned = value.strip()
+        if cleaned and cleaned not in items:
+            items.append(cleaned)
+        return intent
+    raise ValueError(f"unknown memory kind {kind!r}")
 
 
 def as_json(intent: ProjectIntent, questions: list[Question]) -> str:

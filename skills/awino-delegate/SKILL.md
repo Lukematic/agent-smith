@@ -10,6 +10,29 @@ the parent conversation. That isolation is the feature — it keeps the
 orchestrator's context clean — and the constraint: whatever the subagent needs
 must be in its assignment.
 
+This is A.W.I.N.O.'s orchestrator capability. Use it instead of maintaining a
+second always-on "master orchestrator" persona. The primary A.W.I.N.O. agent owns
+human alignment, project memory, run gates, and final verification; this skill owns
+decomposition, dispatch, and synthesis. One controller avoids two competing state
+machines while retaining focused subagent execution.
+
+## Orchestration contract
+
+For non-trivial work:
+
+1. Load confirmed `.smith/project.yaml` and the active issue/run.
+2. If planning decisions remain, use the adaptive grill and wait for approval.
+3. Create or link one tracked issue when the project requires it.
+4. Stabilize shared interfaces before parallel work.
+5. Spawn the minimum useful agents in dependency waves.
+6. Treat agents as specialists, not authorities: independently verify every result.
+7. Pause immediately on user `TWEAK`, update the plan/run checkpoint, then resume.
+8. Close and sync tracker state only after executed gates pass and only commit/push
+   when the user explicitly requested it.
+
+Each materially new user task starts in a fresh parent session. Subagents are fresh
+leaf sessions within that one task; they do not weaken the one-task-per-session rule.
+
 ## When NOT to parallelize
 
 | Situation | Why not | Do instead |
@@ -143,6 +166,7 @@ git status vs ownership table: clean / N unexpected files
 | `UNVERIFIED_TRUST` | accepted a success claim without running the check |
 | `BLOCKING_PROCESS` | subagent started a server and hung |
 | `SCOPE_CREEP_UNCAUGHT` | out-of-scope writes not reconciled against the table |
+| `COMPETING_CONTROLLER` | a second master orchestrator maintains separate state or rules |
 
 ## Completion
 

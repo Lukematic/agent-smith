@@ -25,6 +25,25 @@ the file wins.** Memory MCP is a cache; `$AWINO/memory/` is the ledger.
 That token cost is why entries are one line. Anything longer lives in a file and
 the memory entry points at the path.
 
+## User-facing memory contract
+
+When the user says **"remember this"**, do not merely acknowledge it and do not
+default to editing `CLAUDE.md`. Classify and persist it immediately:
+
+| User intent | Canonical project store | Command |
+| --- | --- | --- |
+| mission or user outcome | `.smith/project.yaml` | `awino remember --as mission "..."` |
+| invariant business or workflow rule | `.smith/project.yaml` tenets | `awino remember --as tenet "..."` |
+| quality, privacy, deployment expectation | `.smith/project.yaml` expectations | `awino remember --as expectation "..."` |
+| goal or explicit non-goal | `.smith/project.yaml` | `awino remember --as goal|non-goal "..."` |
+| repeated A.W.I.N.O. mistake | `.smith/memory/lessons.md` | append dated failure rule |
+
+`CLAUDE.md` remains team documentation, not A.W.I.N.O.'s canonical memory. Mirror a
+rule there only when the user wants every tool and human contributor to inherit it.
+The confirmed `.smith/project.yaml` is re-injected by hooks at session start and on
+every user prompt, so fresh task sessions retain mission, goals, tenets, and workflow
+constraints without carrying conversation history.
+
 ## The five categories — do not invent more
 
 | Category | `is_global` | Contains | Example |
@@ -116,10 +135,11 @@ out to have been right the first time.
 
 At session start, in this order:
 
-1. `$AWINO/memory/lessons.md` — binding rules that override defaults
-2. `retrieve_memories(category="agentic_doctrine", is_global=true)`
-3. `retrieve_memories(category="project_conventions", is_global=false)`
-4. Relevant `expertise/<domain>.jsonl` only when working that domain
+1. `.smith/project.yaml` — confirmed mission, goals, tenets, expectations, workflow
+2. `.smith/memory/lessons.md` — project-specific recurrence prevention
+3. `$AWINO/memory/lessons.md` — global binding rules that override defaults
+4. `retrieve_memories(category="agentic_doctrine", is_global=true)` when available
+5. Relevant `expertise/<domain>.jsonl` only when working that domain
 
 Lessons **override defaults**. If a lesson contradicts your instinct, the lesson
 wins — it was earned from a real failure.
@@ -154,11 +174,11 @@ Supersessions: N
 | Mode | Definition |
 | --- | --- |
 | `MEMORY_SPRAWL` | entries outside the five categories |
-| `SINGLE_WRITE` | stored to MCP without mirroring to a file, or vice versa |
+| `SINGLE_WRITE` | stored to MCP without mirroring to a file, or vice versa when MCP exists |
 | `CORPUS_IN_MEMORY` | chapter content stored instead of a decision |
 | `SCOPE_INVERSION` | project specifics stored global, or doctrine stored local |
 | `HISTORY_REWRITE` | a lessons.md line edited in place |
-| `PHANTOM_MEMORY` | write never confirmed by a retrieve |
+| `PHANTOM_MEMORY` | write never confirmed by reading its canonical project or global store |
 | `PREMATURE_FOUNDATIONAL` | one observation classified as confirmed doctrine |
 | `MULTILINE_ENTRY` | long entry riding in every prompt instead of living in a file |
 | `MISSING_LESSON` | non-trivial session ended with no memory write |

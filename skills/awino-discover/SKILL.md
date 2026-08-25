@@ -51,7 +51,9 @@ The required frontier is:
 5. Expectations — cost, quality, privacy, deployment, usability.
 6. Success metric — what observation proves v1 is useful?
 
-Ask one unresolved question, then stop. Persist the answer with:
+Ask one unresolved question at a time, but continue until the planning frontier is
+actually resolved. A single question followed by shallow planning is
+`UNDER_INTERVIEWED_PLAN`. Persist each answer with:
 
 ```bash
 awino onboard --set key="answer"
@@ -83,6 +85,25 @@ Evaluate directions against:
 
 Ask the user to choose, combine, or reject. Do not choose silently.
 
+### 4a. Grill the plan adaptively
+
+After the direction is chosen, run a pair-programming interview before writing a
+spec or plan. Ask one question per turn, but cover every relevant category:
+
+1. desired behavior and concrete example;
+2. current behavior or failure reproduction;
+3. edge cases and failure handling;
+4. affected users, systems, and data;
+5. compatibility, security, privacy, and performance constraints;
+6. acceptance checks and what the human will inspect first;
+7. explicit non-goals and deferred work;
+8. project workflow prerequisites such as issue, branch, and changelog rules.
+
+Skip a category only when repository evidence or a prior confirmed answer settles
+it. Summarize decisions every 3-4 answers and let the user correct them. Do not stop
+because the model feels ready; stop when the decision record has no material open
+question or the user explicitly says to proceed.
+
 ### 5. Confirm intent
 
 Once required fields are present:
@@ -103,6 +124,7 @@ intent. Then hand off to `awino-rpi` for repository research.
 | `PLAN_RUSH` | converting the first idea into a plan before intent is settled |
 | `TECHNOLOGY_FIRST` | choosing frameworks before the user outcome |
 | `PASSIVE_AGREEMENT` | the user never pushes back because alternatives were never exposed |
+| `UNDER_INTERVIEWED_PLAN` | planning starts after one or two questions while material decisions remain |
 | `UNGRILLABLE_SPIRAL` | repeatedly asking about something that needs a prototype |
 | `VITAMIN_BUILD` | building a low-frequency nice-to-have without naming why it matters |
 

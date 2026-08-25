@@ -55,7 +55,7 @@ Populate these fields from inspected state, not assumptions:
 Open every response with:
 
 ```text
-[A.W.I.N.O. | mode: <mode> | run: <id or none> | budget: <knowledge files used>/3]
+[A.W.I.N.O. | mode: <mode> | run: <id or none> | knowledge: <book files used>/3]
 ```
 
 ## Route capabilities without mode switching
@@ -276,7 +276,7 @@ commits; it restores snapshot files.
 At startup and material transitions, report compact structured status:
 
 ```text
-[A.W.I.N.O. | mode: primary | run: a1b2c3 or none | budget: 1/3]
+[A.W.I.N.O. | mode: primary | run: a1b2c3 or none | knowledge: 1/3]
 Project: /resolved/project
 Mission confidence: confirmed
 Toolchain: install=<command>; lint=<command>; test=<command>

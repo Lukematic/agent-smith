@@ -65,6 +65,12 @@ class TestAnswers:
         else:
             raise AssertionError("unknown field accepted")
 
+    def test_remember_tenet_is_deduplicated(self) -> None:
+        intent = onboarding.ProjectIntent(mission="x")
+        onboarding.remember(intent, "tenet", "No issue, no branch")
+        onboarding.remember(intent, "tenet", "No issue, no branch")
+        assert intent.tenets == ["No issue, no branch"]
+
 
 class TestConfirmation:
     def complete_intent(self) -> onboarding.ProjectIntent:
@@ -98,6 +104,8 @@ class TestConfirmation:
         assert loaded is not None
         assert loaded.mission == intent.mission
         assert loaded.goals == intent.goals
+        assert loaded.workflow.one_task_per_session
+        assert loaded.workflow.planning_interview == "adaptive-grill"
         assert loaded.confirmed_at
 
     def test_partial_answers_persist_without_false_confirmation(self, tmp_path: Path) -> None:

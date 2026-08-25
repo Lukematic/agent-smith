@@ -37,6 +37,10 @@ Format:
 - [2026-08-25] `DEFAULT_AGENT_SHADOWING` — set a plugin's default agent to its scoped identifier (`plugin:agent`), never a bare name that a user or project agent can shadow with a restricted tool list. (surface: tools)
 - [2026-08-25] `CHANNEL_ASSUMPTION` — route visuals to the richest format the active client can actually present; never claim inline rendering, Artifact publishing, or image generation without the corresponding tool. (surface: tools)
 - [2026-08-25] `PLUGIN_CLI_COLD_START` — a versioned plugin cache cannot rely on a `.venv` from the previous release; launch through `uv run --frozen --no-dev` so every installed version prepares its own locked environment automatically. (surface: tools)
+- [2026-08-25] `TENET_WITHOUT_SENSOR` — confirmed project tenets must be injected into every fresh task session and converted to hook checks wherever they are mechanically testable; a line in CLAUDE.md alone is documentation, not enforcement. (surface: memory + tools)
+- [2026-08-25] `UNDER_INTERVIEWED_PLAN` — one-question-at-a-time means sequencing, not stopping after one question; continue the adaptive planning grill until behavior, edges, constraints, acceptance, and non-goals are settled. (surface: prompt)
+- [2026-08-25] `COMPETING_CONTROLLER` — keep one human-facing A.W.I.N.O. controller and load `awino-delegate` for orchestration; a second master persona creates competing trackers, approval rules, and memory. (surface: context + tools)
+- [2026-08-25] `REWARD_THEATER` — fictional points in a prompt invite gaming; compute an advisory score only from plan decisions, executed gates, failures, and corrections, and never let score override closure. (surface: verification)
 
 ---
 

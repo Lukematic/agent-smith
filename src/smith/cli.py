@@ -28,7 +28,9 @@ from smith import (
     models,
     modes,
     onboarding,
+    project_guard,
     seeds,
+    session_state,
     skill_catalog,
     spawn,
     updater,
@@ -44,6 +46,7 @@ from smith.enforce import (
     adjudicate,
     detect_scope_violations,
     detect_test_weakening,
+    score_run,
 )
 from smith.knowledge import BudgetExceeded, FetchError, KnowledgeStore
 from smith.paths import SmithPaths, Workspace
@@ -380,7 +383,9 @@ def status() -> None:
     _echo(f"knowledge: {len(store.manifest.entries)} cached, {freshness} ({verdict})")
     _echo(f"registry: {len(store.registry_paths())} chapters indexed")
     _echo(f"memory: {lessons} binding lessons")
-    _echo(f"budget: {store.budget} files per task")
+    _echo(
+        f"knowledge budget: {store.budget} fetched book files per task; project files do not count"
+    )
 
 
 # ── validation ───────────────────────────────────────────────────────────────
@@ -817,13 +822,39 @@ def scaffold() -> None:
 
 
 @app.command()
-def hook() -> None:
-    """SessionStart staleness verdict. Wired from hooks/hooks.json."""
+def hook(event: str = typer.Argument("session-start", help="Hook event adapter")) -> None:
+    """Inject confirmed project memory and enforce project workflow guardrails."""
+    payload: dict = {}
     try:
         if not sys.stdin.isatty():
-            sys.stdin.read()
-    except (OSError, ValueError):
-        pass
+            payload = json.loads(sys.stdin.read() or "{}")
+    except (OSError, ValueError, json.JSONDecodeError):
+        payload = {}
+    workspace = _workspace()
+    project = workspace.project.root
+    intent = onboarding.load(project)
+    if event == "session-start":
+        if intent and intent.source == "confirmed":
+            session_state.start(workspace.state_root, str(payload.get("session_id") or "unknown"))
+            _echo(project_guard.project_context(intent))
+        _hook_freshness()
+        return
+    if event == "prompt":
+        if intent and intent.source == "confirmed":
+            context = project_guard.project_context(intent)
+            _echo(project_guard.emit(project_guard.prompt_context(context)))
+        return
+    if event == "pre-tool":
+        if intent and intent.source == "confirmed":
+            decision = project_guard.pre_tool_decision(intent, payload, project)
+            if decision:
+                _echo(project_guard.emit(decision))
+        return
+    _echo(f"unknown hook event {event!r}")
+    raise typer.Exit(2)
+
+
+def _hook_freshness() -> None:
     paths = _paths()
     store = KnowledgeStore(paths)
     age = store.manifest.newest_age_days
@@ -841,6 +872,67 @@ def hook() -> None:
     _echo(
         f"[awino] knowledge {age}d old ({verdict}) | cached: {len(store.manifest.entries)} | lessons: {lessons}"
     )
+
+
+@app.command("remember")
+def remember_command(
+    value: str = typer.Argument(..., help="Durable project fact or rule to remember"),
+    kind: str = typer.Option(
+        "tenet",
+        "--as",
+        help="tenet, goal, expectation, non-goal, mission, primary-user, success-metric",
+    ),
+) -> None:
+    """Persist an explicit user memory in this project's confirmed intent."""
+    project = _workspace().project.root
+    found = mission.discover(project, tracker=seeds.Seeds(project))
+    intent = onboarding.load(project) or onboarding.seed_from_mission(found)
+    try:
+        onboarding.remember(intent, kind, value)
+    except ValueError as exc:
+        _echo(str(exc))
+        raise typer.Exit(2) from exc
+    saved = onboarding.save(project, intent)
+    _echo(f"REMEMBERED  {kind}  {value.strip()}")
+    _echo(f"PROJECT     {saved}")
+
+
+@app.command("workflow")
+def workflow_command(
+    issue_pattern: str = typer.Option(None, "--issue-pattern"),
+    base_branch: str = typer.Option(None, "--base-branch"),
+    branch_pattern: str = typer.Option(None, "--branch-pattern"),
+    changelog_file: str = typer.Option(None, "--changelog-file"),
+    one_task_per_session: bool | None = typer.Option(
+        None, "--one-task-per-session/--allow-multiple-tasks"
+    ),
+    planning_interview: str = typer.Option(None, "--planning-interview"),
+) -> None:
+    """Configure mechanically enforced project workflow rules."""
+    project = _workspace().project.root
+    intent = onboarding.load(project)
+    if intent is None:
+        _echo("NO_PROJECT_INTENT  run awino onboard first")
+        raise typer.Exit(2)
+    workflow = intent.workflow
+    if issue_pattern is not None:
+        re.compile(issue_pattern)
+        workflow.issue_pattern = issue_pattern
+        workflow.issue_required = bool(issue_pattern)
+    if branch_pattern is not None:
+        re.compile(branch_pattern)
+        workflow.branch_pattern = branch_pattern
+    if base_branch is not None:
+        workflow.base_branch = base_branch
+    if changelog_file is not None:
+        workflow.changelog_file = changelog_file
+    if one_task_per_session is not None:
+        workflow.one_task_per_session = one_task_per_session
+    if planning_interview is not None:
+        workflow.planning_interview = planning_interview
+    saved = onboarding.save(project, intent)
+    _echo(f"WORKFLOW  {saved}")
+    _echo(project_guard.project_context(intent))
 
 
 @app.command("plan")
@@ -1870,6 +1962,17 @@ def gate_open(
         if not plan_path.is_file():
             _echo(f"PLAN_NOT_FOUND  {plan_path}")
             raise typer.Exit(2)
+    intent = onboarding.load(_workspace().project.root)
+    if intent and intent.source == "confirmed" and intent.workflow.issue_required:
+        if not issue:
+            _echo("ISSUE_REQUIRED  this project's workflow requires an issue ID")
+            raise typer.Exit(2)
+        if (
+            intent.workflow.issue_pattern
+            and re.fullmatch(intent.workflow.issue_pattern, issue) is None
+        ):
+            _echo(f"ISSUE_FORMAT  {issue!r} does not match {intent.workflow.issue_pattern!r}")
+            raise typer.Exit(2)
     linked_issue = _validate_issue(issue) if issue else None
     run = _ledger().open(
         task_class,
@@ -1879,6 +1982,16 @@ def gate_open(
         plan_path=plan_path,
         issue_id=linked_issue.id if linked_issue else None,
     )
+    if intent and intent.source == "confirmed":
+        try:
+            session_state.bind_run(
+                _workspace().state_root,
+                run.run_id,
+                enforce_one_task=intent.workflow.one_task_per_session,
+            )
+        except RuntimeError as exc:
+            _echo(f"NEW_SESSION_REQUIRED  {exc}")
+            raise typer.Exit(2) from exc
     _echo(f"RUN {run.run_id}  class={run.task_class}")
     _echo(f"objective: {run.objective}")
     if run.file_scope:
@@ -1952,6 +2065,24 @@ def gate_plan_status(run_id: str = typer.Option(None, "--run")) -> None:
     _echo(f"PLAN  {run.plan_path or '(none)'}")
     _echo(f"decision: {latest.decision if latest else 'none'}")
     _echo("VALID" if not problems else f"INVALID  {'; '.join(problems)}")
+
+
+@gate_app.command("score")
+def gate_score(run_id: str = typer.Option(None, "--run")) -> None:
+    """Print an advisory score computed only from recorded ledger evidence."""
+    resolved = _resolve_run(run_id)
+    ledger = _ledger()
+    run = ledger.load(resolved)
+    evidence = ledger.evidence(resolved)
+    verdict = adjudicate(run, evidence)
+    score = score_run(run, evidence, verdict)
+    _echo(f"SCORE  {score.total}  grade={score.grade}")
+    if not score.items:
+        _echo("  no scoreable evidence recorded")
+        return
+    for item in score.items:
+        _echo(f"  {item.points:+4d}  {item.name:<25} {item.evidence}")
+    _echo("NOTE   advisory only; gate close remains the completion authority")
 
 
 @gate_app.command("checkpoint")

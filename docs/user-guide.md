@@ -351,7 +351,7 @@ pending decision, and next action. A closed run may appear as stale rather than 
 
 Expect the controller to:
 
-- lead with `[A.W.I.N.O. | mode: ... | run: ... | budget: ...]`;
+- lead with `[A.W.I.N.O. | mode: ... | run: ... | knowledge: ...]`;
 - show the first-session orientation fields;
 - state the route or loop and why it fits;
 - distinguish confirmed facts, sourced claims, and inference;

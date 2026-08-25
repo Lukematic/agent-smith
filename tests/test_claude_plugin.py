@@ -136,6 +136,14 @@ def test_plugin_uses_official_root_and_never_initializes_project_state() -> None
     assert "uv tool install" not in combined
 
 
+def test_plugin_registers_project_memory_and_guard_hooks() -> None:
+    hooks = load_json("hooks/hooks.json")["hooks"]
+    assert "SessionStart" in hooks
+    assert "UserPromptSubmit" in hooks
+    assert "PreToolUse" in hooks
+    assert hooks["PreToolUse"][0]["matcher"] == "Bash"
+
+
 def test_missing_uv_launcher_is_truthfully_degraded(tmp_path: Path) -> None:
     env = os.environ.copy()
     env["PATH"] = str(tmp_path)
@@ -155,7 +163,8 @@ def test_missing_uv_launcher_is_truthfully_degraded(tmp_path: Path) -> None:
 
 
 def test_clean_plugin_cache_prepares_locked_environment_and_runs_doctor(tmp_path: Path) -> None:
-    plugin = tmp_path / "plugins" / "cache" / "awino" / "awino" / "0.4.1"
+    version = load_json("plugin.json")["version"]
+    plugin = tmp_path / "plugins" / "cache" / "awino" / "awino" / version
     shutil.copytree(
         ROOT,
         plugin,
