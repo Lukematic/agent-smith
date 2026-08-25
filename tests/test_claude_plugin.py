@@ -35,7 +35,7 @@ def test_native_plugin_manifest_is_explicit_and_uses_supported_defaults() -> Non
     assert manifest["name"] == "awino"
     assert "agents" not in manifest
     assert "hooks" not in manifest
-    assert settings == {"agent": "awino"}
+    assert settings == {"agent": "awino:awino"}
 
     plugin = marketplace["plugins"]
     assert len(plugin) == 1
@@ -61,6 +61,39 @@ def test_awino_agent_inherits_the_users_selected_model() -> None:
     assert "model: inherit" in agent
     assert "model: sonnet" not in agent
     assert "model: claude-sonnet" not in agent
+
+
+def test_plugin_default_agent_keeps_ask_user_question() -> None:
+    """The scoped plugin agent must not resolve to a shadowing user agent."""
+    # Claude prints the init event before authentication, so this remains a
+    # deterministic tool-resolution test in CI without credentials.
+    settings = json.dumps(load_json("settings.json"), separators=(",", ":"))
+    result = subprocess.run(
+        [
+            "claude",
+            "-p",
+            "--settings",
+            settings,
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "--max-turns",
+            "1",
+            "Respond OK.",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    events = [json.loads(line) for line in result.stdout.splitlines()]
+    init_line = next(
+        event
+        for event in events
+        if event.get("type") == "system" and event.get("subtype") == "init"
+    )
+
+    assert "AskUserQuestion" in init_line["tools"]
 
 
 def test_plugin_uses_official_root_and_never_initializes_project_state() -> None:
