@@ -30,7 +30,7 @@ claude plugin marketplace add Lukematic/agent-smith
 claude plugin install awino@awino
 ```
 
-The native install provides the `awino` agent and all 13 canonical `awino-*` skills
+The native install provides the `awino` agent and all 14 canonical `awino-*` skills
 automatically. It does not initialize `.seeds` or `.smith`, install Python, or run a
 global shell installer. The deterministic gate ledger is an optional CLI layer and
 requires `uv` plus Python 3.12 or later; its launcher prints `DEGRADED` and the exact

@@ -53,7 +53,7 @@ claude plugin marketplace add Lukematic/agent-smith
 claude plugin install awino@awino
 ```
 
-This installs and enables the `awino` agent and exactly 13 canonical `awino-*`
+This installs and enables the `awino` agent and exactly 14 canonical `awino-*`
 skills. A URL pasted into chat is not installation authorization: Claude Code's
 plugin trust boundary requires the user to perform one explicit install action.
 The agent must not replace that action with a global Bash mutation.

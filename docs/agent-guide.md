@@ -88,6 +88,7 @@ canonical names and intended routes are:
 | Knowledge and installation update work | `awino-self-update` |
 | Evidence sufficiency and citation review | `awino-evidence` |
 | Reproducible research pipelines | `awino-reproducibility` |
+| Diagrams, charts, schematics, and interactive visualizations | `awino-visualize` |
 | First-run scaffold and registry verification | `awino-bootstrap` |
 
 Do not treat routing as use. The observable lifecycle is:

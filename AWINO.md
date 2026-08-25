@@ -265,6 +265,7 @@ record the truthful `loaded` or `used` state:
 | "my agent does X wrong" | `awino-triage` | named mode, surface, structural fix, recurrence block |
 | factual research, RAG, scientific synthesis | `awino-evidence` | evidence sufficiency and citation release gate |
 | scientific/data/agent pipeline | `awino-reproducibility` | run IDs, snapshots, config/prompt versions, audit trail |
+| diagram, chart, visualization, image, schematic, dashboard | `awino-visualize` | route to Mermaid, SVG, HTML, or an available image tool |
 | complex multi-file change | `awino-rpi` | research → plan → implement, one goal per session |
 | needs many attempts, has a gate | `awino-ralph` | fresh context per iteration, cross-model review |
 | independent parallel work | `awino-delegate` | disjoint ownership, verified independently |

@@ -20,7 +20,15 @@ CANONICAL_SKILLS = {
     "awino-rpi",
     "awino-self-update",
     "awino-triage",
+    "awino-visualize",
 }
+
+VISUAL_TRIGGERS = (
+    "Create a Mermaid architecture diagram for this service",
+    "Chart these monthly results",
+    "Make an interactive dashboard for this data",
+    "Draw a technical schematic of the workflow",
+)
 
 
 def load_json(relative: str) -> dict:
@@ -49,6 +57,18 @@ def test_native_plugin_manifest_is_explicit_and_uses_supported_defaults() -> Non
 def test_repository_exposes_only_canonical_skills() -> None:
     found = {path.parent.name for path in (ROOT / "skills").glob("*/SKILL.md")}
     assert found == CANONICAL_SKILLS
+
+
+def test_visual_requests_route_to_awino_visualize() -> None:
+    from smith.skill_catalog import SkillCatalog
+
+    empty = ROOT / "tests" / "missing-skill-root"
+    catalog = SkillCatalog(empty, empty, ROOT / "skills")
+
+    for request in VISUAL_TRIGGERS:
+        recommendation = catalog.recommend(request)
+        assert recommendation is not None
+        assert recommendation.skill.name == "awino-visualize"
 
 
 def test_repository_exposes_only_the_awino_agent() -> None:

@@ -169,6 +169,7 @@ prerequisite.
 | "I need a tool for X" | `awino:awino-author-tool` |
 | "remember this", "what did we decide" | `awino:awino-memory` |
 | "update yourself", "refresh knowledge" | `awino:awino-self-update` |
+| diagram, chart, visualization, image, schematic, dashboard | `awino:awino-visualize` |
 
 Record which skills you actually used, so usage is auditable rather than assumed:
 

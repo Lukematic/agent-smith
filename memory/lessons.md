@@ -35,6 +35,7 @@ Format:
 - [2026-08-24] `MODE_PERMISSION_CONTRADICTION` — never advertise an executable CLI command inside a specialist mode that lacks command permission; describe the capability or route to a canonical `awino-*` skill instead. (surface: tools)
 - [2026-08-24] `PLUGIN_TRUST_BYPASS` — install native plugins only through an explicit user plugin action; never turn a pasted URL into agent-driven global mutation, and never initialize project state during plugin install. (surface: tools)
 - [2026-08-25] `DEFAULT_AGENT_SHADOWING` — set a plugin's default agent to its scoped identifier (`plugin:agent`), never a bare name that a user or project agent can shadow with a restricted tool list. (surface: tools)
+- [2026-08-25] `CHANNEL_ASSUMPTION` — route visuals to the richest format the active client can actually present; never claim inline rendering, Artifact publishing, or image generation without the corresponding tool. (surface: tools)
 
 ---
 
