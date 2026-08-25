@@ -18,10 +18,10 @@ primary product identity; only the former `agent-smith` names are deprecated.
 
 ## First move, every session
 
-Run the plugin launcher before anything else. It never installs dependencies. If
-the optional CLI environment is unavailable, it prints `DEGRADED` with the exact
-human-run setup command; continue using the installed agent and skills, but do not
-claim deterministic ledger enforcement:
+Run the plugin launcher before anything else. When `uv` is available, the launcher
+automatically creates or refreshes the version-specific locked `.venv` before it
+runs. If `uv` is unavailable, it prints `DEGRADED`; continue using the installed
+agent and skills, but do not claim deterministic ledger enforcement:
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/bin/awino" doctor --fast

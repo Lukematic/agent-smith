@@ -5,16 +5,10 @@ set "PLUGIN_ROOT=%~dp0.."
 where uv >nul 2>nul
 if errorlevel 1 (
   >&2 echo DEGRADED: A.W.I.N.O. agent and skills are active, but the deterministic ledger CLI needs uv and Python.
-  >&2 echo Install uv, then explicitly run: uv sync --directory "%PLUGIN_ROOT%" --frozen
+  >&2 echo Install uv, then run this command again. The locked CLI environment will be prepared automatically.
   if "%~1"=="hook" exit /b 0
   exit /b 1
 )
 
-if not exist "%PLUGIN_ROOT%\.venv\Scripts\awino.exe" if not exist "%PLUGIN_ROOT%\.venv\bin\awino" (
-  >&2 echo DEGRADED: A.W.I.N.O. agent and skills are active, but the deterministic ledger CLI environment is not prepared.
-  >&2 echo Nothing was installed automatically. Explicitly run: uv sync --directory "%PLUGIN_ROOT%" --frozen
-  if "%~1"=="hook" exit /b 0
-  exit /b 1
-)
-
-uv run --no-sync --directory "%PLUGIN_ROOT%" awino %*
+if not defined UV_LINK_MODE set "UV_LINK_MODE=copy"
+uv run --frozen --no-dev --directory "%PLUGIN_ROOT%" awino %*

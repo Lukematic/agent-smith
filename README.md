@@ -33,8 +33,8 @@ claude plugin install awino@awino
 The native install provides the `awino` agent and all 14 canonical `awino-*` skills
 automatically. It does not initialize `.seeds` or `.smith`, install Python, or run a
 global shell installer. The deterministic gate ledger is an optional CLI layer and
-requires `uv` plus Python 3.12 or later; its launcher prints `DEGRADED` and the exact
-setup command when unavailable, without silently installing anything.
+requires `uv`. Its launcher automatically creates or refreshes a locked `.venv`
+for each installed plugin version and prints `DEGRADED` when `uv` is unavailable.
 
 After reload, select the `awino` agent. In a new project, let it ask before running
 `awino work-init`.

@@ -110,7 +110,7 @@ KNOWN: dict[str, tuple[str, str, str, str]] = {
         "Cross-platform launchers for the optional deterministic A.W.I.N.O. CLI.",
         "Claude Code adds this directory to the Bash tool PATH while the plugin is enabled.",
         "POSIX shell and Windows command scripts.",
-        "Never install dependencies; report DEGRADED with an explicit remedy when unavailable.",
+        "Prepare a locked version-specific environment automatically; report DEGRADED when uv is unavailable.",
     ),
     "templates": (
         "Scaffolding for authored artifacts, with `{{PLACEHOLDER}}` slots.",

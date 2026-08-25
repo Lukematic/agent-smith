@@ -61,11 +61,11 @@ The agent must not replace that action with a global Bash mutation.
 Plugin installation does not create `.seeds`, `.smith`, or any project-local state.
 In a new project, A.W.I.N.O. asks for approval before using `awino work-init`.
 
-The agent and skills need no Python dependency. The deterministic ledger CLI does:
-it requires `uv` and Python 3.12 or later. The cross-platform plugin launcher never
-installs these automatically. When they or the plugin environment are absent it
-prints `DEGRADED` with an explicit `uv sync --directory ... --frozen` remedy; agent
-and skill guidance remains available, but command-backed ledger claims do not.
+The agent and skills need no Python dependency. The deterministic ledger CLI needs
+`uv`. The cross-platform launcher runs `uv run --frozen --no-dev`, which creates or
+refreshes a version-specific locked `.venv` automatically after plugin installs and
+updates. If `uv` is absent or preparation fails, it prints `DEGRADED`; agent and
+skill guidance remains available, but command-backed ledger claims do not.
 
 Update or uninstall through the same trusted plugin interface:
 

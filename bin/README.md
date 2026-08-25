@@ -14,4 +14,6 @@ POSIX shell and Windows command scripts.
 
 ## Stability
 
-Launchers never install dependencies. They report `DEGRADED` when the optional CLI environment is unavailable.
+Launchers use `uv run --frozen --no-dev` to create or refresh the version-specific
+locked `.venv` automatically. They report `DEGRADED` only when `uv` is unavailable
+or locked environment preparation fails.

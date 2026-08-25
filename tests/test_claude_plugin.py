@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -150,7 +151,53 @@ def test_missing_uv_launcher_is_truthfully_degraded(tmp_path: Path) -> None:
     assert result.returncode == 1
     assert "DEGRADED" in result.stderr
     assert "needs uv and Python" in result.stderr
-    assert "uv sync --directory" in result.stderr
+    assert "run this command again" in result.stderr
+
+
+def test_clean_plugin_cache_prepares_locked_environment_and_runs_doctor(tmp_path: Path) -> None:
+    plugin = tmp_path / "plugins" / "cache" / "awino" / "awino" / "0.4.1"
+    shutil.copytree(
+        ROOT,
+        plugin,
+        ignore=shutil.ignore_patterns(".git", ".venv", ".pytest_cache", ".ruff_cache"),
+    )
+    env = os.environ.copy()
+    env["UV_LINK_MODE"] = "copy"
+    if os.name == "nt":
+        command = [
+            "C:\\Windows\\System32\\cmd.exe",
+            "/d",
+            "/c",
+            str(plugin / "bin" / "awino.cmd"),
+            "doctor",
+            "--fast",
+        ]
+    else:
+        command = ["sh", str(plugin / "bin" / "awino"), "doctor", "--fast"]
+
+    first = subprocess.run(
+        command,
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=180,
+    )
+    second = subprocess.run(
+        command,
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=180,
+    )
+
+    assert first.returncode == 0, first.stdout + first.stderr
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert "HEALTH" in first.stdout
+    assert (plugin / ".venv").is_dir()
 
 
 def test_claude_cli_strictly_validates_plugin_and_marketplace() -> None:

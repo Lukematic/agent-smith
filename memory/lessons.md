@@ -36,6 +36,7 @@ Format:
 - [2026-08-24] `PLUGIN_TRUST_BYPASS` — install native plugins only through an explicit user plugin action; never turn a pasted URL into agent-driven global mutation, and never initialize project state during plugin install. (surface: tools)
 - [2026-08-25] `DEFAULT_AGENT_SHADOWING` — set a plugin's default agent to its scoped identifier (`plugin:agent`), never a bare name that a user or project agent can shadow with a restricted tool list. (surface: tools)
 - [2026-08-25] `CHANNEL_ASSUMPTION` — route visuals to the richest format the active client can actually present; never claim inline rendering, Artifact publishing, or image generation without the corresponding tool. (surface: tools)
+- [2026-08-25] `PLUGIN_CLI_COLD_START` — a versioned plugin cache cannot rely on a `.venv` from the previous release; launch through `uv run --frozen --no-dev` so every installed version prepares its own locked environment automatically. (surface: tools)
 
 ---
 

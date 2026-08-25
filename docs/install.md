@@ -30,8 +30,10 @@ does not initialize `.seeds` or `.smith`. A.W.I.N.O. asks before project setup a
 uses `awino work-init` after approval.
 
 The native agent and skills work without the Python CLI. Deterministic ledger,
-mission, and gate commands require `uv` and Python 3.12 or later. Plugin launchers
-do not install them; they emit a clear `DEGRADED` result and setup command instead.
+mission, and gate commands require `uv`. On first use after an install or update,
+the plugin launcher uses the committed lockfile to create that version's `.venv`
+automatically. It emits `DEGRADED` only when `uv` is unavailable or preparation
+fails.
 
 Update with `claude plugin update awino@awino`, uninstall with
 `claude plugin uninstall awino@awino`, and run `/reload-plugins` after updates.
