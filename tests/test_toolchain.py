@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
+from typer.testing import CliRunner
+
+from smith import cli
 from smith.toolchain import Manager, Toolchain
 
 
@@ -87,3 +91,44 @@ requires-python = ">=3.12"
         assert chain.install_command.command == "uv sync --all-groups"
         assert chain.test_command.command == "uv run pytest -q"
         assert chain.lint_command.command == "uv run ruff check ."
+
+    def test_locked_uv_project_without_venv_reports_sync_without_creating_it(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / "pyproject.toml").write_text(
+            '[project]\nname="x"\nversion="0.1"\nrequires-python=">=3.12"\n',
+            encoding="utf-8",
+        )
+        (project / "uv.lock").write_text("version = 1\nrevision = 3\n", encoding="utf-8")
+        monkeypatch.setenv("AWINO_PROJECT", str(project))
+
+        result = CliRunner().invoke(cli.app, ["setup", "--dry-run"])
+
+        assert result.exit_code == 0, result.output
+        assert "command: uv sync --all-groups" in result.output
+        assert "DRY_RUN  nothing executed" in result.output
+        assert not (project / ".venv").exists()
+
+    def test_env_explains_uv_and_prints_activation_commands(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / "pyproject.toml").write_text(
+            '[project]\nname="x"\nversion="0.1"\nrequires-python=">=3.12"\n',
+            encoding="utf-8",
+        )
+        (project / "uv.lock").write_text("version = 1\nrevision = 3\n", encoding="utf-8")
+        (project / ".venv" / ("Scripts" if os.name == "nt" else "bin")).mkdir(parents=True)
+        monkeypatch.setenv("AWINO_PROJECT", str(project))
+
+        result = CliRunner().invoke(cli.app, ["env"])
+
+        assert result.exit_code == 0, result.output
+        assert "manager: uv" in result.output
+        assert f"environment: {project / '.venv'}" in result.output
+        assert ". .venv/bin/activate" in result.output
+        assert ".venv\\Scripts\\activate" in result.output
+        assert "Activation is unnecessary with uv run" in result.output

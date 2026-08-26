@@ -1,5 +1,6 @@
 @echo off
 setlocal
+if not defined AWINO_PROJECT set "AWINO_PROJECT=%CD%"
 set "PLUGIN_ROOT=%~dp0.."
 
 where uv >nul 2>nul
@@ -11,4 +12,6 @@ if errorlevel 1 (
 )
 
 if not defined UV_LINK_MODE set "UV_LINK_MODE=copy"
+set "VIRTUAL_ENV="
+set "CONDA_PREFIX="
 uv run --frozen --no-dev --directory "%PLUGIN_ROOT%" awino %*

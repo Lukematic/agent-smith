@@ -51,7 +51,7 @@ from smith.enforce import (
 from smith.knowledge import BudgetExceeded, FetchError, KnowledgeStore
 from smith.paths import SmithPaths, Workspace
 from smith.tidy import Finding, Tidier
-from smith.toolchain import Toolchain
+from smith.toolchain import Manager, Toolchain
 from smith.validate import BROKEN_SELFTEST, Status, discover, validate_file, validate_text
 
 app = typer.Typer(
@@ -1831,15 +1831,33 @@ def context() -> None:
             _echo(f"  - {item}")
 
 
+@app.command("env")
+def environment() -> None:
+    """Explain the target project's Python environment without changing it."""
+    workspace = _workspace()
+    chain = _toolchain(workspace)
+    manager, reason = chain.manager
+    project_env = chain.in_project_venv
+
+    _echo(f"project: {workspace.project.root}")
+    _echo(f"manager: {manager}")
+    _echo(f"detected because: {reason}")
+    _echo(f"environment: {project_env or 'not created'}")
+    _echo("POSIX activation: . .venv/bin/activate")
+    _echo(r"Windows activation: .venv\Scripts\activate")
+    _echo("Activation is unnecessary with uv run; uv selects the project from the command cwd.")
+    if manager is Manager.UV and project_env is None:
+        _echo("Create it only when intended: awino setup")
+
+
 @app.command()
 def setup(
     dry_run: bool = typer.Option(False, "--dry-run", help="Print the command without running it"),
 ) -> None:
     """Install the project's dependencies using whatever manager it already uses.
 
-    A.W.I.N.O. does not impose uv. It reproduces a committed lockfile when one exists,
-    respects an active environment when one is present, and falls back to pip only
-    when nothing better is declared.
+    A.W.I.N.O. does not impose uv. It reproduces a committed lockfile when one exists
+    and creates no environment unless this command is explicitly run without --dry-run.
     """
     workspace = _workspace()
     chain = _toolchain(workspace)

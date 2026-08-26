@@ -107,6 +107,17 @@ Only `git` cannot be installed for you. `just` is convenience: every recipe also
 runs as `uv run awino ...`. Seeds is an optional issue tracker; A.W.I.N.O. never
 installs or initializes it without being asked.
 
+The plugin's A.W.I.N.O. backend has its own locked environment. Its launcher ignores
+`VIRTUAL_ENV` and `CONDA_PREFIX` only for that child process, preserving the user's
+shell and the caller directory as `AWINO_PROJECT`. Target commands execute from that
+project directory. In a uv project, `uv run` selects the target `.venv` by cwd without
+`--active`. Use `awino env` for detected-manager details and optional POSIX/Windows
+activation commands; activation is not required. `awino setup --dry-run` is read-only,
+and onboarding never creates an environment.
+
+In short: Python executes code; `venv` isolates packages; `pip` installs packages;
+`uv` locks, synchronizes, and runs a project's declared environment.
+
 ---
 
 ## Where it lands

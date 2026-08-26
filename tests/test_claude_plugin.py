@@ -209,6 +209,96 @@ def test_clean_plugin_cache_prepares_locked_environment_and_runs_doctor(tmp_path
     assert (plugin / ".venv").is_dir()
 
 
+def test_launcher_isolates_backend_environment_and_keeps_target_project(tmp_path: Path) -> None:
+    version = load_json("plugin.json")["version"]
+    plugin = tmp_path / "plugins" / "cache" / "awino" / "awino" / version
+    shutil.copytree(
+        ROOT,
+        plugin,
+        ignore=shutil.ignore_patterns(".git", ".venv", ".pytest_cache", ".ruff_cache"),
+    )
+    project = tmp_path / "target"
+    project.mkdir()
+    (project / "pyproject.toml").write_text(
+        '[project]\nname = "target"\nversion = "0.1.0"\nrequires-python = ">=3.12"\n',
+        encoding="utf-8",
+    )
+    (project / "target.txt").write_text("before\n", encoding="utf-8")
+    subprocess.run(["uv", "lock"], cwd=project, check=True, capture_output=True, text=True)
+    subprocess.run(["uv", "sync"], cwd=project, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=project, check=True)
+    subprocess.run(
+        ["git", "-c", "user.email=t@t.com", "-c", "user.name=t", "commit", "-q", "-m", "init"],
+        cwd=project,
+        check=True,
+    )
+
+    env = os.environ.copy()
+    env.pop("AWINO_PROJECT", None)
+    env.pop("SMITH_PROJECT", None)
+    env["VIRTUAL_ENV"] = str(project / ".venv")
+    env["CONDA_PREFIX"] = str(project / ".venv")
+    env["UV_LINK_MODE"] = "copy"
+    if os.name == "nt":
+        launcher = [
+            "C:\\Windows\\System32\\cmd.exe",
+            "/d",
+            "/c",
+            str(plugin / "bin" / "awino.cmd"),
+        ]
+    else:
+        launcher = ["sh", str(plugin / "bin" / "awino")]
+
+    def run(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [*launcher, *args],
+            cwd=project,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=180,
+        )
+
+    context = run("context")
+    assert context.returncode == 0, context.stdout + context.stderr
+    assert f"project       {project}" in context.stdout
+    assert "VIRTUAL_ENV" not in context.stderr
+    assert "does not match the project environment path" not in context.stderr
+
+    plan = project / "plan.md"
+    plan.write_text("# Plan\n", encoding="utf-8")
+    opened = run(
+        "gate",
+        "open",
+        "code-change",
+        "launcher regression",
+        "--scope",
+        "target.txt",
+        "--plan",
+        str(plan),
+    )
+    assert opened.returncode == 0, opened.stdout + opened.stderr
+    approved = run("gate", "plan", "approve", "--by", "test")
+    assert approved.returncode == 0, approved.stdout + approved.stderr
+    recorded = run(
+        "gate",
+        "record",
+        "tested",
+        "--cmd",
+        'uv run python -c "import pathlib,sys; print(pathlib.Path(sys.prefix).resolve())"',
+    )
+    assert recorded.returncode == 0, recorded.stdout + recorded.stderr
+    assert str((project / ".venv").resolve()) in recorded.stdout
+    (project / "target.txt").write_text("after\n", encoding="utf-8")
+    checked = run("gate", "check", "--diff-base", "HEAD")
+    assert checked.returncode == 0, checked.stdout + checked.stderr
+    assert "GIT_DIFF_FAILED" not in checked.stdout
+    assert "TESTS_NOT_WEAKENED  ok" in checked.stdout
+    assert "SCOPE_RESPECTED  ok" in checked.stdout
+
+
 def test_claude_cli_strictly_validates_plugin_and_marketplace() -> None:
     result = subprocess.run(
         ["claude", "plugin", "validate", ".", "--strict"],

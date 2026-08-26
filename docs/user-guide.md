@@ -67,6 +67,19 @@ refreshes a version-specific locked `.venv` automatically after plugin installs 
 updates. If `uv` is absent or preparation fails, it prints `DEGRADED`; agent and
 skill guidance remains available, but command-backed ledger claims do not.
 
+The launcher isolates that backend environment from the current project's activated
+environment; it does not deactivate or alter the parent shell. Target commands still
+run from the target root. For a target with committed `pyproject.toml` and `uv.lock`,
+`uv run` selects the target's `.venv` from that working directory, so `--active` and
+manual activation are unnecessary. `awino env` reports the detected manager and
+optional activation commands. `awino setup --dry-run` reports required setup without
+creating anything; only an explicit real `awino setup` may create `.venv`.
+
+`Python` is the interpreter, `venv` is an isolated directory for one project's
+packages, `pip` installs packages into an interpreter environment, and `uv` manages
+locked dependencies and runs commands in the environment selected by the project
+directory. A.W.I.N.O. does not create a target environment during onboarding.
+
 Update or uninstall through the same trusted plugin interface:
 
 ```text
