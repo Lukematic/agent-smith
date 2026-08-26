@@ -6,6 +6,10 @@ This is the operating contract for AI agents, mode authors, and harness integrat
 It defines what must happen at startup, how capabilities are routed, what state must
 survive a handoff, and what evidence is required before a completion claim.
 
+The companion [operating guide](operating-guide.md) explains these mechanisms from
+the user's perspective, including status semantics, loop transitions, task classes,
+and concrete prompts.
+
 ## Startup protocol
 
 Run the fast health gate before substantive work:
@@ -55,7 +59,7 @@ Populate these fields from inspected state, not assumptions:
 Open every response with:
 
 ```text
-[A.W.I.N.O. | mode: <mode> | run: <id or none> | knowledge: <book files used>/3]
+[A.W.I.N.O. | mode: <mode> | loop: <direct|rpi|ralph|delegate> | run: <id or none> | knowledge: <book files used>/3]
 ```
 
 ## Route capabilities without mode switching
@@ -276,7 +280,7 @@ commits; it restores snapshot files.
 At startup and material transitions, report compact structured status:
 
 ```text
-[A.W.I.N.O. | mode: primary | run: a1b2c3 or none | knowledge: 1/3]
+[A.W.I.N.O. | mode: testing | loop: rpi | run: a1b2c3 or none | knowledge: 1/3]
 Project: /resolved/project
 Mission confidence: confirmed
 Toolchain: install=<command>; lint=<command>; test=<command>
@@ -318,6 +322,7 @@ Rules:
 
 ## References
 
+- [Operating guide](operating-guide.md)
 - [User guide](user-guide.md)
 - [Architecture](architecture.md)
 - [Gate enforcement](enforcement.md)

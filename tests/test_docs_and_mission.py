@@ -13,6 +13,59 @@ from pathlib import Path
 from smith import fair, mission
 from smith.mission import Confidence, Kind
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+
+
+class TestOperatingGuide:
+    def test_is_linked_from_all_documentation_entry_points(self) -> None:
+        for relative in (
+            "README.md",
+            "docs/README.md",
+            "docs/user-guide.md",
+            "docs/agent-guide.md",
+        ):
+            text = (REPOSITORY_ROOT / relative).read_text(encoding="utf-8")
+            assert "operating-guide.md" in text, relative
+
+    def test_covers_status_contract_and_required_distinctions(self) -> None:
+        text = (REPOSITORY_ROOT / "docs/operating-guide.md").read_text(encoding="utf-8")
+        required = (
+            "[A.W.I.N.O. | mode: architecture | loop: direct | run: none | knowledge: 0/3]",
+            "not money",
+            "not an LLM token counter",
+            "resets for the next task",
+            "Kilo/Roo custom mode",
+            "leverage ladder",
+            "direct → rpi",
+            "Planned, not current",
+            "## Quick reference",
+            "## Glossary",
+        )
+        for phrase in required:
+            assert phrase in text, phrase
+
+    def test_covers_every_task_contract_and_requested_scenario(self) -> None:
+        text = (REPOSITORY_ROOT / "docs/operating-guide.md").read_text(encoding="utf-8")
+        for task_class in (
+            "question",
+            "research",
+            "code-change",
+            "bugfix",
+            "refactor",
+            "authoring",
+        ):
+            assert f"`{task_class}`" in text
+        for heading in (
+            "### Ask an agentic-engineering question",
+            "### Fix a bug",
+            "### Implement a multi-file feature",
+            "### Conduct research",
+            "### Run a reproducible pipeline",
+            "### Resume interrupted work",
+            "### Handle a blocked decision",
+        ):
+            assert heading in text
+
 
 class TestFairExemptions:
     def test_tool_caches_are_exempt(self, tmp_path: Path) -> None:

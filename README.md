@@ -8,6 +8,7 @@ remain unsatisfied.
 ## Start here
 
 - **Using A.W.I.N.O.:** [User guide](docs/user-guide.md)
+- **Understanding the operating model:** [Operating guide](docs/operating-guide.md)
 - **Integrating or operating A.W.I.N.O.:** [Agent and harness guide](docs/agent-guide.md)
 - **All documentation:** [Documentation index](docs/README.md)
 
@@ -100,6 +101,7 @@ The generated editor modes are: 🧭 A.W.I.N.O., 🧭 A.W.I.N.O. Consult,
 
 | Document | Purpose |
 | --- | --- |
+| [Operating guide](docs/operating-guide.md) | Status fields, modes versus loops, knowledge budget, gates, scenarios, and evidence-driven interaction |
 | [User guide](docs/user-guide.md) | Installation, paired work, Seeds, gates, updates, and troubleshooting |
 | [Agent and harness guide](docs/agent-guide.md) | Startup, routing, plans, checkpoints, verification, and status protocol |
 | [Mission](docs/MISSION.md) | Product mission and naming rationale |

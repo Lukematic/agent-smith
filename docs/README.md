@@ -8,6 +8,7 @@ Long-form, task-oriented documentation for A.W.I.N.O.
 
 | Guide | Audience | Covers |
 | --- | --- | --- |
+| [Operating guide](operating-guide.md) | Anyone working with A.W.I.N.O. | Status and orientation, modes, loops, knowledge budget, end-to-end operation, task gates, scenarios, and glossary |
 | [User guide](user-guide.md) | People pairing with A.W.I.N.O. | Setup, first session, plans, Seeds, evidence, resume, updates, and troubleshooting |
 | [Agent and harness guide](agent-guide.md) | AI agents and harness authors | Startup contract, routing, skills, run protocol, checkpoints, verification, and status reporting |
 

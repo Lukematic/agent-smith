@@ -6,6 +6,10 @@ This guide is for people who want to pair with an AI agent without becoming expe
 in agent frameworks. It explains what A.W.I.N.O. shows, when it waits for approval,
 how it proves work, and how to recover safely.
 
+For the detailed explanation of every status field, the knowledge budget, mode
+versus loop selection, task-class gates, and copy-ready interaction prompts, read
+the [operating guide](operating-guide.md).
+
 ## What A.W.I.N.O. is
 
 A.W.I.N.O. stands for **Agentic Workflow Intelligence & Navigation Orchestrator**.
@@ -416,6 +420,7 @@ Expect the controller to:
 
 ## References
 
+- [Operating guide](operating-guide.md)
 - [Agent and harness guide](agent-guide.md)
 - [Detailed installation](install.md)
 - [Gate enforcement](enforcement.md)
