@@ -169,6 +169,28 @@ class RunArtifact:
     payload: dict[str, object]
 
 
+@dataclass(frozen=True)
+class CompletenessRecord:
+    """Achieved-vs-stated evidence for an objective that names a target count.
+
+    Exists so a partial deliverable cannot be silently reported as complete.
+    A human may explicitly accept a reduced scope, but that acceptance is
+    itself recorded here rather than inferred from silence.
+    """
+
+    stated: int
+    achieved: int
+    unit: str
+    recorded_at: str
+    accepted_reduced_scope: bool = False
+    accepted_by: str | None = None
+    accepted_reason: str | None = None
+
+    @property
+    def satisfied(self) -> bool:
+        return self.achieved >= self.stated or self.accepted_reduced_scope
+
+
 @dataclass
 class Run:
     """One unit of work with a declared contract and an evidence ledger."""
@@ -188,6 +210,7 @@ class Run:
     checkpoints: list[Checkpoint] = field(default_factory=list)
     skill_events: list[SkillEvent] = field(default_factory=list)
     escalated_gates: list[str] = field(default_factory=list)
+    completeness: CompletenessRecord | None = None
     closed_at: str | None = None
     verdict: str | None = None
 
@@ -208,6 +231,8 @@ class Run:
         values["checkpoints"] = [Checkpoint(**item) for item in values.get("checkpoints", [])]
         values["skill_events"] = [SkillEvent(**item) for item in values.get("skill_events", [])]
         values.setdefault("escalated_gates", [])
+        completeness = values.get("completeness")
+        values["completeness"] = CompletenessRecord(**completeness) if completeness else None
         values.setdefault("closed_at", None)
         values.setdefault("verdict", None)
         return cls(**values)
@@ -577,6 +602,44 @@ class Ledger:
         self.append(run_id, item)
         return item
 
+    def record_completeness(
+        self,
+        run_id: str,
+        *,
+        achieved: int,
+        stated: int,
+        unit: str = "unit(s)",
+        accept_reduced_scope: bool = False,
+        accepted_by: str | None = None,
+        accepted_reason: str | None = None,
+    ) -> CompletenessRecord:
+        """Record achieved-vs-stated evidence for a counted deliverable.
+
+        A partial deliverable is a failed task, not a partial success, unless
+        a human explicitly records acceptance of the reduced scope here. That
+        acceptance must be attributed and given a reason; silence is refusal.
+        """
+        if achieved < 0 or stated < 0:
+            raise LedgerError("COMPLETENESS_INVALID: achieved and stated must be non-negative")
+        if accept_reduced_scope and not (accepted_by and accepted_reason):
+            raise LedgerError(
+                "COMPLETENESS_ACCEPTANCE_INCOMPLETE: accepting reduced scope requires "
+                "both --by and a reason"
+            )
+        record = CompletenessRecord(
+            stated=stated,
+            achieved=achieved,
+            unit=unit,
+            recorded_at=datetime.now(UTC).isoformat(),
+            accepted_reduced_scope=accept_reduced_scope,
+            accepted_by=accepted_by if accept_reduced_scope else None,
+            accepted_reason=accepted_reason if accept_reduced_scope else None,
+        )
+        run = self.load(run_id)
+        run.completeness = record
+        self.save(run)
+        return record
+
     def note_skill(
         self, run_id: str, skill: str, *, state: str = "loaded", reason: str = ""
     ) -> Run:
@@ -611,10 +674,13 @@ class Verdict:
     failing: list[str]
     attempts_exceeded: list[str]
     attested_only: list[str]
+    completeness: CompletenessRecord | None = None
 
     @property
     def can_close(self) -> bool:
-        return not (self.missing or self.failing or self.attempts_exceeded)
+        if self.missing or self.failing or self.attempts_exceeded:
+            return False
+        return self.completeness is None or self.completeness.satisfied
 
     @property
     def blocked_reason(self) -> str:
@@ -627,6 +693,14 @@ class Verdict:
             return f"GATE_FAILING {', '.join(self.failing)} recorded a nonzero exit code."
         if self.missing:
             return f"GATE_MISSING {', '.join(self.missing)} has no recorded evidence."
+        if self.completeness is not None and not self.completeness.satisfied:
+            c = self.completeness
+            return (
+                f"DELIVERABLE_INCOMPLETE {c.achieved}/{c.stated} {c.unit} achieved. "
+                "A partial deliverable is a failed task, not a partial success. "
+                "Record human acceptance of reduced scope to close anyway: "
+                "gate record-completeness --achieved N --stated N --accept-reduced-scope --by ACTOR --reason REASON"
+            )
         return ""
 
 
@@ -725,6 +799,7 @@ def adjudicate(run: Run, evidence: list[Evidence]) -> Verdict:
         failing=failing,
         attempts_exceeded=exceeded,
         attested_only=attested,
+        completeness=run.completeness,
     )
 
 

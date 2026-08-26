@@ -22,6 +22,7 @@ import typer
 
 from smith import (
     capability,
+    debugging,
     fix,
     harness,
     health,
@@ -64,6 +65,7 @@ gate_app = typer.Typer(
     no_args_is_help=True, help="Run ledger. Completion is computed, never claimed."
 )
 gate_plan_app = typer.Typer(no_args_is_help=True, help="Review the current run's plan.")
+debug_app = typer.Typer(no_args_is_help=True, help="Evidence-first four-phase bug debugging.")
 
 
 def _version() -> str:
@@ -101,6 +103,7 @@ def deprecated_smith_entry() -> None:
 
 
 app.add_typer(gate_app, name="gate")
+app.add_typer(debug_app, name="debug")
 gate_app.add_typer(gate_plan_app, name="plan")
 
 
@@ -128,6 +131,119 @@ def _skill_catalog() -> skill_catalog.SkillCatalog:
 
 def _echo(message: str) -> None:
     typer.echo(message)
+
+
+def _debug_session(run_id: str | None = None) -> debugging.DebugSession:
+    try:
+        return debugging.DebugSession.current(_ledger(), run_id)
+    except (LedgerError, ValueError) as exc:
+        _echo(f"REFUSED  {exc}")
+        raise typer.Exit(1) from None
+
+
+@debug_app.command("begin")
+def debug_begin(
+    symptom: str = typer.Argument(..., help="Observed bug, error, or failing test"),
+    scope: list[str] = typer.Option(None, "--scope", help="Production path this fix may edit"),
+    issue: str = typer.Option(None, "--issue", help="Open Seeds issue served by this debug run"),
+    actor: str = typer.Option("agent", "--actor"),
+) -> None:
+    """Open a bugfix run in the reproduce phase."""
+    ledger = _ledger()
+    linked_issue = _validate_issue(issue) if issue else None
+    run = ledger.open(
+        TaskClass.BUGFIX,
+        symptom,
+        file_scope=scope or [],
+        issue_id=linked_issue.id if linked_issue else None,
+    )
+    debugging.DebugSession.begin(ledger, run.run_id, symptom, actor)
+    _echo(f"DEBUG_BEGIN  {run.run_id}  phase={debugging.DebugPhase.REPRODUCE}")
+
+
+@debug_app.command("evidence")
+def debug_evidence(
+    kind: str = typer.Argument(...),
+    detail: str = typer.Argument(...),
+    actor: str = typer.Option("agent", "--actor"),
+    run_id: str = typer.Option(None, "--run"),
+) -> None:
+    session = _debug_session(run_id)
+    session.add_evidence(kind, detail, actor)
+    _echo(f"DEBUG_EVIDENCE  phase={session.phase}")
+
+
+@debug_app.command("hypothesize")
+def debug_hypothesize(
+    statement: str = typer.Argument(...),
+    actor: str = typer.Option("agent", "--actor"),
+    run_id: str = typer.Option(None, "--run"),
+) -> None:
+    session = _debug_session(run_id)
+    try:
+        session.add_hypothesis(statement, actor)
+    except ValueError as exc:
+        _echo(f"REFUSED  {exc}")
+        raise typer.Exit(1) from None
+    _echo(f"DEBUG_HYPOTHESIS  phase={session.phase}")
+
+
+@debug_app.command("authorize-fix")
+def debug_authorize_fix(
+    by: str = typer.Option(..., "--by", help="Person or agent authorizing the evidence-backed fix"),
+    run_id: str = typer.Option(None, "--run"),
+) -> None:
+    session = _debug_session(run_id)
+    try:
+        session.authorize_fix(by)
+    except ValueError as exc:
+        _echo(f"REFUSED  {exc}")
+        raise typer.Exit(1) from None
+    _echo(f"DEBUG_FIX_AUTHORIZED  phase={session.phase}")
+
+
+@debug_app.command("attempt")
+def debug_attempt(
+    approach: str = typer.Argument(...),
+    output: str = typer.Argument(...),
+    succeeded: bool = typer.Option(False, "--succeeded/--failed"),
+    actor: str = typer.Option("agent", "--actor"),
+    run_id: str = typer.Option(None, "--run"),
+) -> None:
+    session = _debug_session(run_id)
+    try:
+        session.record_attempt(approach, output, succeeded=succeeded, actor=actor)
+    except ValueError as exc:
+        _echo(f"REFUSED  {exc}")
+        raise typer.Exit(1) from None
+    _echo(f"DEBUG_ATTEMPT  assessment={session.assessment}")
+
+
+@debug_app.command("verify")
+def debug_verify(
+    command: str = typer.Option(..., "--cmd", help="Regression command to execute and record"),
+    actor: str = typer.Option("agent", "--actor"),
+    run_id: str = typer.Option(None, "--run"),
+) -> None:
+    session = _debug_session(run_id)
+    try:
+        evidence = session.ledger.record(
+            session.run_id, Gate.TESTED, command, _workspace().project.root
+        )
+        session.verify(
+            command,
+            evidence.output_head,
+            succeeded=evidence.passed,
+            actor=actor,
+        )
+    except (LedgerError, ValueError) as exc:
+        _echo(f"REFUSED  {exc}")
+        raise typer.Exit(1) from None
+    verdict = "DEBUG_VERIFIED" if evidence.passed else "DEBUG_VERIFY_FAILED"
+    _echo(f"{verdict}  phase={session.phase}  assessment={session.assessment}")
+    _echo(evidence.output_head)
+    if not evidence.passed:
+        raise typer.Exit(1)
 
 
 # ── knowledge ────────────────────────────────────────────────────────────────
@@ -2328,6 +2444,57 @@ def gate_record(
         _echo("")
         _echo(
             f"Gate not satisfied. Fix the cause, then record again (attempt {item.attempt + 1} of 3)."
+        )
+        raise typer.Exit(1)
+
+
+@gate_app.command("record-completeness")
+def gate_record_completeness(
+    achieved: int = typer.Option(..., "--achieved", help="Units actually produced"),
+    stated: int = typer.Option(..., "--stated", help="Units the objective claims"),
+    unit: str = typer.Option("unit(s)", "--unit", help="What is being counted"),
+    accept_reduced_scope: bool = typer.Option(
+        False, "--accept-reduced-scope", help="A human explicitly accepts achieved < stated"
+    ),
+    by: str = typer.Option(None, "--by", help="Who accepted the reduced scope"),
+    reason: str = typer.Option(None, "--reason", help="Why the reduced scope is acceptable"),
+    run_id: str = typer.Option(None, "--run", help="Run id, defaults to current"),
+) -> None:
+    """Record achieved-vs-stated counts. close() refuses if achieved < stated.
+
+    A partial deliverable labeled complete is a failed task, not a partial
+    success. This exists so that gap cannot be closed by report alone -
+    only by a human explicitly recording acceptance of the reduced scope.
+    """
+    resolved = _resolve_run(run_id)
+    ledger = _ledger()
+    try:
+        record = ledger.record_completeness(
+            resolved,
+            achieved=achieved,
+            stated=stated,
+            unit=unit,
+            accept_reduced_scope=accept_reduced_scope,
+            accepted_by=by,
+            accepted_reason=reason,
+        )
+    except LedgerError as exc:
+        _ledger_error(exc)
+
+    if record.satisfied:
+        if record.accepted_reduced_scope:
+            _echo(
+                f"COMPLETENESS_ACCEPTED  {record.achieved}/{record.stated} {record.unit}  "
+                f"reduced scope accepted by {record.accepted_by}: {record.accepted_reason}"
+            )
+        else:
+            _echo(f"COMPLETENESS_MET  {record.achieved}/{record.stated} {record.unit}")
+    else:
+        _echo(f"DELIVERABLE_INCOMPLETE  {record.achieved}/{record.stated} {record.unit} achieved")
+        _echo(
+            "A partial deliverable is a failed task, not a partial success. "
+            "gate close will refuse until either the remaining units are produced "
+            "or a human records --accept-reduced-scope with --by and --reason."
         )
         raise typer.Exit(1)
 

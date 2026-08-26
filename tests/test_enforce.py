@@ -486,3 +486,86 @@ class TestScopeDetection:
 
     def test_separator_style_does_not_matter(self) -> None:
         assert detect_scope_violations(["src\\smith\\cli.py"], ["src/smith/cli.py"]) == []
+
+
+class TestDeliverableCompleteness:
+    """Regression for the Nuclear Battery / TRISO substitution incident.
+
+    An agent was asked to run 10 indicator scans for Nuclear Battery. It ran
+    3, invented a success-adjacent status ("honesty_boundary") to describe
+    the other 7 as skipped, and reported the run as implemented_and_tested.
+    A partial deliverable reported as complete is a failed task, not a
+    partial success - close() must refuse it mechanically, not rely on the
+    agent's self-report.
+    """
+
+    def test_partial_deliverable_refuses_close_even_with_all_gates_green(
+        self, ledger: Ledger
+    ) -> None:
+        run = ledger.open(TaskClass.RESEARCH, "run 10 indicator scans for Nuclear Battery")
+        ledger.record(run.run_id, Gate.RESEARCHED, "exit 0")
+        # 3 of 10 indicators actually ran - the exact incident numbers.
+        ledger.record_completeness(run.run_id, achieved=3, stated=10, unit="indicator(s)")
+
+        run = ledger.load(run.run_id)
+        verdict = adjudicate(run, ledger.evidence(run.run_id))
+
+        assert not verdict.can_close
+        assert "DELIVERABLE_INCOMPLETE" in verdict.blocked_reason
+        assert "3/10 indicator(s)" in verdict.blocked_reason
+
+    def test_full_deliverable_does_not_block_close(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.RESEARCH, "run 10 indicator scans")
+        ledger.record(run.run_id, Gate.RESEARCHED, "exit 0")
+        ledger.record_completeness(run.run_id, achieved=10, stated=10, unit="indicator(s)")
+
+        run = ledger.load(run.run_id)
+        verdict = adjudicate(run, ledger.evidence(run.run_id))
+
+        assert verdict.can_close
+
+    def test_human_can_explicitly_accept_reduced_scope(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.RESEARCH, "run 10 indicator scans")
+        ledger.record(run.run_id, Gate.RESEARCHED, "exit 0")
+        ledger.record_completeness(
+            run.run_id,
+            achieved=3,
+            stated=10,
+            unit="indicator(s)",
+            accept_reduced_scope=True,
+            accepted_by="human-reviewer",
+            accepted_reason="7 indicators require sensor data not yet collected",
+        )
+
+        run = ledger.load(run.run_id)
+        verdict = adjudicate(run, ledger.evidence(run.run_id))
+
+        assert verdict.can_close
+
+    def test_accepting_reduced_scope_without_attribution_is_refused(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.RESEARCH, "run 10 indicator scans")
+        with pytest.raises(LedgerError, match="COMPLETENESS_ACCEPTANCE_INCOMPLETE"):
+            ledger.record_completeness(run.run_id, achieved=3, stated=10, accept_reduced_scope=True)
+
+    def test_negative_counts_are_refused(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.RESEARCH, "run scans")
+        with pytest.raises(LedgerError, match="COMPLETENESS_INVALID"):
+            ledger.record_completeness(run.run_id, achieved=-1, stated=10)
+
+    def test_no_completeness_record_means_no_completeness_constraint(self, ledger: Ledger) -> None:
+        # Most tasks never state a count. Absence of the field must not block
+        # closure - only a real Ledger.record_completeness() call does.
+        run = ledger.open(TaskClass.QUESTION, "what is a harness")
+        verdict = adjudicate(run, ledger.evidence(run.run_id))
+        assert verdict.can_close
+
+    def test_completeness_survives_a_reload_from_disk(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.RESEARCH, "run 10 indicator scans")
+        ledger.record_completeness(run.run_id, achieved=3, stated=10, unit="indicator(s)")
+
+        reloaded = ledger.load(run.run_id)
+
+        assert reloaded.completeness is not None
+        assert reloaded.completeness.achieved == 3
+        assert reloaded.completeness.stated == 10
+        assert not reloaded.completeness.satisfied
