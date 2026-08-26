@@ -164,6 +164,11 @@ prerequisite.
 | --- | --- |
 | "what is X", "how should I do X" | `awino:awino-consult` |
 | "my agent does X wrong", "it keeps..." | `awino:awino-triage` |
+| concrete bug, error, exception, failing test | `awino:awino-debug` |
+
+During an `awino-debug` bugfix, never use Bash, a script, a patch command, or an
+indirect tool to modify production paths before `authorize-fix`; the typed edit hook
+is enforceable, while shell filesystem effects cannot be comprehensively inspected.
 | complex multi-file change, refactor, migration | `awino:awino-rpi` |
 | needs many attempts with a pass/fail gate | `awino:awino-ralph` |
 | independent parallel workstreams | `awino:awino-delegate` |

@@ -89,6 +89,11 @@ class SkillCatalog:
         words = _tokens(request)
         if not words:
             return None
+        preferred = _intent_skill(words)
+        if preferred is not None and preferred in self._skills:
+            skill = self._skills[preferred]
+            description_matches = tuple(sorted(words & _tokens(skill.description)))
+            return Recommendation(skill, 100, (), description_matches)
         ranked: list[Recommendation] = []
         for skill in self.skills:
             name_matches = tuple(sorted(words & _tokens(skill.name)))
@@ -125,6 +130,16 @@ class SkillCatalog:
 
 def _tokens(value: str) -> set[str]:
     return {word for word in _WORDS.findall(value.lower()) if word not in _STOP_WORDS}
+
+
+def _intent_skill(words: set[str]) -> str | None:
+    concrete_failure = {"bug", "error", "errors", "exception", "failing", "failure", "pytest"}
+    vague_agent = {"agent", "misbehaving", "behaving", "badly", "keeps"}
+    if words & concrete_failure:
+        return "awino-debug"
+    if "agent" in words and len(words & vague_agent) >= 2:
+        return "awino-triage"
+    return None
 
 
 def _read_skill(path: Path, source: str, precedence: int) -> Skill | None:

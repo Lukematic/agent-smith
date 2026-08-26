@@ -24,6 +24,7 @@
         "./skills/awino-bootstrap",
         "./skills/awino-consult",
         "./skills/awino-delegate",
+        "./skills/awino-debug",
         "./skills/awino-discover",
         "./skills/awino-evidence",
         "./skills/awino-memory",

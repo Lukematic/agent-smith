@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from smith.enforce import Ledger, TaskClass
 from smith.onboarding import ProjectIntent, WorkflowPolicy
 from smith.project_guard import pre_tool_decision, project_context
 from smith.session_state import bind_run, start
@@ -43,6 +44,10 @@ def git_repo(tmp_path: Path) -> Path:
 
 def payload(command: str) -> dict:
     return {"tool_name": "Bash", "tool_input": {"command": command}}
+
+
+def edit_payload(tool: str, path: Path) -> dict:
+    return {"tool_name": tool, "tool_input": {"file_path": str(path)}}
 
 
 def test_context_injects_confirmed_project_memory() -> None:
@@ -91,3 +96,45 @@ def test_one_task_per_session_rejects_second_run(tmp_path: Path) -> None:
         assert "start a new Claude Code session" in str(exc)
     else:
         raise AssertionError("second task was accepted in one session")
+
+
+def test_bugfix_guard_denies_ordinary_production_edits_until_authorized(tmp_path: Path) -> None:
+    ledger = Ledger(tmp_path / ".smith")
+    run = ledger.open(TaskClass.BUGFIX, "fix", file_scope=["src/app.py"])
+    production = tmp_path / "src" / "app.py"
+
+    for tool in ("Edit", "Write", "MultiEdit"):
+        result = pre_tool_decision(intent(), edit_payload(tool, production), tmp_path)
+        assert result is not None
+        assert (
+            "awino debug authorize-fix" in result["hookSpecificOutput"]["permissionDecisionReason"]
+        )
+
+    ledger.append_artifact(run.run_id, "debug.authorization", "reviewer", {"authorized": True})
+    assert pre_tool_decision(intent(), edit_payload("Edit", production), tmp_path) is None
+
+
+def test_bugfix_guard_allows_test_evidence_edits_before_authorization(tmp_path: Path) -> None:
+    ledger = Ledger(tmp_path / ".smith")
+    ledger.open(TaskClass.BUGFIX, "fix", file_scope=["src/app.py"])
+
+    assert (
+        pre_tool_decision(
+            intent(), edit_payload("Write", tmp_path / "tests" / "test_app.py"), tmp_path
+        )
+        is None
+    )
+
+
+def test_bugfix_guard_uses_nested_install_state_root(tmp_path: Path) -> None:
+    smith_home = tmp_path / ".smith"
+    smith_home.mkdir()
+    (smith_home / "plugin.json").write_text("{}\n", encoding="utf-8")
+    ledger = Ledger(smith_home / "state")
+    ledger.open(TaskClass.BUGFIX, "fix", file_scope=["src/app.py"])
+
+    result = pre_tool_decision(
+        intent(), edit_payload("Edit", tmp_path / "src" / "app.py"), tmp_path
+    )
+
+    assert result is not None

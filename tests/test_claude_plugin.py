@@ -13,6 +13,7 @@ CANONICAL_SKILLS = {
     "awino-bootstrap",
     "awino-consult",
     "awino-delegate",
+    "awino-debug",
     "awino-discover",
     "awino-evidence",
     "awino-memory",
@@ -70,6 +71,21 @@ def test_visual_requests_route_to_awino_visualize() -> None:
         recommendation = catalog.recommend(request)
         assert recommendation is not None
         assert recommendation.skill.name == "awino-visualize"
+
+
+def test_failures_route_to_debug_but_vague_agent_behavior_routes_to_triage() -> None:
+    from smith.skill_catalog import SkillCatalog
+
+    empty = ROOT / "tests" / "missing-skill-root"
+    catalog = SkillCatalog(empty, empty, ROOT / "skills")
+
+    for request in ("fix this bug", "pytest has failing tests", "ValueError in parser"):
+        recommendation = catalog.recommend(request)
+        assert recommendation is not None
+        assert recommendation.skill.name == "awino-debug"
+    recommendation = catalog.recommend("my agent keeps behaving badly")
+    assert recommendation is not None
+    assert recommendation.skill.name == "awino-triage"
 
 
 def test_repository_exposes_only_the_awino_agent() -> None:
@@ -141,7 +157,7 @@ def test_plugin_registers_project_memory_and_guard_hooks() -> None:
     assert "SessionStart" in hooks
     assert "UserPromptSubmit" in hooks
     assert "PreToolUse" in hooks
-    assert hooks["PreToolUse"][0]["matcher"] == "Bash"
+    assert hooks["PreToolUse"][0]["matcher"] == "Bash|Edit|Write|MultiEdit"
 
 
 def test_missing_uv_launcher_is_truthfully_degraded(tmp_path: Path) -> None:

@@ -7,6 +7,7 @@ import re
 import subprocess
 from pathlib import Path
 
+from smith.enforce import Ledger, TaskClass
 from smith.onboarding import ProjectIntent
 
 _BRANCH_CREATE = re.compile(r"\bgit\s+(?:switch\s+-c|checkout\s+-b)\s+([^\s;&|]+)", re.I)
@@ -36,8 +37,13 @@ def project_context(intent: ProjectIntent) -> str:
     return "\n".join(lines)
 
 
-def pre_tool_decision(intent: ProjectIntent, payload: dict, project: Path) -> dict | None:
+def pre_tool_decision(intent: ProjectIntent | None, payload: dict, project: Path) -> dict | None:
+    edit_decision = _debug_edit_decision(payload, project)
+    if edit_decision is not None:
+        return edit_decision
     if payload.get("tool_name") != "Bash":
+        return None
+    if intent is None:
         return None
     command = str((payload.get("tool_input") or {}).get("command") or "")
     workflow = intent.workflow
@@ -66,6 +72,52 @@ def pre_tool_decision(intent: ProjectIntent, payload: dict, project: Path) -> di
                     f"Stage {workflow.changelog_file!r} before committing this project task."
                 )
     return None
+
+
+def _debug_edit_decision(payload: dict, project: Path) -> dict | None:
+    if payload.get("tool_name") not in {"Edit", "Write", "MultiEdit"}:
+        return None
+    smith_dir = project / ".smith"
+    state_root = smith_dir / "state" if (smith_dir / "plugin.json").is_file() else smith_dir
+    ledger = Ledger(state_root)
+    current = ledger.inspect_current()
+    if current.status != "active" or current.run is None:
+        return None
+    if current.run.task_class != str(TaskClass.BUGFIX):
+        return None
+    if ledger.latest_artifact(current.run.run_id, "debug.authorization") is not None:
+        return None
+    tool_input = payload.get("tool_input") or {}
+    paths = [tool_input.get("file_path")]
+    paths.extend(
+        edit.get("file_path") for edit in tool_input.get("edits", []) if isinstance(edit, dict)
+    )
+    if not any(_is_production_path(project, path) for path in paths if path):
+        return None
+    return _deny(
+        "Bugfix production edits are locked. Record reproduction evidence and a hypothesis, "
+        "then run 'awino debug authorize-fix --by <reviewer>'."
+    )
+
+
+def _is_production_path(project: Path, value: object) -> bool:
+    path = Path(str(value))
+    try:
+        relative = (
+            (path if path.is_absolute() else project / path)
+            .resolve()
+            .relative_to(project.resolve())
+        )
+    except (OSError, ValueError):
+        return False
+    return bool(relative.parts) and relative.parts[0].lower() not in {
+        "test",
+        "tests",
+        "spec",
+        "specs",
+        ".smith",
+        "thoughts",
+    }
 
 
 def _starts_from_base(command: str, project: Path, base: str) -> bool:

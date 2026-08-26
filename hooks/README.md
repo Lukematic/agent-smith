@@ -13,7 +13,7 @@ Discovered automatically by the agent harness from `hooks.json`.
 
 ## Format
 
-JSON manifest pointing at commands. `${PLUGIN_ROOT}` resolves to the install directory.
+JSON manifest pointing at commands. `${CLAUDE_PLUGIN_ROOT}` resolves to the install directory.
 
 ## Stability
 
