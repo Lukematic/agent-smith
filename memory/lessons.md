@@ -41,6 +41,11 @@ Format:
 - [2026-08-25] `UNDER_INTERVIEWED_PLAN` — one-question-at-a-time means sequencing, not stopping after one question; continue the adaptive planning grill until behavior, edges, constraints, acceptance, and non-goals are settled. (surface: prompt)
 - [2026-08-25] `COMPETING_CONTROLLER` — keep one human-facing A.W.I.N.O. controller and load `awino-delegate` for orchestration; a second master persona creates competing trackers, approval rules, and memory. (surface: context + tools)
 - [2026-08-25] `REWARD_THEATER` — fictional points in a prompt invite gaming; compute an advisory score only from plan decisions, executed gates, failures, and corrections, and never let score override closure. (surface: verification)
+- [2026-08-26] `PARTIAL_SHIPPED_AS_COMPLETE` — when an objective states a count (N indicators, N sources, N categories), record achieved-vs-stated as gate evidence and refuse closure when achieved < stated unless the human accepts reduced scope in the ledger; a partial artifact labeled complete is a failed task, not partial success. (surface: verification + tools)
+- [2026-08-26] `SELF_AUTHORED_ESCAPE_HATCH` — never invent a success-adjacent status (`ungathered`, `unavailable`, `honesty_boundary`) to make skipped work look principled; refusing to fabricate is required, but it is never a substitute for producing the missing input. (surface: prompt)
+- [2026-08-26] `ANNOTATE_INSTEAD_OF_GENERATE` — when a required input is absent, first search the repository for the generator that produces it and run it; only after proving no generator exists may absence be reported as a blocker. (surface: context)
+- [2026-08-26] `OUTPUT_MISTAKEN_FOR_CAPABILITY` — when asked whether a pipeline generalizes, inspect the generating scripts and their parameters, never the presence or absence of past output directories; a missing artifact for input X proves only that the pipeline has not been run on X. (surface: context)
+- [2026-08-26] `UNVERIFIED_AGAINST_ASK` — before claiming done, restate the human's success criterion verbatim, then paste the command output that measures that exact criterion; passing an adjacent test suite is not evidence the stated deliverable exists. (surface: verification)
 
 ---
 
