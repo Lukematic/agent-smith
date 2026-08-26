@@ -1,0 +1,79 @@
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+
+def run_cli(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env["AWINO_PROJECT"] = str(project)
+    env.pop("VIRTUAL_ENV", None)
+    return subprocess.run(
+        [sys.executable, "-m", "smith.cli", *args],
+        cwd=project,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+
+def test_read_only_report_does_not_create_project_state(tmp_path: Path) -> None:
+    result = run_cli(tmp_path, "project-bootstrap", "--json")
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"].startswith("BOOTSTRAP_REQUIRED")
+    assert not (tmp_path / ".smith").exists()
+
+
+def test_confirm_requires_all_explicit_decisions(tmp_path: Path) -> None:
+    result = run_cli(tmp_path, "project-bootstrap", "--environment", "skip", "--confirm")
+    assert result.returncode == 2
+    assert "requires --environment, --tracker, and --runner" in result.stdout
+
+
+def test_confirm_and_current_round_trip(tmp_path: Path) -> None:
+    confirmed = run_cli(
+        tmp_path,
+        "project-bootstrap",
+        "--environment",
+        "not-applicable",
+        "--tracker",
+        "skip",
+        "--runner",
+        "use-native",
+        "--confirm",
+        "--by",
+        "reviewer",
+    )
+    assert confirmed.returncode == 0, confirmed.stdout + confirmed.stderr
+    current = run_cli(tmp_path, "project-bootstrap")
+    assert current.returncode == 0
+    assert "BOOTSTRAP_CURRENT" in current.stdout
+    assert "confirmed_by=reviewer" in current.stdout
+
+
+def test_gate_open_snapshots_bootstrap(tmp_path: Path) -> None:
+    confirmed = run_cli(
+        tmp_path,
+        "project-bootstrap",
+        "--environment",
+        "not-applicable",
+        "--tracker",
+        "skip",
+        "--runner",
+        "use-native",
+        "--confirm",
+    )
+    assert confirmed.returncode == 0
+    opened = run_cli(tmp_path, "gate", "open", "question", "inspect")
+    assert opened.returncode == 0, opened.stdout + opened.stderr
+    run_id = opened.stdout.split()[1]
+    artifacts = tmp_path / ".smith" / "run" / run_id / "artifacts.jsonl"
+    payload = json.loads(artifacts.read_text(encoding="utf-8").strip())
+    assert payload["kind"] == "bootstrap"
+    assert payload["payload"]["confirmed_by"] == "human"

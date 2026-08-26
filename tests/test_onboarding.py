@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
+
 from smith import onboarding
 from smith.mission import Confidence, Kind, Mission
 
@@ -135,3 +137,48 @@ class TestConfirmation:
         payload = onboarding.as_json(intent, onboarding.frontier(intent))
         assert '"primary_user"' in payload
         assert '"complete": false' in payload
+
+
+class TestBootstrapState:
+    def test_legacy_project_loads_without_bootstrap(self, tmp_path: Path) -> None:
+        path = tmp_path / ".smith" / "project.yaml"
+        path.parent.mkdir()
+        path.write_text("mission: legacy\nsource: confirmed\n", encoding="utf-8")
+
+        loaded = onboarding.load(tmp_path)
+
+        assert loaded is not None
+        assert loaded.schema_version == 1
+        assert loaded.bootstrap is None
+
+    def test_bootstrap_round_trip_records_actor_time_and_version(self, tmp_path: Path) -> None:
+        intent = onboarding.ProjectIntent(mission="x")
+        intent.bootstrap = onboarding.BootstrapState(
+            environment="skip",
+            tracker="skip",
+            runner="use-native",
+            fingerprint=onboarding.bootstrap_fingerprint(tmp_path),
+            confirmed_by="reviewer",
+            confirmed_at="2026-08-26T12:00:00+00:00",
+        )
+
+        path = onboarding.save(tmp_path, intent)
+        loaded = onboarding.load(tmp_path)
+        stored = yaml.safe_load(path.read_text(encoding="utf-8"))
+
+        assert stored["schema_version"] == 2
+        assert loaded is not None and loaded.bootstrap is not None
+        assert loaded.bootstrap.confirmed_by == "reviewer"
+        assert loaded.bootstrap.confirmed_at == "2026-08-26T12:00:00+00:00"
+        assert onboarding.bootstrap_current(tmp_path, loaded)
+
+    def test_declaration_change_invalidates_fingerprint(self, tmp_path: Path) -> None:
+        intent = onboarding.ProjectIntent(mission="x")
+        intent.bootstrap = onboarding.BootstrapState(
+            fingerprint=onboarding.bootstrap_fingerprint(tmp_path),
+            confirmed_by="human",
+            confirmed_at="now",
+        )
+        (tmp_path / "package.json").write_text('{"name":"x"}', encoding="utf-8")
+
+        assert not onboarding.bootstrap_current(tmp_path, intent)

@@ -141,6 +141,23 @@ class TestEvidenceIsReal:
             ledger.load("does-not-exist")
 
 
+class TestRunArtifacts:
+    def test_artifacts_are_append_only_hash_bound_and_filterable(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.QUESTION, "bootstrap")
+        first = ledger.append_artifact(run.run_id, "bootstrap", "human", {"runner": "native"})
+        second = ledger.append_artifact(run.run_id, "debug", "agent", {"phase": "root"})
+
+        assert first.payload_sha256
+        assert ledger.artifacts(run.run_id) == [first, second]
+        assert ledger.artifacts(run.run_id, "bootstrap") == [first]
+        assert ledger.latest_artifact(run.run_id, "bootstrap") == first
+
+    def test_legacy_run_without_artifact_file_reads_empty(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.QUESTION, "legacy")
+        ledger._artifacts(run.run_id).unlink()
+        assert ledger.artifacts(run.run_id) == []
+
+
 class TestRunSerialization:
     def test_new_runs_use_versioned_run_json(self, ledger: Ledger) -> None:
         run = ledger.open(TaskClass.QUESTION, "versioned")

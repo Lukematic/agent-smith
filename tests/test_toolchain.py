@@ -8,7 +8,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from smith import cli
-from smith.toolchain import Manager, Toolchain
+from smith.toolchain import Manager, Runner, Toolchain
 
 
 class TestEnvironmentIsolation:
@@ -66,6 +66,51 @@ class TestManagerPrecedence:
         chain = Toolchain(project)
         assert chain.manager[0] is Manager.POETRY
 
+    def test_in_project_venv_beats_generic_uv_default(self, tmp_path: Path, monkeypatch) -> None:
+        project = tmp_path / "project"
+        (project / ".venv" / ("Scripts" if os.name == "nt" else "bin")).mkdir(parents=True)
+        (project / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
+        from smith import toolchain
+
+        monkeypatch.setattr(toolchain, "_have", lambda name: name in {"uv", "python"})
+        assert Toolchain(project).manager[0] is Manager.VENV
+
+    def test_pdm_declaration_is_detected(self, tmp_path: Path, monkeypatch) -> None:
+        (tmp_path / "pyproject.toml").write_text(
+            "[tool.pdm]\ndistribution=true\n", encoding="utf-8"
+        )
+        from smith import toolchain
+
+        monkeypatch.setattr(toolchain, "_have", lambda name: name in {"pdm", "uv"})
+        assert Toolchain(tmp_path).manager[0] is Manager.PDM
+
+    def test_non_python_project_never_uses_system_python(self, tmp_path: Path, monkeypatch) -> None:
+        (tmp_path / "package.json").write_text(
+            '{"scripts":{"test":"node test.js"}}', encoding="utf-8"
+        )
+        from smith import toolchain
+
+        monkeypatch.setattr(toolchain, "_have", lambda name: name == "python")
+        assert Toolchain(tmp_path).manager[0] is Manager.NONE
+
+    def test_unavailable_just_falls_through_to_make(self, tmp_path: Path, monkeypatch) -> None:
+        (tmp_path / "justfile").write_text("test:\n", encoding="utf-8")
+        (tmp_path / "Makefile").write_text("test:\n", encoding="utf-8")
+        from smith import toolchain
+
+        monkeypatch.setattr(toolchain, "_have", lambda name: name == "make")
+        assert Toolchain(tmp_path).runner[0] is Runner.MAKE
+
+    def test_makefile_requires_make_executable(self, tmp_path: Path, monkeypatch) -> None:
+        (tmp_path / "Makefile").write_text("test:\n", encoding="utf-8")
+        (tmp_path / "package.json").write_text(
+            '{"scripts":{"test":"node test.js"}}', encoding="utf-8"
+        )
+        from smith import toolchain
+
+        monkeypatch.setattr(toolchain, "_have", lambda name: False)
+        assert Toolchain(tmp_path).runner[0] is Runner.NPM_SCRIPTS
+
 
 class TestCommands:
     def test_uv_default_produces_uv_commands(self, tmp_path: Path, monkeypatch) -> None:
@@ -111,7 +156,7 @@ requires-python = ">=3.12"
         assert "DRY_RUN  nothing executed" in result.output
         assert not (project / ".venv").exists()
 
-    def test_env_explains_uv_and_prints_activation_commands(
+    def test_env_explains_uv_with_manager_specific_guidance(
         self, tmp_path: Path, monkeypatch
     ) -> None:
         project = tmp_path / "project"
@@ -129,6 +174,5 @@ requires-python = ">=3.12"
         assert result.exit_code == 0, result.output
         assert "manager: uv" in result.output
         assert f"environment: {project / '.venv'}" in result.output
-        assert ". .venv/bin/activate" in result.output
-        assert ".venv\\Scripts\\activate" in result.output
-        assert "Activation is unnecessary with uv run" in result.output
+        assert "Run commands with 'uv run'" in result.output
+        assert "shell activation is optional" in result.output

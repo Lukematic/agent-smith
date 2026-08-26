@@ -13,6 +13,7 @@ import os
 import re
 import subprocess
 import sys
+from dataclasses import asdict
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -1558,6 +1559,11 @@ def onboard_command(
     _echo(f"TRACKER   {state} ({tracker_reason})")
     if not state.usable:
         _echo("          optional: awino onboard --with-seeds")
+    _echo("")
+    _echo("PROJECT BOOTSTRAP")
+    _echo(_bootstrap_status(project, intent))
+    if not onboarding.bootstrap_current(project, intent):
+        _echo("  inspect and confirm: awino project-bootstrap")
 
     if saved:
         _echo("")
@@ -1575,6 +1581,136 @@ def onboard_command(
     else:
         _echo("READY TO CONFIRM")
         _echo("  awino onboard --confirm")
+
+
+def _bootstrap_status(project: Path, intent: onboarding.ProjectIntent | None) -> str:
+    if onboarding.bootstrap_current(project, intent):
+        assert intent is not None and intent.bootstrap is not None
+        state = intent.bootstrap
+        return (
+            f"BOOTSTRAP_CURRENT environment={state.environment} tracker={state.tracker} "
+            f"runner={state.runner} confirmed_by={state.confirmed_by}"
+        )
+    if intent and intent.bootstrap:
+        return "BOOTSTRAP_STALE project declarations changed; inspect before reconfirming"
+    return "BOOTSTRAP_REQUIRED no confirmed project setup decision"
+
+
+@app.command("project-bootstrap")
+def project_bootstrap_command(
+    environment: onboarding.EnvironmentDecision | None = typer.Option(None, "--environment"),
+    tracker: onboarding.TrackerDecision | None = typer.Option(None, "--tracker"),
+    runner: onboarding.RunnerDecision | None = typer.Option(None, "--runner"),
+    confirm: bool = typer.Option(False, "--confirm", help="Persist and execute selected decisions"),
+    actor: str = typer.Option("human", "--by", help="Actor confirming these decisions"),
+    as_json_output: bool = typer.Option(False, "--json", help="Machine-readable output"),
+) -> None:
+    """Inspect project setup, or explicitly confirm environment/tracker/runner choices."""
+    workspace = _workspace()
+    project = workspace.project.root
+    intent = onboarding.load(project)
+    chain = Toolchain(project)
+    tracker_client = seeds.Seeds(project)
+    tracker_state, tracker_reason = tracker_client.bootstrap_state()
+    manager, manager_reason = chain.manager
+    detected_runner, runner_reason = chain.runner
+    fingerprint = onboarding.bootstrap_fingerprint(project)
+    status = _bootstrap_status(project, intent)
+
+    if not confirm:
+        if any(choice is not None for choice in (environment, tracker, runner)):
+            _echo("REFUSED  decisions are persisted or executed only with --confirm")
+            raise typer.Exit(2)
+        if as_json_output:
+            _echo(
+                json.dumps(
+                    {
+                        "project": str(project),
+                        "status": status,
+                        "fingerprint": fingerprint,
+                        "environment": {
+                            "manager": str(manager),
+                            "reason": manager_reason,
+                            "setup_command": chain.install_command.command,
+                            "guidance": chain.environment_guidance,
+                        },
+                        "tracker": {"state": str(tracker_state), "reason": tracker_reason},
+                        "runner": {"detected": str(detected_runner), "reason": runner_reason},
+                    },
+                    indent=2,
+                )
+            )
+            return
+        _echo(status)
+        _echo(f"project: {project}")
+        _echo(f"environment: {manager} ({manager_reason})")
+        _echo(f"setup command: {chain.install_command.command or 'unavailable'}")
+        for item in chain.environment_guidance:
+            _echo(f"  - {item}")
+        _echo(f"tracker: {tracker_state} ({tracker_reason})")
+        _echo(f"runner: {detected_runner} ({runner_reason})")
+        _echo("")
+        _echo("No changes made. Confirm all three decisions explicitly with:")
+        _echo(
+            "  awino project-bootstrap --environment <choice> --tracker <choice> "
+            "--runner <choice> --confirm"
+        )
+        return
+
+    if any(choice is None for choice in (environment, tracker, runner)):
+        _echo("REFUSED  --confirm requires --environment, --tracker, and --runner")
+        raise typer.Exit(2)
+    if not actor.strip():
+        _echo("REFUSED  --by must name the confirming actor")
+        raise typer.Exit(2)
+
+    assert environment is not None and tracker is not None and runner is not None
+    install = chain.install_command
+    if environment is onboarding.EnvironmentDecision.SETUP:
+        if not install.usable:
+            _echo(f"REFUSED  environment setup unavailable: {install.reason}")
+            raise typer.Exit(1)
+        _echo(f"ENVIRONMENT SETUP  {install.command}")
+        code = subprocess.run(install.command, shell=True, cwd=str(project), check=False).returncode
+        if code:
+            _echo(f"FAILED  environment setup exit {code}")
+            raise typer.Exit(code)
+    elif environment is onboarding.EnvironmentDecision.USE_EXISTING and manager in {
+        Manager.NONE,
+        Manager.SYSTEM,
+    }:
+        _echo("REFUSED  no existing project environment or manager is usable")
+        raise typer.Exit(1)
+    elif environment is onboarding.EnvironmentDecision.NOT_APPLICABLE and chain.python_project:
+        _echo("REFUSED  environment cannot be not-applicable for a detected Python project")
+        raise typer.Exit(1)
+
+    if tracker is onboarding.TrackerDecision.INITIALIZE:
+        _echo("TRACKER INITIALIZE  repository-root .seeds and .gitattributes")
+        result = tracker_client.init(confirmed=True)
+        if not result.ok:
+            _echo(f"FAILED  {result.detail}")
+            raise typer.Exit(1)
+    elif tracker is onboarding.TrackerDecision.USE_EXISTING and not tracker_state.usable:
+        _echo("REFUSED  no repository-root tracker is usable")
+        raise typer.Exit(1)
+
+    intent = intent or onboarding.ProjectIntent(mission="", source="draft")
+    intent.bootstrap = onboarding.BootstrapState(
+        environment=str(environment),
+        tracker=str(tracker),
+        runner=str(runner),
+        detected_manager=str(manager),
+        detected_runner=str(detected_runner),
+        environment_command=install.command or "",
+        tracker_root=str(project) if tracker_client.initialized else "",
+        fingerprint=onboarding.bootstrap_fingerprint(project),
+        confirmed_by=actor.strip(),
+        confirmed_at=datetime.now(UTC).isoformat(),
+    )
+    saved = onboarding.save(project, intent)
+    _echo(f"BOOTSTRAP_CONFIRMED environment={environment} tracker={tracker} runner={runner}")
+    _echo(f"PROJECT  {saved}")
 
 
 @app.command("limits")
@@ -1843,11 +1979,10 @@ def environment() -> None:
     _echo(f"manager: {manager}")
     _echo(f"detected because: {reason}")
     _echo(f"environment: {project_env or 'not created'}")
-    _echo("POSIX activation: . .venv/bin/activate")
-    _echo(r"Windows activation: .venv\Scripts\activate")
-    _echo("Activation is unnecessary with uv run; uv selects the project from the command cwd.")
+    for item in chain.environment_guidance:
+        _echo(item)
     if manager is Manager.UV and project_env is None:
-        _echo("Create it only when intended: awino setup")
+        _echo("Create it only when intended: awino project-bootstrap --environment setup --confirm")
 
 
 @app.command()
@@ -1992,7 +2127,8 @@ def gate_open(
             _echo(f"ISSUE_FORMAT  {issue!r} does not match {intent.workflow.issue_pattern!r}")
             raise typer.Exit(2)
     linked_issue = _validate_issue(issue) if issue else None
-    run = _ledger().open(
+    ledger = _ledger()
+    run = ledger.open(
         task_class,
         objective,
         file_scope=list(scope or []),
@@ -2000,6 +2136,13 @@ def gate_open(
         plan_path=plan_path,
         issue_id=linked_issue.id if linked_issue else None,
     )
+    if intent and intent.bootstrap:
+        ledger.append_artifact(
+            run.run_id,
+            "bootstrap",
+            intent.bootstrap.confirmed_by or "unknown",
+            asdict(intent.bootstrap),
+        )
     if intent and intent.source == "confirmed":
         try:
             session_state.bind_run(

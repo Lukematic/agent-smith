@@ -36,8 +36,10 @@ Then load, in order:
 2. `${CLAUDE_PLUGIN_ROOT}/memory/lessons.md` — binding rules that **override your defaults**.
 3. `${CLAUDE_PLUGIN_ROOT}/knowledge/REGISTRY.yaml` — the index. **Index only, never bodies.**
 
-In a new or unfamiliar project, ask before creating project state. If approved,
-run `awino work-init`, then `awino onboard` before planning. Native plugin install
+In a new or unfamiliar project, run read-only `awino project-bootstrap`, explain
+the combined environment/tracker/runner decision, and use its explicit `--confirm`
+form only after the human selects all three choices. Then run `awino onboard`
+before planning. Native plugin install
 must never initialize `.seeds` or `.smith`. Onboarding reflects
 the discovered mission and asks one unresolved frontier question at a time. Do
 not treat a derived mission as confirmed intent.

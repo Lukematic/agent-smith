@@ -155,6 +155,20 @@ class SkillEvent:
     recorded_at: str
 
 
+@dataclass(frozen=True)
+class RunArtifact:
+    """One hash-bound, append-only run artifact shared across workflow phases."""
+
+    artifact_id: str
+    run_id: str
+    kind: str
+    schema_version: int
+    actor: str
+    created_at: str
+    payload_sha256: str
+    payload: dict[str, object]
+
+
 @dataclass
 class Run:
     """One unit of work with a declared contract and an evidence ledger."""
@@ -242,6 +256,9 @@ class Ledger:
     def _evidence(self, run_id: str) -> Path:
         return self.run_dir(run_id) / "evidence.jsonl"
 
+    def _artifacts(self, run_id: str) -> Path:
+        return self.run_dir(run_id) / "artifacts.jsonl"
+
     def _current(self) -> Path:
         return self.base / "CURRENT"
 
@@ -271,6 +288,7 @@ class Ledger:
         self.run_dir(run_id).mkdir(parents=True, exist_ok=True)
         self._meta(run_id).write_text(json.dumps(run.to_dict(), indent=2), encoding="utf-8")
         self._evidence(run_id).touch()
+        self._artifacts(run_id).touch()
         self._current().write_text(run_id, encoding="utf-8")
         return run
 
@@ -314,6 +332,40 @@ class Ledger:
     def append(self, run_id: str, item: Evidence) -> None:
         with self._evidence(run_id).open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(asdict(item)) + "\n")
+
+    def artifacts(self, run_id: str, kind: str | None = None) -> list[RunArtifact]:
+        path = self._artifacts(run_id)
+        if not path.is_file():
+            return []
+        items = [
+            RunArtifact(**json.loads(line))
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        return [item for item in items if kind is None or item.kind == kind]
+
+    def append_artifact(
+        self, run_id: str, kind: str, actor: str, payload: dict[str, object]
+    ) -> RunArtifact:
+        self.load(run_id)
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        item = RunArtifact(
+            artifact_id=uuid.uuid4().hex[:12],
+            run_id=run_id,
+            kind=kind,
+            schema_version=1,
+            actor=actor,
+            created_at=datetime.now(UTC).isoformat(),
+            payload_sha256=hashlib.sha256(encoded).hexdigest(),
+            payload=payload,
+        )
+        with self._artifacts(run_id).open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(asdict(item), sort_keys=True) + "\n")
+        return item
+
+    def latest_artifact(self, run_id: str, kind: str) -> RunArtifact | None:
+        items = self.artifacts(run_id, kind)
+        return items[-1] if items else None
 
     # ── plan and continuation state ─────────────────────────────────────────
     def decide_plan(

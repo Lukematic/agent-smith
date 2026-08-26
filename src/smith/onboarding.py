@@ -26,9 +26,11 @@ Grounding:
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 
 import yaml
@@ -36,6 +38,43 @@ import yaml
 from smith.mission import Confidence, Mission
 
 ONBOARDING_FILE = ".smith/project.yaml"
+PROJECT_SCHEMA_VERSION = 2
+
+
+class EnvironmentDecision(StrEnum):
+    USE_EXISTING = "use-existing"
+    SETUP = "setup"
+    SKIP = "skip"
+    NOT_APPLICABLE = "not-applicable"
+
+
+class TrackerDecision(StrEnum):
+    USE_EXISTING = "use-existing"
+    INITIALIZE = "initialize"
+    SKIP = "skip"
+
+
+class RunnerDecision(StrEnum):
+    USE_DETECTED = "use-detected"
+    USE_NATIVE = "use-native"
+    DEFER_JUST = "defer-just"
+
+
+@dataclass
+class BootstrapState:
+    """Human-confirmed setup choices for the current project shape."""
+
+    schema_version: int = 1
+    environment: str = ""
+    tracker: str = ""
+    runner: str = ""
+    detected_manager: str = ""
+    detected_runner: str = ""
+    environment_command: str = ""
+    tracker_root: str = ""
+    fingerprint: str = ""
+    confirmed_by: str = ""
+    confirmed_at: str = ""
 
 
 @dataclass
@@ -56,6 +95,7 @@ class ProjectIntent:
     """Human-confirmed project intent, kept local to the project."""
 
     mission: str
+    schema_version: int = PROJECT_SCHEMA_VERSION
     primary_user: str = ""
     goals: list[str] = field(default_factory=list)
     tenets: list[str] = field(default_factory=list)
@@ -66,6 +106,7 @@ class ProjectIntent:
     confirmed_at: str = ""
     confirmed_by: str = "human"
     source: str = "confirmed"
+    bootstrap: BootstrapState | None = None
 
     @property
     def complete(self) -> bool:
@@ -145,10 +186,16 @@ def load(project: Path) -> ProjectIntent | None:
         return None
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     values = {k: v for k, v in data.items() if k in ProjectIntent.__dataclass_fields__}
+    values.setdefault("schema_version", 1)
     workflow = values.get("workflow") or {}
     if isinstance(workflow, dict):
         values["workflow"] = WorkflowPolicy(
             **{k: v for k, v in workflow.items() if k in WorkflowPolicy.__dataclass_fields__}
+        )
+    bootstrap = values.get("bootstrap")
+    if isinstance(bootstrap, dict):
+        values["bootstrap"] = BootstrapState(
+            **{k: v for k, v in bootstrap.items() if k in BootstrapState.__dataclass_fields__}
         )
     return ProjectIntent(**values)
 
@@ -156,12 +203,69 @@ def load(project: Path) -> ProjectIntent | None:
 def save(project: Path, intent: ProjectIntent) -> Path:
     path = path_for(project)
     path.parent.mkdir(parents=True, exist_ok=True)
+    intent.schema_version = PROJECT_SCHEMA_VERSION
     if intent.source == "confirmed" and not intent.confirmed_at:
         intent.confirmed_at = datetime.now(UTC).isoformat()
     path.write_text(
         yaml.safe_dump(asdict(intent), sort_keys=False, allow_unicode=True), encoding="utf-8"
     )
     return path
+
+
+FINGERPRINT_FILES = (
+    "pyproject.toml",
+    "setup.py",
+    "setup.cfg",
+    "requirements.txt",
+    "uv.lock",
+    "poetry.lock",
+    "pdm.lock",
+    "Pipfile",
+    "Pipfile.lock",
+    "environment.yml",
+    "environment.yaml",
+    "package.json",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "Cargo.toml",
+    "Cargo.lock",
+    "go.mod",
+    "go.sum",
+    "justfile",
+    "Justfile",
+    ".justfile",
+    "Makefile",
+    "makefile",
+)
+
+
+def bootstrap_fingerprint(project: Path) -> str:
+    """Fingerprint declaration identities without retaining their contents."""
+    declarations = []
+    for name in FINGERPRINT_FILES:
+        path = project / name
+        if path.is_file():
+            declarations.append(
+                {
+                    "name": name,
+                    "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                }
+            )
+    for name in (".venv", "venv", ".virtualenv", ".seeds"):
+        if (project / name).exists():
+            declarations.append({"name": name, "present": True})
+    encoded = json.dumps(declarations, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def bootstrap_current(project: Path, intent: ProjectIntent | None) -> bool:
+    return bool(
+        intent
+        and intent.bootstrap
+        and intent.bootstrap.confirmed_at
+        and intent.bootstrap.fingerprint == bootstrap_fingerprint(project)
+    )
 
 
 def seed_from_mission(found: Mission) -> ProjectIntent:

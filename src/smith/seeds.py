@@ -146,6 +146,20 @@ class Seeds:
     def initialized(self) -> bool:
         return (self.root / ".seeds" / "issues.jsonl").is_file()
 
+    def bootstrap_state(self) -> tuple[SeedsState, str]:
+        """Inspect only this repository; bootstrap never adopts an ancestor tracker."""
+        if not self.installed:
+            return (
+                SeedsState.NOT_INSTALLED,
+                f"sd is not on PATH; optional, install with '{INSTALL_HINT}'",
+            )
+        if not self.initialized:
+            return SeedsState.NOT_INITIALIZED, "no repository-root .seeds tracker"
+        version = self._version()
+        if version is None:
+            return SeedsState.BROKEN, "sd is present but did not report a version"
+        return SeedsState.READY, f"sd {version} with a tracker at {self.root}"
+
     def state(self) -> tuple[SeedsState, str]:
         """Report usability without pretending. A tracker A.W.I.N.O. cannot reach is
         not a tracker A.W.I.N.O. should claim to be using."""

@@ -130,7 +130,7 @@ def test_plugin_uses_official_root_and_never_initializes_project_state() -> None
 
     assert "${PLUGIN_ROOT}" not in combined
     assert "${CLAUDE_PLUGIN_ROOT}" in combined
-    assert "work-init" in combined
+    assert "project-bootstrap" in combined
     assert "sd init" not in combined
     assert "pip install" not in combined
     assert "uv tool install" not in combined

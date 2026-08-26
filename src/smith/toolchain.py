@@ -145,6 +145,22 @@ class Toolchain:
             return None
         return candidate
 
+    @property
+    def python_project(self) -> bool:
+        return self.has(
+            "pyproject.toml",
+            "setup.py",
+            "setup.cfg",
+            "requirements.txt",
+            "Pipfile",
+            "Pipfile.lock",
+            "uv.lock",
+            "poetry.lock",
+            "pdm.lock",
+            "environment.yml",
+            "environment.yaml",
+        )
+
     # ── dependency manager ───────────────────────────────────────────────────
     @cached_property
     def manager(self) -> tuple[Manager, str]:
@@ -156,24 +172,34 @@ class Toolchain:
         """
         tool = self.pyproject.get("tool", {})
 
-        if self.has("uv.lock") and _have("uv"):
-            return Manager.UV, "uv.lock is committed and uv is installed"
-        if self.has("poetry.lock") and _have("poetry"):
-            return Manager.POETRY, "poetry.lock is committed and poetry is installed"
-        if self.has("pdm.lock") and _have("pdm"):
-            return Manager.PDM, "pdm.lock is committed and pdm is installed"
-        if self.has("Pipfile.lock") and _have("pipenv"):
-            return Manager.PIPENV, "Pipfile.lock is committed and pipenv is installed"
+        locks = (
+            ("uv.lock", "uv", Manager.UV),
+            ("poetry.lock", "poetry", Manager.POETRY),
+            ("pdm.lock", "pdm", Manager.PDM),
+            ("Pipfile.lock", "pipenv", Manager.PIPENV),
+        )
+        for filename, binary, manager in locks:
+            if self.has(filename):
+                if _have(binary):
+                    return manager, f"{filename} is committed and {binary} is installed"
+                return Manager.NONE, f"{filename} requires {binary}, which is not installed"
 
         # Declared but unlocked, or locked but the manager is missing.
         if "uv" in tool and _have("uv"):
             return Manager.UV, "[tool.uv] declared in pyproject and uv is installed"
         if "poetry" in tool and _have("poetry"):
             return Manager.POETRY, "[tool.poetry] declared in pyproject and poetry is installed"
+        if "pdm" in tool and _have("pdm"):
+            return Manager.PDM, "[tool.pdm] declared in pyproject and pdm is installed"
         if "hatch" in tool and _have("hatch"):
             return Manager.HATCH, "[tool.hatch] declared in pyproject and hatch is installed"
         if self.has("environment.yml", "environment.yaml") and _have("conda"):
             return Manager.CONDA, "a conda environment file is present"
+
+        if self.active_venv:
+            return Manager.VENV, f"an environment is already active at {self.active_venv.name}"
+        if self.in_project_venv:
+            return Manager.VENV, f"an in-project environment exists at {self.in_project_venv.name}"
 
         # For an uninitialized Python project with a pyproject, uv is the safest
         # default when available: it creates an isolated environment and lockfile
@@ -182,18 +208,11 @@ class Toolchain:
         if self.has("pyproject.toml") and _have("uv"):
             return Manager.UV, "Python project has no manager yet; defaulting to available uv"
 
-        if self.active_venv:
-            return Manager.VENV, f"an environment is already active at {self.active_venv.name}"
-        if self.in_project_venv:
-            return Manager.VENV, f"an in-project environment exists at {self.in_project_venv.name}"
-
-        if self.has("uv.lock") or self.has("poetry.lock"):
-            missing = "uv" if self.has("uv.lock") else "poetry"
-            return Manager.NONE, f"{missing} lockfile present but {missing} is not installed"
-
-        if _have("python") or _have("python3"):
+        if self.python_project and (_have("python") or _have("python3")):
             return Manager.SYSTEM, "no environment found, falling back to the system interpreter"
-        return Manager.NONE, "no Python interpreter found"
+        if self.python_project:
+            return Manager.NONE, "Python project found but no Python interpreter is installed"
+        return Manager.NONE, "not a Python project"
 
     @property
     def run_prefix(self) -> str:
@@ -326,15 +345,18 @@ class Toolchain:
     # ── task runner ──────────────────────────────────────────────────────────
     @cached_property
     def runner(self) -> tuple[Runner, str]:
-        if self.has("justfile", "Justfile", ".justfile"):
-            if _have("just"):
-                return Runner.JUST, "a justfile exists and just is installed"
-            return Runner.NONE, "a justfile exists but just is not installed"
-        if self.has("Makefile", "makefile"):
-            return Runner.MAKE, "a Makefile exists"
+        if self.has("justfile", "Justfile", ".justfile") and _have("just"):
+            return Runner.JUST, "a justfile exists and just is installed"
+        if self.has("Makefile", "makefile") and _have("make"):
+            return Runner.MAKE, "a Makefile exists and make is installed"
         if self.package_json.get("scripts"):
             return Runner.NPM_SCRIPTS, "package.json declares scripts"
-        return Runner.NONE, "no task runner found"
+        unavailable = []
+        if self.has("justfile", "Justfile", ".justfile"):
+            unavailable.append("justfile exists but just is unavailable")
+        if self.has("Makefile", "makefile"):
+            unavailable.append("Makefile exists but make is unavailable")
+        return Runner.NONE, "; ".join(unavailable) or "no task runner found"
 
     @property
     def recipes(self) -> list[str]:
@@ -418,9 +440,16 @@ class Toolchain:
         """Concrete next steps, phrased for the project's existing conventions."""
         out: list[str] = []
         manager, _ = self.manager
-        if manager is Manager.NONE and (self.has("uv.lock") or self.has("poetry.lock")):
-            which = "uv" if self.has("uv.lock") else "poetry"
-            out.append(f"install {which} so the committed lockfile can be reproduced")
+        if manager is Manager.NONE:
+            for lock, binary in (
+                ("uv.lock", "uv"),
+                ("poetry.lock", "poetry"),
+                ("pdm.lock", "pdm"),
+                ("Pipfile.lock", "pipenv"),
+            ):
+                if self.has(lock):
+                    out.append(f"install {binary} so the committed {lock} can be reproduced")
+                    break
         if manager is Manager.SYSTEM:
             out.append("create an environment: python -m venv .venv, then install dependencies")
         if not manager.reproducible and manager is not Manager.NONE:
@@ -430,7 +459,28 @@ class Toolchain:
             out.append("add [tool.ruff] to pyproject.toml to enable the lint gate")
         if not self.test_command.usable:
             out.append("add tests, because without an executable check autonomy stays supervised")
-        runner, _ = self.runner
-        if runner is Runner.NONE:
-            out.append("consider a justfile so gate commands are discoverable")
         return out
+
+    @property
+    def environment_guidance(self) -> list[str]:
+        manager, _ = self.manager
+        if manager is Manager.UV:
+            return ["Run commands with 'uv run'; shell activation is optional."]
+        if manager is Manager.POETRY:
+            return ["Run commands with 'poetry run' or use 'poetry env activate'."]
+        if manager is Manager.PDM:
+            return ["Run commands with 'pdm run'; PDM manages the selected environment."]
+        if manager is Manager.HATCH:
+            return ["Run commands with 'hatch run'; Hatch manages its environments."]
+        if manager is Manager.PIPENV:
+            return ["Run commands with 'pipenv run' or enter it with 'pipenv shell'."]
+        if manager is Manager.CONDA:
+            return ["Activate the declared Conda environment before running native commands."]
+        if manager is Manager.VENV:
+            return [
+                "POSIX activation: . .venv/bin/activate",
+                r"Windows activation: .venv\Scripts\activate",
+            ]
+        if manager is Manager.SYSTEM:
+            return ["Create the selected project environment before installing dependencies."]
+        return ["No Python environment applies to this project."]
