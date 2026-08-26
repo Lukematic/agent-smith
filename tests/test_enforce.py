@@ -569,3 +569,60 @@ class TestDeliverableCompleteness:
         assert reloaded.completeness.achieved == 3
         assert reloaded.completeness.stated == 10
         assert not reloaded.completeness.satisfied
+
+
+class TestEscapeHatchDenylist:
+    """Regression for the incident where an agent invented 'honesty_boundary'
+    to make 7 skipped indicator scans sound principled instead of unmet."""
+
+    def test_the_exact_invented_term_from_the_incident_is_refused(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.RESEARCH, "run 10 indicator scans for Nuclear Battery")
+        with pytest.raises(LedgerError, match="ESCAPE_HATCH_TERM"):
+            ledger.attest(
+                run.run_id,
+                Gate.RESEARCHED,
+                "7 of 10 indicators marked honesty_boundary - cannot relabel TRISO evidence",
+            )
+
+    def test_ungathered_is_refused(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.RESEARCH, "gather sources")
+        with pytest.raises(LedgerError, match="ESCAPE_HATCH_TERM"):
+            ledger.attest(run.run_id, Gate.RESEARCHED, "remaining sources left ungathered")
+
+    def test_unavailable_is_refused(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.RESEARCH, "gather sources")
+        with pytest.raises(LedgerError, match="ESCAPE_HATCH_TERM"):
+            ledger.attest(run.run_id, Gate.RESEARCHED, "marked the remaining data unavailable")
+
+    def test_matching_is_case_insensitive(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.RESEARCH, "gather sources")
+        with pytest.raises(LedgerError, match="ESCAPE_HATCH_TERM"):
+            ledger.attest(run.run_id, Gate.RESEARCHED, "Honesty_Boundary reached")
+
+    def test_the_refusal_names_the_matched_term(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.RESEARCH, "gather sources")
+        with pytest.raises(LedgerError, match="'ungathered'"):
+            ledger.attest(run.run_id, Gate.RESEARCHED, "left ungathered for now")
+
+    def test_an_ordinary_true_note_is_not_refused(self, ledger: Ledger) -> None:
+        # The denylist must not become so broad it blocks honest, real notes.
+        run = ledger.open(TaskClass.RESEARCH, "run 10 indicator scans")
+        item = ledger.attest(
+            run.run_id, Gate.RESEARCHED, "ran all 10 indicator scans; results attached"
+        )
+        assert item.passed
+
+    def test_a_genuinely_blocked_note_pointing_at_a_checkpoint_is_not_refused(
+        self, ledger: Ledger
+    ) -> None:
+        # Honestly reporting a blocker and pointing at the real mechanism
+        # (a checkpoint) must remain possible - only invented status words
+        # are denied, not the concept of being blocked.
+        run = ledger.open(TaskClass.RESEARCH, "run 10 indicator scans")
+        item = ledger.attest(
+            run.run_id,
+            Gate.RESEARCHED,
+            "3 of 10 indicators ran; 7 require sensor data not yet collected, "
+            "recorded as a pending checkpoint decision",
+        )
+        assert item.passed

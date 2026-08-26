@@ -12,7 +12,11 @@ about agent behavior remain `awino-triage` work.
 The lifecycle has exactly four phases:
 
 1. **Reproduce**: open with `awino debug begin`, add a failing test or observed trace,
-   and record it with `awino debug evidence`.
+   and record it with `awino debug evidence`. If a required input or output is
+   missing, first search the repository for the script or tool that generates it
+   and run it with `--help` or a dry run before reporting the input as absent. An
+   empty output directory is evidence the generator has not been run, not evidence
+   it cannot run - see `MISSING_INPUT_ANNOTATED_INSTEAD_OF_GENERATED` below.
 2. **Diagnose**: record an evidence-backed hypothesis with `awino debug hypothesize`.
 3. **Fix**: run `awino debug authorize-fix --by <reviewer>` before changing production
    paths, then record each distinct approach with `awino debug attempt`.
@@ -34,6 +38,7 @@ commands, or indirect tools to bypass the production-edit lock.
 | `FIX_BEFORE_DIAGNOSIS` | authorization requires evidence and a hypothesis |
 | `THREE_DISTINCT_PATCHES` | three failed approaches with one signature question the architecture |
 | `SHELL_GUARD_BYPASS` | persona forbids Bash or indirect production edits before authorization |
+| `MISSING_INPUT_ANNOTATED_INSTEAD_OF_GENERATED` | before reporting an input as missing, grep/glob for the generator that produces it and attempt to run it (`--help`, dry run, smallest real invocation); only after confirming no generator exists may absence be reported as a blocker |
 
 ## Completion
 

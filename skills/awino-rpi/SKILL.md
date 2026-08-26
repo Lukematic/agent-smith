@@ -75,6 +75,23 @@ Patterns found elsewhere in this repo.
 Things the code does not answer. Do not guess.
 ```
 
+**Missing-input protocol.** If research needs an input, category, or capability
+that appears absent (an empty output directory, a category with no prior run,
+a data file that does not exist), the required next step is **search for the
+generator**, not annotate the absence:
+
+1. Grep/glob for the script, CLI flag, or tool that would produce it (a parameter
+   like `--technology-slug` on an existing scanner, a generator invoked for one
+   category that plausibly accepts others).
+2. Attempt `--help` or a dry run against that generator.
+3. Only after confirming no generator exists — not merely that no prior output
+   exists — may the input be reported as a real gap in "Open questions."
+
+Absence of output for input X is evidence the pipeline has not been run on X,
+not evidence it cannot run on X. Concluding infeasibility from an output
+directory alone is `RESEARCH_CONTAMINATION` by omission: a false negative
+recorded as fact.
+
 **Then stop.** The human reviews research before planning. Course-correcting here
 is cheap; correcting after implementation is not. If the topic was scoped wrong,
 rerun research with a sharper topic — that is the system working, not a failure.
@@ -178,6 +195,7 @@ beats accumulating failed attempts in one window.
 | Mode | Definition |
 | --- | --- |
 | `RESEARCH_CONTAMINATION` | opinions or fixes recorded during research |
+| `MISSING_INPUT_ANNOTATED_INSTEAD_OF_GENERATED` | absence of prior output reported as infeasibility without first searching for and running the generator |
 | `PLAN_WITHOUT_RESEARCH` | planning on assumptions instead of documented reality |
 | `UNDERSPECIFIED_PLAN` | plan assumes context the implementer will not have |
 | `PLAN_DRIFT` | improvising during implement instead of iterating the plan |

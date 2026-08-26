@@ -191,3 +191,78 @@ def test_skills_route_and_gate_are_truthful_subprocess_workflows(tmp_path: Path)
     )
     assert used.returncode == 0, used.stdout + used.stderr
     assert "SKILL_USED  awino-local" in used.stdout
+
+
+def test_nuclear_battery_deliverable_substitution_incident_is_refused(tmp_path: Path) -> None:
+    """Real regression for the incident this feature exists to prevent.
+
+    An agent was asked to run 10 indicator scans for Nuclear Battery. It ran
+    3, invented the status "honesty_boundary" to describe the other 7, and
+    reported the run as implemented_and_tested. Both the escape-hatch
+    vocabulary and the partial-as-complete report must now be mechanically
+    refused end-to-end through the real CLI, not just the ledger unit tests.
+    """
+    opened = run_cli(
+        tmp_path, "gate", "open", "research", "run 10 indicator scans for Nuclear Battery"
+    )
+    assert opened.returncode == 0, opened.stdout + opened.stderr
+
+    escape_hatch = run_cli(
+        tmp_path,
+        "gate",
+        "record",
+        "researched",
+        "--attest",
+        "7 of 10 indicators marked honesty_boundary - cannot relabel TRISO evidence",
+    )
+    assert escape_hatch.returncode == 1
+    assert "ESCAPE_HATCH_TERM" in escape_hatch.stdout
+
+    honest_attempt = run_cli(
+        tmp_path,
+        "gate",
+        "record",
+        "researched",
+        "--attest",
+        "ran 3 of 10 indicator scans; remaining 7 not yet attempted",
+    )
+    assert honest_attempt.returncode == 0, honest_attempt.stdout + honest_attempt.stderr
+
+    completeness = run_cli(
+        tmp_path,
+        "gate",
+        "record-completeness",
+        "--achieved",
+        "3",
+        "--stated",
+        "10",
+        "--unit",
+        "indicator(s)",
+    )
+    assert completeness.returncode == 1
+    assert "DELIVERABLE_INCOMPLETE" in completeness.stdout
+
+    close_attempt = run_cli(tmp_path, "gate", "close")
+    assert close_attempt.returncode == 1
+    assert "REFUSED  DELIVERABLE_INCOMPLETE 3/10 indicator(s) achieved" in close_attempt.stdout
+    assert "run 10 indicator scans for Nuclear Battery" in close_attempt.stdout
+    assert "You may not report this work as complete." in close_attempt.stdout
+
+    completed = run_cli(
+        tmp_path,
+        "gate",
+        "record-completeness",
+        "--achieved",
+        "10",
+        "--stated",
+        "10",
+        "--unit",
+        "indicator(s)",
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "COMPLETENESS_MET  10/10 indicator(s)" in completed.stdout
+
+    closed = run_cli(tmp_path, "gate", "close")
+    assert closed.returncode == 0, closed.stdout + closed.stderr
+    assert "COMPLETE" in closed.stdout
+    assert "run 10 indicator scans for Nuclear Battery" in closed.stdout

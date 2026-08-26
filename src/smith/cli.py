@@ -2596,6 +2596,7 @@ def gate_close(
     verdict = adjudicate(run, ledger.evidence(resolved))
 
     _echo(f"RUN {verdict.run_id}  class={verdict.task_class}")
+    _echo(f"OBJECTIVE (stated at open): {run.objective}")
     for gate in run.required:
         if gate in verdict.satisfied:
             mark = "attested" if gate in verdict.attested_only else "executed"
@@ -2604,6 +2605,11 @@ def gate_close(
             _echo(f"  [!] {gate}  FAILING")
         else:
             _echo(f"  [ ] {gate}  no evidence")
+
+    if run.completeness is not None:
+        c = run.completeness
+        mark = "x" if c.satisfied else "!"
+        _echo(f"  [{mark}] completeness  {c.achieved}/{c.stated} {c.unit}")
 
     if not verdict.can_close:
         _echo("")
@@ -2616,6 +2622,10 @@ def gate_close(
     ledger.save(run)
     _echo("")
     _echo(f"COMPLETE  {len(verdict.satisfied)} gate(s) satisfied")
+    _echo(
+        f"Restate the human's exact ask and confirm the pasted evidence above answers it, "
+        f'not an adjacent one: "{run.objective}"'
+    )
     if verdict.attested_only:
         _echo(f"NOTE  attested rather than executed: {', '.join(verdict.attested_only)}")
 

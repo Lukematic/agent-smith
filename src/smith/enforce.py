@@ -30,6 +30,20 @@ from pathlib import Path
 MAX_ATTEMPTS = 3
 OUTPUT_KEEP_CHARS = 4000
 
+# Vocabulary an agent has used to make skipped work sound principled instead
+# of reporting it as unmet. Refusing to fabricate a result is required; these
+# words are never a substitute for producing the missing input. Matched as
+# whole words, case-insensitive, against attestation notes.
+ESCAPE_HATCH_TERMS = (
+    "honesty_boundary",
+    "honesty boundary",
+    "ungathered",
+    "unavailable",
+    "not_applicable_for_now",
+    "out_of_scope_for_now",
+    "n/a_for_this_run",
+)
+
 
 class Gate(StrEnum):
     """The checkable obligations a run can carry."""
@@ -579,7 +593,10 @@ class Ledger:
         """Record a gate that has no command, such as a plan document existing.
 
         Attestations are marked with exit code 0 but a synthetic command so a
-        reader can always tell executed proof from asserted proof.
+        reader can always tell executed proof from asserted proof. The note
+        is also checked against known self-authored escape-hatch vocabulary:
+        an agent may not invent a success-adjacent status word to make
+        skipped work sound principled instead of reporting it as unmet.
         """
         run = self.load(run_id)
         if run.schema_version >= 2 and run.plan_path is not None and gate != Gate.PLANNED:
@@ -588,6 +605,17 @@ class Ledger:
                 raise LedgerError(f"PLAN_INVALID: {'; '.join(plan_problems)}")
         if run.schema_version >= 2 and run.plan_path is not None and gate == Gate.PLANNED:
             raise LedgerError("planned evidence must be created by approve_plan")
+        lowered = note.lower()
+        hit = next((term for term in ESCAPE_HATCH_TERMS if term in lowered), None)
+        if hit is not None:
+            raise LedgerError(
+                f"ESCAPE_HATCH_TERM: attestation note uses '{hit}'. Refusing to fabricate "
+                "a result is required, but that is never a substitute for producing the "
+                "missing input. Search for the generator that produces it and run it, then "
+                "attest the real outcome; or, if genuinely blocked, record a checkpoint "
+                "(gate checkpoint --pending ... --option ...) describing the reproducible "
+                "blocker instead of attesting a status you invented."
+            )
         prior = [e for e in self.evidence(run_id) if e.gate == str(gate)]
         item = Evidence(
             gate=str(gate),
