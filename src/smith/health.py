@@ -123,6 +123,56 @@ def check_skill_registry(paths: SmithPaths) -> Result:
     return _ok("skill_registry", f"{len(on_disk)} canonical skill(s), all indexed and manifested")
 
 
+def check_clone_freshness(paths: SmithPaths) -> Result:
+    """Warn when this A.W.I.N.O. clone has diverged from its own remote.
+
+    Multiple clones of the same installation can silently drift: a lesson,
+    fix, or feature committed in one clone is invisible to every other
+    clone until it is pushed and pulled. This exists so that drift is a
+    visible warning, not a discovery made by manually diffing clones.
+    """
+    if shutil.which("git") is None:
+        return _ok("clone_freshness", "git not on PATH, skipping")
+    code, _ = _run(["git", "rev-parse", "--git-dir"], paths.root)
+    if code != 0:
+        return _ok("clone_freshness", "not a git checkout, skipping")
+
+    fetch_code, _fetch_out = _run(["git", "fetch"], paths.root)
+    if fetch_code != 0:
+        return _warn(
+            "clone_freshness",
+            "could not reach the remote to compare",
+            "check network access or remote credentials",
+        )
+
+    status_code, status_out = _run(["git", "status", "--porcelain=v1", "-uno"], paths.root)
+    dirty = status_code == 0 and status_out.strip() != ""
+
+    ahead_code, ahead_out = _run(["git", "rev-list", "--count", "@{u}..HEAD"], paths.root)
+    behind_code, behind_out = _run(["git", "rev-list", "--count", "HEAD..@{u}"], paths.root)
+    if ahead_code != 0 or behind_code != 0:
+        return _ok("clone_freshness", "no upstream tracking branch configured, skipping")
+
+    ahead = int(ahead_out.strip() or 0)
+    behind = int(behind_out.strip() or 0)
+
+    if ahead == 0 and behind == 0 and not dirty:
+        return _ok("clone_freshness", "in sync with its remote")
+
+    problems = []
+    if ahead:
+        problems.append(f"{ahead} commit(s) ahead, not yet pushed")
+    if behind:
+        problems.append(f"{behind} commit(s) behind, not yet pulled")
+    if dirty:
+        problems.append("uncommitted tracked changes")
+    return _warn(
+        "clone_freshness",
+        "; ".join(problems),
+        "git push and/or git pull so this clone matches its remote before relying on it",
+    )
+
+
 def check_uv(paths: SmithPaths) -> Result:
     """uv must be installed and the project environment must exist and be synced."""
     if shutil.which("uv") is None:
@@ -496,6 +546,7 @@ FAST_CHECKS: tuple[Callable[[SmithPaths], Result], ...] = (
     check_memory,
     check_knowledge,
     check_harness_install,
+    check_clone_freshness,
 )
 
 SLOW_CHECKS: tuple[Callable[[SmithPaths], Result], ...] = (

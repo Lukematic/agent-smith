@@ -13,6 +13,7 @@ import pytest
 from smith import health
 from smith.health import (
     Health,
+    check_clone_freshness,
     check_docs,
     check_justfile_shim,
     check_memory,
@@ -192,3 +193,74 @@ class TestProjectAwareSeeds:
         assert result.health is Health.WARN
         assert "legacy" in result.detail
         assert "archive" in result.remedy
+
+
+class TestCloneFreshness:
+    """Multiple clones of the same installation can silently drift; the
+    exact failure this session discovered manually before this check
+    existed."""
+
+    def _git(self, cwd: Path, *args: str) -> None:
+        import subprocess
+
+        subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
+
+    def _clone_with_remote(self, tmp_path: Path) -> SmithPaths:
+        remote = tmp_path / "remote.git"
+        remote.mkdir()
+        self._git(remote, "init", "--bare", "-b", "main")
+
+        origin = tmp_path / "origin"
+        origin.mkdir()
+        self._git(origin, "init", "-b", "main")
+        self._git(origin, "config", "user.email", "test@example.com")
+        self._git(origin, "config", "user.name", "test")
+        (origin / "README.md").write_text("first\n", encoding="utf-8")
+        self._git(origin, "add", "README.md")
+        self._git(origin, "commit", "-m", "first")
+        self._git(origin, "remote", "add", "origin", str(remote))
+        self._git(origin, "push", "-u", "origin", "main")
+        return SmithPaths(root=origin)
+
+    def test_in_sync_clone_is_ok(self, tmp_path: Path) -> None:
+        paths = self._clone_with_remote(tmp_path)
+        result = check_clone_freshness(paths)
+        assert result.health is Health.OK
+
+    def test_unpushed_commit_warns(self, tmp_path: Path) -> None:
+        paths = self._clone_with_remote(tmp_path)
+        (paths.root / "new.md").write_text("second\n", encoding="utf-8")
+        self._git(paths.root, "add", "new.md")
+        self._git(paths.root, "commit", "-m", "second")
+
+        result = check_clone_freshness(paths)
+        assert result.health is Health.WARN
+        assert "ahead" in result.detail
+
+    def test_unpulled_remote_commit_warns(self, tmp_path: Path) -> None:
+        paths = self._clone_with_remote(tmp_path)
+        remote = tmp_path / "remote.git"
+        other_clone = tmp_path / "other-clone"
+        self._git(tmp_path, "clone", str(remote), str(other_clone))
+        self._git(other_clone, "config", "user.email", "test@example.com")
+        self._git(other_clone, "config", "user.name", "test")
+        (other_clone / "elsewhere.md").write_text("elsewhere\n", encoding="utf-8")
+        self._git(other_clone, "add", "elsewhere.md")
+        self._git(other_clone, "commit", "-m", "elsewhere")
+        self._git(other_clone, "push", "origin", "main")
+
+        result = check_clone_freshness(paths)
+        assert result.health is Health.WARN
+        assert "behind" in result.detail
+
+    def test_uncommitted_tracked_change_warns(self, tmp_path: Path) -> None:
+        paths = self._clone_with_remote(tmp_path)
+        (paths.root / "README.md").write_text("changed\n", encoding="utf-8")
+
+        result = check_clone_freshness(paths)
+        assert result.health is Health.WARN
+        assert "uncommitted" in result.detail
+
+    def test_non_git_directory_is_ok_not_a_failure(self, blank: SmithPaths) -> None:
+        result = check_clone_freshness(blank)
+        assert result.health is Health.OK
