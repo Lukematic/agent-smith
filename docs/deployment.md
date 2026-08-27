@@ -136,7 +136,7 @@ uv sync --all-groups
 awino install --overwrite
 awino install-mode --force
 awino doctor
-awino update
+awino knowledge-update
 ```
 
 Linked skills update with the clone. Personas and mode files are regenerated to

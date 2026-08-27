@@ -132,7 +132,20 @@ Reload the editor window after installing modes.
 
 ## Safe updates and rollback
 
-Use the preflight command instead of pulling directly:
+To update A.W.I.N.O. itself, say "update A.W.I.N.O." or run:
+
+```bash
+awino update
+```
+
+It detects whether you are using the Claude Code plugin or a standalone
+clone, and runs the correct procedure for either automatically - the Claude
+plugin's own update commands, or a backup-first fast-forward git pull. It
+always prints the resulting version at the end, so you never need a separate
+version check.
+
+For a standalone clone specifically, the preflight command is available on
+its own instead of pulling directly:
 
 ```bash
 awino update-preflight
@@ -154,7 +167,7 @@ After an update, verify health and refresh the knowledge cache:
 
 ```bash
 awino doctor
-awino update
+awino knowledge-update
 ```
 
 Restore project-owned state from the exact printed path:

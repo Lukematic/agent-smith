@@ -260,7 +260,14 @@ cd ~/dev/awino
 git pull
 uv sync --all-groups     # only if dependencies changed
 awino doctor             # confirm nothing broke
-awino update             # refresh knowledge against upstream
+awino knowledge-update   # refresh knowledge against upstream
+```
+
+To update A.W.I.N.O. itself in one step (Claude plugin or standalone clone,
+detected automatically):
+
+```bash
+awino update
 ```
 
 Skills update automatically via the links. `awino doctor` after a pull is the

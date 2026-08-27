@@ -221,7 +221,8 @@ Needing a fourth file means the task is under-decomposed. Say so and split it.
 awino doctor [--fast] [--record]   # project health, the gate on the repo itself
 awino route <question>             # index-only routing
 awino fetch <path>                 # one chapter, with provenance
-awino update                       # refresh knowledge, report drift
+awino update                       # update A.W.I.N.O. itself (Claude plugin or clone, detected)
+awino knowledge-update             # refresh knowledge, report drift
 awino status                       # cache age, chapters indexed, lessons
 awino validate <targets> [-v]      # every authored skill and agent
 awino validate --selftest          # prove the validator still blocks bad input

@@ -188,7 +188,7 @@ it. `awino plan` reports all three.
 | Anti-pattern | Detected by | Fix |
 | --- | --- | --- |
 | `OPEN_LOOP` | no executed objective check | close the loop with an independent check |
-| `KNOWLEDGE_ROT` | cache age against the staleness policy | `awino update`, reconcile lessons |
+| `KNOWLEDGE_ROT` | cache age against the staleness policy | `awino knowledge-update`, reconcile lessons |
 | `COGNITIVE_SURRENDER` | autonomy at `bounded`+ with no recorded human inspection | inspect what the loop does, not just that it runs |
 
 `COGNITIVE_SURRENDER` deliberately does not fire under `supervised` autonomy: a

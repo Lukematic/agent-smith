@@ -1,13 +1,24 @@
 ---
 name: awino-self-update
-description: Use when asked to update yourself or refresh knowledge. Diffs the local registry against the upstream book repo, curates entries for new chapters, and reports drift against recorded lessons.
+description: Use when asked to refresh A.W.I.N.O.'s knowledge base or curate the chapter registry against upstream. For updating A.W.I.N.O.'s own installed version (Claude plugin or standalone clone), run 'awino update' directly instead - that is a single command, not a skill with judgment calls.
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash
 ---
 
-# A.W.I.N.O. Self-Update
+# A.W.I.N.O. Knowledge Registry Update
 
 A.W.I.N.O.'s knowledge is upstream and changes daily. This skill keeps the
 *index* current without ever bulk-importing the corpus.
+
+This is distinct from updating A.W.I.N.O.'s own installed version. That has
+no judgment calls to make - it is a single command:
+
+```bash
+awino update
+```
+
+It detects the Claude plugin vs a standalone clone and runs the correct
+procedure either way, then prints the resulting version. Use this skill only
+for the knowledge-registry curation described below.
 
 ## Instructions
 
@@ -27,6 +38,7 @@ entered via `_index.md`, not registry entries. Do not add them individually.
 ### Step 2: Curate ADDED entries one at a time
 
 For each newly added chapter path — **not in bulk**:
+
 
 1. Fetch it: `& .smith\scripts\fetch.ps1 -Path <path>`
 2. Read only the frontmatter plus the first section.

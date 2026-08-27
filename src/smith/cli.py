@@ -325,9 +325,13 @@ def drift() -> None:
         raise typer.Exit(1)
 
 
-@app.command()
-def update() -> None:
-    """Refresh stale cache entries and report registry drift."""
+@app.command("knowledge-update")
+def knowledge_update() -> None:
+    """Refresh stale knowledge cache entries and report registry drift.
+
+    This refreshes the fetched book/chapter cache, not A.W.I.N.O.'s own
+    installed version. To update A.W.I.N.O. itself, use 'awino update'.
+    """
     paths = _paths()
     store = KnowledgeStore(paths, budget=10_000)
     refreshed = 0
@@ -371,6 +375,86 @@ def update_preflight_command(
         raise typer.Exit(1) from exc
     _echo(f"BACKUP  {backup}")
     _echo("UPDATED  source is clean and fast-forwarded")
+
+
+def _detect_claude_plugin() -> bool:
+    """Whether this install is used through the Claude Code plugin system.
+
+    A single settings.json check is enough: it is written by the Claude
+    plugin manager itself when a plugin is enabled, so its presence is
+    evidence of the plugin path, not an assumption about how A.W.I.N.O.
+    happens to be installed on this particular machine.
+    """
+    settings_path = Path.home() / ".claude" / "settings.json"
+    if not settings_path.is_file():
+        return False
+    try:
+        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    enabled = settings.get("enabledPlugins", {})
+    return any(key.split("@")[0] == "awino" for key in enabled)
+
+
+@app.command("update")
+def update_command() -> None:
+    """Update A.W.I.N.O. itself the right way for how it is installed here.
+
+    Detects whether this machine uses the Claude Code plugin or a standalone
+    clone, and runs the matching update path automatically - so the human
+    does not need to remember two different procedures. Always ends by
+    printing the version that is actually active afterward.
+    """
+    if _detect_claude_plugin():
+        _echo("DETECTED  Claude Code plugin install")
+        marketplace = subprocess.run(
+            ["claude", "plugin", "marketplace", "update", "awino"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+        if marketplace.returncode != 0:
+            _echo(
+                f"FAILED  marketplace update: {marketplace.stderr.strip() or marketplace.stdout.strip()}"
+            )
+            raise typer.Exit(1)
+        _echo(marketplace.stdout.strip())
+        plugin_update = subprocess.run(
+            ["claude", "plugin", "update", "awino@awino"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+        if plugin_update.returncode != 0:
+            _echo(
+                f"FAILED  plugin update: {plugin_update.stderr.strip() or plugin_update.stdout.strip()}"
+            )
+            raise typer.Exit(1)
+        _echo(plugin_update.stdout.strip())
+        _echo("Restart Claude Code (or /reload-plugins) for the update to take effect.")
+        _echo(f"VERSION  {_version()}")
+        return
+
+    _echo("DETECTED  standalone clone")
+    workspace = _workspace()
+    mode_paths = [target.path for target in modes.discover(workspace.project.root)]
+    harness_paths = mode_paths + [
+        target.persona_path for target in harness.discover(workspace.project.root)
+    ]
+    try:
+        backup = updater.update_preflight(
+            workspace.home.root, workspace.project.root, harness_paths
+        )
+    except updater.PreflightError as exc:
+        _echo(f"BACKUP  {exc.backup}")
+        _echo(f"REFUSED  {exc}")
+        _echo(f"VERSION  {_version()}  (unchanged)")
+        raise typer.Exit(1) from exc
+    _echo(f"BACKUP  {backup}")
+    _echo("UPDATED  source is clean and fast-forwarded")
+    _echo(f"VERSION  {_version()}")
 
 
 @app.command("rollback")

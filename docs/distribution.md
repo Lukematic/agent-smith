@@ -168,12 +168,18 @@ git push --tags
 ## Updating an install
 
 ```bash
+awino update              # detects Claude plugin vs standalone clone, updates either way
+```
+
+Or step by step, for a standalone clone specifically:
+
+```bash
 cd ~/dev/awino
 git pull
 uv sync --all-groups     # only if dependencies changed
 awino update-preflight   # backup, then fast-forward only
 awino doctor             # confirm nothing broke
-awino update             # refresh the knowledge registry against upstream
+awino knowledge-update   # refresh the knowledge registry against upstream
 ```
 
 `awino doctor` after a pull is the important step. It is the difference between

@@ -262,7 +262,7 @@ After update:
 
 ```bash
 awino doctor
-awino update
+awino knowledge-update
 ```
 
 If restoration is required, default to project state:
