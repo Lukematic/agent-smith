@@ -22,6 +22,7 @@
         "./skills/awino-author-agent",
         "./skills/awino-author-tool",
         "./skills/awino-bootstrap",
+        "./skills/awino-config-review",
         "./skills/awino-consult",
         "./skills/awino-delegate",
         "./skills/awino-debug",

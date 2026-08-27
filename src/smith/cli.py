@@ -22,6 +22,7 @@ import typer
 
 from smith import (
     capability,
+    config_review,
     debugging,
     fix,
     harness,
@@ -1358,6 +1359,54 @@ def doctor(
     if failing:
         _echo("")
         _echo(f"REFUSED  {len(failing)} gate(s) failing: {', '.join(r.name for r in failing)}")
+        raise typer.Exit(1)
+
+
+@app.command("config-review")
+def config_review_command(
+    as_json_output: bool = typer.Option(False, "--json", help="Machine-readable output"),
+) -> None:
+    """Audit project configuration for drift, conflicts, and unsafe defaults.
+
+    Read-only: this never rewrites pyproject.toml, Makefile, Justfile, CI
+    workflows, harness config, .env files, or kilo.json. Every finding cites
+    the exact file (and line, when addressable) it came from.
+    """
+    workspace = _workspace()
+    project = workspace.project.root
+    findings = config_review.review(project)
+    has_error = any(str(finding.severity) == "error" for finding in findings)
+
+    if as_json_output:
+        _echo(config_review.as_json(project, findings))
+        if has_error:
+            raise typer.Exit(1)
+        return
+
+    _echo(f"project: {project}")
+    if not findings:
+        _echo("CLEAN  no configuration findings")
+        return
+
+    for finding in findings:
+        _echo(
+            f"  {finding.severity:<5} {finding.category:<12} {finding.citation(project)}  "
+            f"{finding.message}"
+        )
+        if finding.suggested_command:
+            _echo(f"        try: {finding.suggested_command}")
+
+    counts: dict[str, int] = {}
+    for finding in findings:
+        counts[str(finding.severity)] = counts.get(str(finding.severity), 0) + 1
+    _echo("")
+    _echo(
+        "SUMMARY  "
+        + "  ".join(
+            f"{severity}={counts.get(severity, 0)}" for severity in ("error", "warn", "info")
+        )
+    )
+    if has_error:
         raise typer.Exit(1)
 
 
