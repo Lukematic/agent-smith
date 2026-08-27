@@ -341,6 +341,63 @@ class TestIdempotentLinking:
         assert (destination / "marker-old").exists()
         assert not (destination / "marker-new").exists()
 
+    def test_an_unrecorded_preexisting_link_is_refused_without_overwrite(
+        self, tmp_path: Path
+    ) -> None:
+        # Regression for a real bug found live on a machine with skills
+        # installed before ownership.record() was called on link success: a
+        # manifest-unaware link must not be silently relinked, and must not
+        # be confused with a genuinely foreign (never-A.W.I.N.O.-owned) path.
+        from smith.harness import _link_or_copy
+
+        source = tmp_path / "source"
+        source.mkdir()
+        (source / "marker").write_text("x", encoding="utf-8")
+        destination = tmp_path / "dst"
+
+        # Create the link the same way the installer's own fallback does,
+        # without going through _link_or_copy, so no ownership entry exists -
+        # exactly the state a pre-fix install left behind.
+        first, _ = _link_or_copy(source, destination)
+        assert first == "LINKED"
+        from smith import ownership
+
+        manifest = ownership.manifest_path(destination.parent)
+        manifest.unlink()
+
+        outcome, detail = _link_or_copy(source, destination)
+        assert outcome == "SKIPPED"
+        assert "already linked" in detail
+
+    def test_overwrite_repoints_an_owned_link_after_backing_it_up(self, tmp_path: Path) -> None:
+        # The real fix: --overwrite is the escape hatch for a link that is
+        # genuinely A.W.I.N.O.'s own but now needs to point somewhere else
+        # (a moved or consolidated repository), instead of the flag doing
+        # nothing at all.
+        from smith.harness import _link_or_copy
+
+        old = tmp_path / "old"
+        old.mkdir()
+        (old / "marker-old").write_text("x", encoding="utf-8")
+        new = tmp_path / "new"
+        new.mkdir()
+        (new / "marker-new").write_text("x", encoding="utf-8")
+        destination = tmp_path / "dst"
+
+        first, _ = _link_or_copy(old, destination)
+        assert first == "LINKED"
+
+        without_overwrite, _ = _link_or_copy(new, destination)
+        assert without_overwrite == "FAILED"
+
+        with_overwrite, _ = _link_or_copy(new, destination, overwrite=True)
+        assert with_overwrite == "LINKED"
+        assert (destination / "marker-new").exists()
+        assert not (destination / "marker-old").exists()
+
+        backups = list((destination.parent / ".awino-backups").glob("*/dst"))
+        assert backups, "expected the old destination to be backed up, not discarded"
+
 
 class TestHarnessFrontmatter:
     """Each harness needs a different frontmatter shape, and getting it wrong

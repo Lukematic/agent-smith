@@ -220,22 +220,48 @@ def _link_or_copy(source: Path, destination: Path, *, overwrite: bool = False) -
     Windows needs Developer Mode or elevation for symlinks, so a junction and then
     a copy are the documented fallbacks. The difference matters: a link updates on
     git pull, a copy needs reinstalling.
+
+    ``overwrite`` is a deliberate escape hatch for the one case ownership
+    safety cannot resolve on its own: a destination that is genuinely
+    A.W.I.N.O.'s own link or copy, but was created before ownership tracking
+    existed, or now needs to point at a different source (a moved or
+    consolidated repository). It still backs up an existing destination
+    before replacing it - "force" here means "replace after backing up",
+    never "replace and discard".
     """
-    # Kept for CLI compatibility; ownership safety applies even when requested.
-    del overwrite
     if _already_linked(destination, source):
         return "SKIPPED", "already linked, git pull keeps it current"
 
     if destination.exists() or destination.is_symlink():
         root = destination.parent
         owned = ownership.entry(root, destination)
-        if not owned:
-            return "FAILED", "existing destination is not installer-owned; refusing replacement"
-        if not ownership.unchanged(root, destination):
-            saved = ownership.backup(destination)
-            return "FAILED", f"installer-owned destination was modified; backup: {saved}"
-        if owned.get("kind") == "copy" and ownership.sha256_path(source) == owned.get("sha256"):
-            return "SKIPPED", "installer-owned copy already current"
+        points_elsewhere = owned is not None and owned.get("kind") == "link"
+
+        if not overwrite:
+            if not owned:
+                return (
+                    "FAILED",
+                    "existing destination is not installer-owned; refusing replacement",
+                )
+            if points_elsewhere:
+                # An owned link that no longer points at the requested source is
+                # a real change of intent (a different install location, a moved
+                # repository), not a modification of file content - unchanged()
+                # would not catch this since it only hashes the destination's
+                # current content, which still matches whatever it is linked to.
+                return (
+                    "FAILED",
+                    "installer-owned link points elsewhere; re-run with "
+                    "--overwrite after confirming the new source is correct",
+                )
+            if not ownership.unchanged(root, destination):
+                saved = ownership.backup(destination)
+                return "FAILED", f"installer-owned destination was modified; backup: {saved}"
+            if owned.get("kind") == "copy" and ownership.sha256_path(source) == owned.get("sha256"):
+                return "SKIPPED", "installer-owned copy already current"
+
+        if overwrite and destination.exists():
+            ownership.backup(destination)
         try:
             _unlink_any(destination)
         except OSError as exc:
@@ -247,6 +273,7 @@ def _link_or_copy(source: Path, destination: Path, *, overwrite: bool = False) -
     except OSError:
         pass
     else:
+        ownership.record(destination.parent, destination, "link")
         return "LINKED", "updates automatically on git pull"
 
     if os.name == "nt":
@@ -258,6 +285,7 @@ def _link_or_copy(source: Path, destination: Path, *, overwrite: bool = False) -
             check=False,
         )
         if result.returncode == 0:
+            ownership.record(destination.parent, destination, "link")
             return "LINKED", "junction, updates automatically on git pull"
 
     try:
@@ -358,7 +386,11 @@ def install(
     destination = target.persona_path
     try:
         outcome, detail = ownership.safe_write(
-            target.root, destination, _persona_for(target.harness, persona_source), "persona"
+            target.root,
+            destination,
+            _persona_for(target.harness, persona_source),
+            "persona",
+            overwrite=overwrite,
         )
         actions.append(Action(label, destination, outcome, detail))
     except OSError as exc:
@@ -407,7 +439,9 @@ def status(project: Path, targets: list[Target] | None = None) -> list[tuple[Tar
             out.append((target, True, detail))
             continue
         count = (
-            len(list(target.skills_root.glob("*/SKILL.md"))) if target.skills_root.is_dir() else 0
+            len(list(target.skills_root.glob("awino-*/SKILL.md")))
+            if target.skills_root.is_dir()
+            else 0
         )
         out.append((target, True, f"persona and {count} skill(s)"))
     return out

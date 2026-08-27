@@ -74,7 +74,9 @@ def backup(path: Path) -> Path:
     return destination
 
 
-def safe_write(root: Path, destination: Path, content: str, kind: str) -> tuple[str, str]:
+def safe_write(
+    root: Path, destination: Path, content: str, kind: str, *, overwrite: bool = False
+) -> tuple[str, str]:
     encoded_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
     if destination.exists():
         if sha256_path(destination) == encoded_hash:
@@ -82,7 +84,8 @@ def safe_write(root: Path, destination: Path, content: str, kind: str) -> tuple[
             return "SKIPPED", "already current"
         if not unchanged(root, destination):
             saved = backup(destination)
-            return "FAILED", f"destination changed or not installer-owned; backup: {saved}"
+            if not overwrite:
+                return "FAILED", f"destination changed or not installer-owned; backup: {saved}"
     destination.parent.mkdir(parents=True, exist_ok=True)
     # Preserve the exact bytes hashed above. On Windows, text-mode newline
     # translation would otherwise turn LF into CRLF and make the installer
