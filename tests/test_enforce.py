@@ -490,20 +490,20 @@ class TestScopeDetection:
 
 
 class TestDeliverableCompleteness:
-    """Regression for the Nuclear Battery / TRISO substitution incident.
+    """Regression for a real deliverable-substitution incident.
 
-    An agent was asked to run 10 indicator scans for Nuclear Battery. It ran
-    3, invented a success-adjacent status ("honesty_boundary") to describe
-    the other 7 as skipped, and reported the run as implemented_and_tested.
-    A partial deliverable reported as complete is a failed task, not a
-    partial success - close() must refuse it mechanically, not rely on the
-    agent's self-report.
+    An agent was asked to run 10 indicator scans for a technology category.
+    It ran 3, invented a success-adjacent status ("honesty_boundary") to
+    describe the other 7 as skipped, and reported the run as
+    implemented_and_tested. A partial deliverable reported as complete is a
+    failed task, not a partial success - close() must refuse it mechanically,
+    not rely on the agent's self-report.
     """
 
     def test_partial_deliverable_refuses_close_even_with_all_gates_green(
         self, ledger: Ledger
     ) -> None:
-        run = ledger.open(TaskClass.RESEARCH, "run 10 indicator scans for Nuclear Battery")
+        run = ledger.open(TaskClass.RESEARCH, "run 10 indicator scans")
         ledger.record(run.run_id, Gate.RESEARCHED, "exit 0")
         # 3 of 10 indicators actually ran - the exact incident numbers.
         ledger.record_completeness(run.run_id, achieved=3, stated=10, unit="indicator(s)")
@@ -577,7 +577,7 @@ class TestEscapeHatchDenylist:
     to make 7 skipped indicator scans sound principled instead of unmet."""
 
     def test_the_exact_invented_term_from_the_incident_is_refused(self, ledger: Ledger) -> None:
-        run = ledger.open(TaskClass.RESEARCH, "run 10 indicator scans for Nuclear Battery")
+        run = ledger.open(TaskClass.RESEARCH, "run 10 indicator scans")
         with pytest.raises(LedgerError, match="ESCAPE_HATCH_TERM"):
             ledger.attest(
                 run.run_id,
