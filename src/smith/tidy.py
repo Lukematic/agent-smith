@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import re
 import shutil
 from collections import defaultdict
 from dataclasses import dataclass
@@ -93,6 +94,19 @@ def _ignored(path: Path, root: Path) -> bool:
     return any(part in IGNORED_TREES for part in parts)
 
 
+# CI generates one JUnit XML report per matrix cell (test-results-<os>-py<ver>.xml,
+# see .github/workflows/ci.yml), and a human running the exact same pytest command
+# locally produces the same pattern. A generated test report is not clutter that
+# indicates a project going feral - it is expected, disposable evidence, no
+# different in kind from a coverage report. Naming this out explicitly means a
+# real CI run does not fail 'doctor' on its own test step's own output.
+_GENERATED_TEST_REPORT = re.compile(r"^test-results.*\.xml$")
+
+
+def _is_generated_test_report(name: str) -> bool:
+    return bool(_GENERATED_TEST_REPORT.match(name))
+
+
 class Finding(StrEnum):
     STRAY_ROOT_FILE = "STRAY_ROOT_FILE"
     STRAY_ROOT_DIR = "STRAY_ROOT_DIR"
@@ -141,7 +155,7 @@ class Tidier:
                     out.append(
                         Clutter(Finding.STRAY_ROOT_DIR, item, "unexpected directory at root")
                     )
-            elif item.name not in ROOT_ALLOWED:
+            elif item.name not in ROOT_ALLOWED and not _is_generated_test_report(item.name):
                 out.append(
                     Clutter(
                         Finding.STRAY_ROOT_FILE,
