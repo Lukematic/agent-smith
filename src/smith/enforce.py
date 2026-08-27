@@ -78,6 +78,14 @@ class PlanDecision(StrEnum):
     REJECTED = "rejected"
 
 
+class ReviewVerdict(StrEnum):
+    """The reviewer's durable judgement, recorded by ``gate review``."""
+
+    APPROVED = "approved"
+    CHANGES_REQUESTED = "changes-requested"
+    BLOCKED = "blocked"
+
+
 class TerminalState(StrEnum):
     """The only ways a run may end up looking finished.
 
@@ -221,6 +229,42 @@ class CompletenessRecord:
         return self.achieved >= self.stated or self.accepted_reduced_scope
 
 
+@dataclass(frozen=True)
+class ProvenanceGateResult:
+    """One (gate, command, exit_code) tuple captured at review time."""
+
+    gate: str
+    command: str
+    exit_code: int
+
+
+@dataclass(frozen=True)
+class ProvenanceRecord:
+    """The durable record written by ``gate review`` before a run may close.
+
+    A review is not a paragraph asserting the work is good, it is a structured
+    citation of what was actually checked: which Seed and plan this run traces
+    to, exactly which commands ran and what they returned, which files changed,
+    and a human-attributable verdict with any risks that remain open. Recording
+    this here means ``gate close`` can require it exist rather than trust that
+    review happened.
+    """
+
+    issue_id: str | None
+    plan_sha256: str | None
+    run_id: str
+    gate_results: list[ProvenanceGateResult]
+    changed_files: list[str]
+    verdict: str
+    risks: str | None
+    recorded_at: str
+
+    @property
+    def summary(self) -> str:
+        risks = self.risks or "none recorded"
+        return f"review={self.verdict} changed_files={len(self.changed_files)} risks={risks}"
+
+
 @dataclass
 class Run:
     """One unit of work with a declared contract and an evidence ledger."""
@@ -244,6 +288,7 @@ class Run:
     closed_at: str | None = None
     verdict: str | None = None
     terminal_state: str | None = None
+    provenance: ProvenanceRecord | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> Run:
@@ -267,6 +312,14 @@ class Run:
         values.setdefault("closed_at", None)
         values.setdefault("verdict", None)
         values.setdefault("terminal_state", None)
+        provenance = values.get("provenance")
+        if provenance:
+            gate_results = [
+                ProvenanceGateResult(**item) for item in provenance.get("gate_results", [])
+            ]
+            values["provenance"] = ProvenanceRecord(**{**provenance, "gate_results": gate_results})
+        else:
+            values["provenance"] = None
         return cls(**values)
 
     def to_dict(self) -> dict[str, object]:
@@ -795,6 +848,41 @@ class Ledger:
             run.skill_events.append(item)
         self.save(run)
         return run
+
+    def record_provenance(
+        self,
+        run_id: str,
+        *,
+        verdict: ReviewVerdict,
+        gate_results: list[ProvenanceGateResult],
+        changed_files: list[str],
+        risks: str | None = None,
+    ) -> ProvenanceRecord:
+        """Persist ``gate review``'s findings so ``gate close`` can require them.
+
+        The plan hash and Seed id are read from the run itself rather than
+        supplied by the caller, so a review cannot be attributed to a plan or
+        Seed it did not actually inspect.
+        """
+        run = self.load(run_id)
+        plan_sha256 = None
+        if run.plan_path is not None:
+            plan = Path(run.plan_path)
+            if plan.is_file():
+                plan_sha256 = hashlib.sha256(plan.read_bytes()).hexdigest()
+        record = ProvenanceRecord(
+            issue_id=run.issue_id,
+            plan_sha256=plan_sha256,
+            run_id=run_id,
+            gate_results=gate_results,
+            changed_files=changed_files,
+            verdict=str(verdict),
+            risks=risks,
+            recorded_at=datetime.now(UTC).isoformat(),
+        )
+        run.provenance = record
+        self.save(run)
+        return record
 
 
 @dataclass

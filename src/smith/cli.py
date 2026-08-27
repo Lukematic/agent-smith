@@ -22,6 +22,7 @@ import typer
 
 from smith import (
     capability,
+    completion_review,
     config_review,
     debugging,
     fix,
@@ -45,6 +46,7 @@ from smith.enforce import (
     Ledger,
     LedgerError,
     PlanDecision,
+    ReviewVerdict,
     TaskClass,
     adjudicate,
     detect_scope_violations,
@@ -1532,6 +1534,7 @@ def work_close_command(
     resolved = run_id or ledger.current_id()
     verdict = None
     evidence: list = []
+    run = None
     if resolved:
         try:
             run = ledger.load(resolved)
@@ -1558,6 +1561,8 @@ def work_close_command(
         raise typer.Exit(1)
 
     reason_text = check.close_reason if check.may_close else f"FORCED despite {check.reason}"
+    if run is not None and run.provenance is not None:
+        reason_text = f"{reason_text} [review: {completion_review.provenance_summary_for_seed(run.provenance)}]"
     result = tracker.close(issue_id, reason_text)
     _echo("")
     if not result.ok:
@@ -2630,6 +2635,143 @@ def gate_check(
         raise typer.Exit(1)
 
 
+@gate_app.command("review")
+def gate_review(
+    verdict: ReviewVerdict = typer.Option(
+        ..., "--verdict", help="approved, changes-requested, or blocked"
+    ),
+    risks: str = typer.Option(None, "--risks", help="Remaining risk(s), free text. Optional."),
+    diff_base: str = typer.Option(
+        None, "--diff-base", help="Git ref to diff against for scope/weakening checks"
+    ),
+    skip_toolchain: bool = typer.Option(
+        False, "--skip-toolchain", help="Skip running detected test/lint commands"
+    ),
+    run_id: str = typer.Option(None, "--run", help="Run id, defaults to current"),
+) -> None:
+    """Independent completion review, run before ``gate close``.
+
+    Extracts acceptance criteria from the objective and linked Seed (if any),
+    runs the project's own test/lint commands as real evidence, reuses the
+    existing scope and test-weakening checks against a diff, and runs
+    ``tidy --dry-run`` read-only. The result is recorded as a ProvenanceRecord;
+    task classes that require the REVIEWED gate will not close without one.
+    """
+    resolved = _resolve_run(run_id)
+    ledger = _ledger()
+    root = _workspace().project.root
+    try:
+        run = ledger.load(resolved)
+        _require_valid_plan(ledger, resolved)
+    except LedgerError as exc:
+        _ledger_error(exc)
+
+    seed_description = ""
+    if run.issue_id:
+        tracker = seeds.Seeds(root)
+        state, _reason = tracker.state()
+        if state.usable:
+            issue = tracker.show(run.issue_id)
+            if issue is not None:
+                seed_description = issue.description
+
+    try:
+        report = completion_review.review_run(
+            ledger,
+            run,
+            root,
+            seed_description=seed_description,
+            diff_base=diff_base,
+            run_toolchain=not skip_toolchain,
+        )
+    except RuntimeError as exc:
+        _echo(f"REFUSED  GIT_DIFF_FAILED  {exc}")
+        raise typer.Exit(1) from exc
+
+    if report.criteria:
+        _echo(f"ACCEPTANCE CRITERIA  {len(report.criteria)} found in objective/Seed description")
+        for item in report.criteria:
+            _echo(f"  - {item.text}")
+    else:
+        _echo("ACCEPTANCE CRITERIA  none found, skipped")
+
+    if report.toolchain_results:
+        _echo("")
+        _echo("TOOLCHAIN VERIFICATION")
+        for item in report.toolchain_results:
+            mark = "PASS" if item.passed else "FAIL"
+            _echo(f"  {mark}  {item.gate:<10} exit={item.exit_code}  {item.command}")
+
+    if diff_base:
+        _echo("")
+        if report.test_weakening:
+            _echo(f"TESTS_WEAKENED  {len(report.test_weakening)} finding(s):")
+            for finding in report.test_weakening:
+                _echo(f"  ! {finding}")
+        else:
+            _echo("TESTS_NOT_WEAKENED  ok")
+            ledger.attest(
+                resolved,
+                Gate.TESTS_NOT_WEAKENED,
+                f"gate review: diff vs {diff_base} shows no weakening",
+            )
+        if report.scope_violations:
+            _echo(
+                f"SCOPE_VIOLATION  {len(report.scope_violations)} file(s) outside declared scope:"
+            )
+            for path in report.scope_violations:
+                _echo(f"  ! {path}")
+        elif run.file_scope:
+            _echo("SCOPE_RESPECTED  ok")
+            ledger.attest(
+                resolved,
+                Gate.SCOPE_RESPECTED,
+                f"gate review: {len(report.changed_files)} changed files all within scope",
+            )
+
+    _echo("")
+    if report.tidy_findings:
+        _echo(f"TIDY FINDINGS  {len(report.tidy_findings)} (dry-run, nothing changed)")
+        for item in report.tidy_findings:
+            rel = (
+                item.clutter.path.relative_to(root)
+                if root in item.clutter.path.parents
+                else item.clutter.path
+            )
+            level = "BLOCKING" if item.blocking else "WARN"
+            _echo(f"  {level:<8} {item.clutter.kind:<18} {rel}  ({item.clutter.detail})")
+    else:
+        _echo("TIDY FINDINGS  none")
+
+    if not report.can_record:
+        _echo("")
+        reasons = []
+        if report.test_weakening:
+            reasons.append("test weakening detected")
+        if report.scope_violations:
+            reasons.append("scope violation detected")
+        if report.blocking_tidy_findings:
+            reasons.append(f"{len(report.blocking_tidy_findings)} in-scope clutter finding(s)")
+        _echo(f"REFUSED  REVIEW_BLOCKED  {'; '.join(reasons)}")
+        raise typer.Exit(1)
+
+    gate_results = completion_review.build_provenance(report)
+    record = ledger.record_provenance(
+        resolved,
+        verdict=verdict,
+        gate_results=gate_results,
+        changed_files=report.changed_files,
+        risks=risks,
+    )
+    ledger.attest(resolved, Gate.REVIEWED, f"gate review verdict={verdict}")
+
+    _echo("")
+    _echo(f"REVIEWED  verdict={record.verdict}")
+    _echo(f"  changed_files={len(record.changed_files)}  risks={record.risks or 'none'}")
+    if verdict != ReviewVerdict.APPROVED:
+        _echo(f"NOTE  verdict is {verdict}; gate close will still require every gate to pass.")
+
+
 @gate_app.command("close")
 def gate_close(
     run_id: str = typer.Option(None, "--run", help="Run id, defaults to current"),
@@ -2642,6 +2784,10 @@ def gate_close(
         _require_valid_plan(ledger, resolved)
     except LedgerError as exc:
         _ledger_error(exc)
+    if Gate.REVIEWED in run.required and run.provenance is None:
+        _echo("")
+        _echo("REFUSED  REVIEW_REQUIRED: run 'gate review' first")
+        raise typer.Exit(1)
     verdict = adjudicate(run, ledger.evidence(resolved))
 
     _echo(f"RUN {verdict.run_id}  class={verdict.task_class}")
