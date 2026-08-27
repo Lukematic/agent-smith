@@ -26,6 +26,7 @@ from smith import (
     completion_review,
     config_review,
     debugging,
+    doc_review,
     fix,
     harness,
     health,
@@ -2102,6 +2103,86 @@ def delegate_command(
     if len(trusted) != len(results):
         _echo("Unverified work is not complete work.")
         raise typer.Exit(1)
+
+
+@app.command("review-doc")
+def review_doc_command(
+    path: Path = typer.Argument(..., help="Spec or plan document to review"),
+    rubric: str = typer.Option(
+        ..., "--rubric", help="'spec' (project.yaml-style) or 'plan' (thoughts/plans/*.md-style)"
+    ),
+    run_loop: bool = typer.Option(
+        False,
+        "--run-loop",
+        help="Loop fix->re-review with the default scorer, capped at 5 iterations",
+    ),
+    run_id: str = typer.Option(
+        None, "--run", help="Run id to attest against. Defaults to the current run if any."
+    ),
+) -> None:
+    """Second-pass rubric review of a spec or plan, before implementation proceeds.
+
+    This does not spawn a real reviewer subagent: that requires the
+    orchestrating agent's Task tool, which a CLI subprocess does not have.
+    A single pass (the default) scores the document with the deterministic
+    rubric heuristics in ``doc_review.score_document`` and prints Issues
+    Found, exiting nonzero unless the document is Approved. ``--run-loop``
+    additionally loops that same scorer against the document on disk, capped
+    at 5 total iterations and 3 iterations of the same recurring rubric
+    category, surfacing to the human rather than looping forever. The verdict
+    is attested against a run (explicit ``--run`` or the current run) when
+    one exists; without a run this still runs standalone and just prints.
+    """
+    if rubric not in {doc_review.RubricKind.SPEC, doc_review.RubricKind.PLAN}:
+        _echo(f"REFUSED  --rubric must be 'spec' or 'plan', got {rubric!r}")
+        raise typer.Exit(2)
+    resolved_path = path if path.is_absolute() else _workspace().project.root / path
+    if not resolved_path.is_file():
+        _echo(f"REFUSED  DOCUMENT_NOT_FOUND  {resolved_path}")
+        raise typer.Exit(2)
+
+    table = doc_review.RubricKind.rubric(rubric)
+    _echo(f"RUBRIC  {rubric}: {', '.join(table)}")
+
+    def _read() -> str:
+        return resolved_path.read_text(encoding="utf-8")
+
+    if run_loop:
+        outcome = doc_review.run_review_loop(_read, table, doc_review.score_document)
+    else:
+        result = doc_review.score_document(_read(), table)
+        outcome = doc_review.LoopOutcome(
+            iterations=[doc_review.IterationRecord(1, result)],
+            stopped_reason="single pass" if result.approved else "single pass, issues found",
+            surfaced_to_human=False,
+        )
+
+    final = outcome.final
+    for record in outcome.iterations:
+        result = record.result
+        _echo(f"ITERATION {record.iteration}  verdict={result.verdict}")
+        for issue in result.issues:
+            _echo(f"  ! [{issue.category}] {issue.detail}")
+
+    _echo("")
+    _echo(f"STOPPED  {outcome.stopped_reason}")
+
+    resolved_run_id = run_id or _ledger().current_id()
+    if resolved_run_id:
+        try:
+            doc_review.attest_review(_ledger(), resolved_run_id, outcome, resolved_path)
+            _echo(f"ATTESTED  run={resolved_run_id}")
+        except LedgerError as exc:
+            _echo(f"REFUSED  {exc}")
+            raise typer.Exit(1) from exc
+
+    if outcome.surfaced_to_human:
+        _echo("REFUSED  cap reached; a human must decide how to proceed.")
+        raise typer.Exit(1)
+    if final is None or not final.approved:
+        _echo("REFUSED  Issues Found; re-run after fixing, or pass --run-loop.")
+        raise typer.Exit(1)
+    _echo("APPROVED")
 
 
 @app.command()
