@@ -217,6 +217,63 @@ def _bullets(body: str) -> list[str]:
     return out
 
 
+_WORK_ITEM_PREFIX = re.compile(r"^\s*(bug|fix|test|task|chore|docs?|refactor)\s*[:\-]", re.I)
+
+# Words too generic to establish a shared theme on their own (articles,
+# verbs common to almost any task description). Requiring an overlap
+# outside this set keeps a false "shared theme" from being found between
+# titles that only share "the" or "add".
+_THEME_STOPWORDS = frozenset(
+    {
+        "a",
+        "an",
+        "and",
+        "the",
+        "to",
+        "of",
+        "for",
+        "in",
+        "on",
+        "is",
+        "it",
+        "or",
+        "with",
+        "add",
+        "fix",
+        "update",
+        "make",
+        "use",
+        "when",
+        "not",
+        "no",
+    }
+)
+
+
+def _reads_as_work_item(title: str) -> bool:
+    """A title that opens like an issue-tracker entry, not a purpose statement."""
+    return bool(_WORK_ITEM_PREFIX.match(title))
+
+
+def _leading_title_fits_theme(titles: list[str], *, minimum: int = 2) -> bool:
+    """Does the title that would actually be guessed from share a theme?
+
+    Checking for *any* shared theme across the whole list is not enough:
+    three titles about one topic and a leading title about something else
+    entirely would still pass a whole-list check while presenting an
+    unrelated title as if it belonged to that theme. The word that must be
+    shared is the leading title's own word, with at least one other title.
+    """
+    if len(titles) < minimum:
+        return False
+    word_sets = [
+        {word for word in re.findall(r"[a-z0-9]+", title.lower()) if word not in _THEME_STOPWORDS}
+        for title in titles
+    ]
+    leading = word_sets[0]
+    return any(leading & other for other in word_sets[1:])
+
+
 def detect_kind(root: Path, text: str) -> tuple[Kind, str]:
     """Classify the project from structure and stated language."""
     lowered = text.lower()
@@ -354,9 +411,26 @@ def discover(root: Path, tracker=None) -> Mission:
                 if mission.open_work and mission.statement is None:
                     # Weakest inference: current work is not a purpose statement,
                     # so it is marked as a guess and never presented as stated.
-                    mission.statement = f"inferred from open work: {mission.open_work[0]}"
-                    mission.confidence = Confidence.GUESSED
-                    mission.evidence.append(Evidence("tracker", f"{len(issues)} open issues"))
+                    # But an open-work title that reads as a work-item (BUG:,
+                    # FIX:, TEST: prefixes) or a set of titles with no shared
+                    # theme is not a purpose statement even as a guess - it is
+                    # just the most recent unrelated task. Guessing from it
+                    # produces a confident, specific, wrong answer, which is
+                    # worse than admitting the mission is unknown.
+                    if _reads_as_work_item(mission.open_work[0]) or not _leading_title_fits_theme(
+                        mission.open_work
+                    ):
+                        mission.evidence.append(
+                            Evidence(
+                                "tracker",
+                                f"{len(issues)} open issue(s), no thematically coherent "
+                                "purpose statement among them",
+                            )
+                        )
+                    else:
+                        mission.statement = f"inferred from open work: {mission.open_work[0]}"
+                        mission.confidence = Confidence.GUESSED
+                        mission.evidence.append(Evidence("tracker", f"{len(issues)} open issues"))
         except (OSError, AttributeError):
             pass
 

@@ -295,3 +295,114 @@ class TestRealProject:
         found = mission.discover(SmithPaths.discover().root)
         assert found.statement
         assert found.confidence.trustworthy
+
+
+class _FakeIssue:
+    def __init__(self, title: str) -> None:
+        self.title = title
+
+
+class _FakeTracker:
+    """Minimal stand-in for smith.seeds.Seeds, usable without a real .seeds/."""
+
+    def __init__(self, titles: list[str]) -> None:
+        self._titles = titles
+
+    def state(self):
+        # Duck-typed to match smith.seeds.Seeds.state()'s return shape.
+        from smith.seeds import SeedsState
+
+        return SeedsState.READY, "ready"
+
+    def list_open(self, limit: int = 20) -> list[_FakeIssue]:
+        return [_FakeIssue(title) for title in self._titles[:limit]]
+
+
+class TestMissionDoesNotGuessFromWorkItems:
+    """Regression for a real bug: mission picked the most recent bug-report
+    title as the project's purpose, at a workspace root with no AGENTS.md
+    and no thematically coherent open work."""
+
+    def test_a_bug_prefixed_title_is_not_treated_as_a_purpose_statement(
+        self, tmp_path: Path
+    ) -> None:
+        tracker = _FakeTracker(
+            [
+                "BUG: awino fetch crashes on 404",
+                "Evaluate Flint Chart MCP for Claude Science",
+                "Learn LinkML: schema connection and benefits",
+            ]
+        )
+        found = mission.discover(tmp_path, tracker=tracker)
+        assert found.statement is None
+        assert found.confidence is Confidence.UNKNOWN
+
+    def test_unrelated_open_titles_are_not_treated_as_a_shared_theme(self, tmp_path: Path) -> None:
+        # None of these share a real word once stopwords are removed - they
+        # are simply the most recent unrelated tasks, not a theme.
+        tracker = _FakeTracker(
+            [
+                "Curate resources for a topic",
+                "Set up Windows and Linux tooling",
+                "Learn SOLID design principles",
+            ]
+        )
+        found = mission.discover(tmp_path, tracker=tracker)
+        assert found.statement is None
+        assert found.confidence is Confidence.UNKNOWN
+
+    def test_thematically_coherent_open_work_is_still_guessed_from(self, tmp_path: Path) -> None:
+        # This is the case the original heuristic was meant to serve: several
+        # open issues genuinely about the same subject can still stand in for
+        # a guessed purpose, marked as such.
+        tracker = _FakeTracker(
+            [
+                "Add invoice export to the billing module",
+                "Fix rounding error in billing totals",
+                "Write tests for the billing reconciliation job",
+            ]
+        )
+        found = mission.discover(tmp_path, tracker=tracker)
+        assert found.statement is not None
+        assert found.statement.startswith("inferred from open work:")
+        assert found.confidence is Confidence.GUESSED
+
+    def test_a_single_open_issue_alone_is_never_enough_to_guess_from(self, tmp_path: Path) -> None:
+        tracker = _FakeTracker(["Add invoice export to the billing module"])
+        found = mission.discover(tmp_path, tracker=tracker)
+        assert found.statement is None
+        assert found.confidence is Confidence.UNKNOWN
+
+    def test_a_real_agents_md_still_wins_over_the_tracker_regardless(self, tmp_path: Path) -> None:
+        # Regression check requested alongside the fix: a project with a real
+        # AGENTS.md must not have its explicit statement overridden or
+        # weakened by anything happening in the open-work heuristic.
+        (tmp_path / "AGENTS.md").write_text(
+            "## Mission\nCalibrate detector drift for a physics experiment.\n",
+            encoding="utf-8",
+        )
+        tracker = _FakeTracker(["BUG: something unrelated crashed"])
+        found = mission.discover(tmp_path, tracker=tracker)
+        assert found.statement is not None
+        assert "Calibrate detector drift" in found.statement
+        assert found.confidence is Confidence.STATED
+
+    def test_leading_title_unrelated_to_an_otherwise_coherent_cluster_is_not_guessed(
+        self, tmp_path: Path
+    ) -> None:
+        # Found live: three sibling titles shared "science"/"claude" with
+        # each other, which made a whole-list theme check pass, even though
+        # the leading title (the one actually used as the guess) shared
+        # nothing with any of them. The theme must be checked against the
+        # specific title that would be presented, not the list as a whole.
+        tracker = _FakeTracker(
+            [
+                "Document review loop: adapt superpowers spec/plan-reviewer pattern",
+                "Design Claude Science capability architecture",
+                "Evaluate Flint Chart MCP for Claude Science",
+                "Claude Science ideas and resource backlog",
+            ]
+        )
+        found = mission.discover(tmp_path, tracker=tracker)
+        assert found.statement is None
+        assert found.confidence is Confidence.UNKNOWN
