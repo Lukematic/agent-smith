@@ -8,6 +8,7 @@ work in prose, which is the ``MODEL_DOES_DETERMINISM`` guard applied to A.W.I.N.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -58,6 +59,18 @@ from smith.paths import SmithPaths, Workspace
 from smith.tidy import Finding, Tidier
 from smith.toolchain import Manager, Toolchain
 from smith.validate import BROKEN_SELFTEST, Status, discover, validate_file, validate_text
+
+# On Windows, sys.stdout/stderr can default to the legacy console codepage
+# (e.g. cp1252) even when the terminal or a redirected file expects UTF-8.
+# That codepage cannot round-trip characters such as an em-dash cleanly and
+# silently substitutes U+FFFD (the mojibake replacement character) instead
+# of raising. Force UTF-8 explicitly so CLI output is not corrupted by the
+# ambient console codepage. reconfigure() is a no-op where it is unsupported
+# (e.g. some captured/piped streams in test runners), so this is safe
+# everywhere, not just on Windows.
+for _stream in (sys.stdout, sys.stderr):
+    with contextlib.suppress(AttributeError, ValueError, OSError):
+        _stream.reconfigure(encoding="utf-8")
 
 app = typer.Typer(
     add_completion=False,
