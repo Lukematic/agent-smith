@@ -617,7 +617,12 @@ def tidy(
         False, "--strict", help="Also fail on regenerable caches, not just real clutter"
     ),
 ) -> None:
-    """Find clutter and archive it. Archiving is reversible; deleting is not.
+    """Find clutter in A.W.I.N.O.'s own installation and archive it.
+
+    This inspects A.W.I.N.O.'s home directory, not the project you are working
+    in. AWINO_PROJECT and the current project's toolchain have no effect
+    here. A target project's own clutter is checked by 'awino gate review'
+    instead, scoped to that project. Archiving is reversible; deleting is not.
 
     Regenerable caches are reported but do not fail by default. A ship gate that
     fails because `__pycache__` exists trains you to ignore it, which is worse than
@@ -663,7 +668,12 @@ def tidy(
 
 @app.command()
 def clean() -> None:
-    """Delete disposable artifacts. Cache is disposable; memory never is."""
+    """Delete disposable artifacts from A.W.I.N.O.'s own installation.
+
+    This operates on A.W.I.N.O.'s home directory, not the project you are
+    working in; AWINO_PROJECT has no effect here. Cache is disposable; memory
+    never is.
+    """
     paths = _paths()
     store = KnowledgeStore(paths)
     tidier = Tidier(paths)
