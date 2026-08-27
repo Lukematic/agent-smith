@@ -19,6 +19,7 @@ from smith.enforce import (
     LedgerError,
     PlanDecision,
     TaskClass,
+    TerminalState,
     adjudicate,
     detect_scope_violations,
     detect_test_weakening,
@@ -626,3 +627,186 @@ class TestEscapeHatchDenylist:
             "recorded as a pending checkpoint decision",
         )
         assert item.passed
+
+
+class TestTerminalStates:
+    """A run must persist through exactly three allowed terminal states.
+
+    COMPLETE, BLOCKED, and PAUSED are each earned by a distinct mechanism.
+    None of the three may be reached by omission, by an agent's self-report,
+    or as a side effect of an unrelated command.
+    """
+
+    def test_new_run_has_no_terminal_state(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.QUESTION, "fresh run")
+        assert run.terminal_state is None
+
+    def test_mark_complete_sets_terminal_state(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.QUESTION, "trivial")
+        completed = ledger.mark_complete(run.run_id)
+        assert completed.terminal_state == str(TerminalState.COMPLETE)
+        assert completed.verdict == "COMPLETE"
+        assert completed.closed_at is not None
+
+    def test_terminal_state_survives_reload(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.QUESTION, "trivial")
+        ledger.mark_complete(run.run_id)
+        loaded = ledger.load(run.run_id)
+        assert loaded.terminal_state == str(TerminalState.COMPLETE)
+
+    def test_legacy_run_without_terminal_state_defaults_to_none(self, ledger: Ledger) -> None:
+        run_id = "legacy-terminal"
+        ledger.run_dir(run_id).mkdir(parents=True)
+        ledger._meta(run_id).write_text(
+            json.dumps(
+                {
+                    "run_id": run_id,
+                    "task_class": "question",
+                    "objective": "old",
+                    "opened_at": "2026-01-01T00:00:00+00:00",
+                }
+            ),
+            encoding="utf-8",
+        )
+        loaded = ledger.load(run_id)
+        assert loaded.terminal_state is None
+
+    # ── BLOCKED requires both a reproducible failure and a pending decision ──
+
+    def test_blocked_requires_a_recorded_failure(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.RESEARCH, "needs a decision")
+        ledger.checkpoint(
+            run.run_id,
+            "stuck",
+            "no repro yet",
+            "wait",
+            pending_decision="proceed how?",
+            options=["a", "b"],
+        )
+        with pytest.raises(LedgerError, match="BLOCKED_REQUIRES_EVIDENCE"):
+            ledger.mark_blocked(run.run_id)
+
+    def test_blocked_requires_an_unresolved_pending_decision(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.RESEARCH, "genuinely stuck")
+        ledger.record(run.run_id, Gate.RESEARCHED, "exit 1")
+        with pytest.raises(LedgerError, match="BLOCKED_REQUIRES_PENDING_DECISION"):
+            ledger.mark_blocked(run.run_id)
+
+    def test_blocked_is_refused_once_the_decision_is_resolved(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.RESEARCH, "resolved already")
+        ledger.record(run.run_id, Gate.RESEARCHED, "exit 1")
+        ledger.checkpoint(
+            run.run_id,
+            "stuck",
+            "no repro yet",
+            "wait",
+            pending_decision="proceed how?",
+            options=["a", "b"],
+        )
+        ledger.resolve_checkpoint(run.run_id, "a", "reviewer")
+        with pytest.raises(LedgerError, match="BLOCKED_REQUIRES_PENDING_DECISION"):
+            ledger.mark_blocked(run.run_id)
+
+    def test_blocked_succeeds_with_both_a_failure_and_a_pending_decision(
+        self, ledger: Ledger
+    ) -> None:
+        run = ledger.open(TaskClass.RESEARCH, "properly blocked")
+        ledger.record(run.run_id, Gate.RESEARCHED, "exit 1")
+        ledger.checkpoint(
+            run.run_id,
+            "stuck",
+            "reproducible failure hit",
+            "wait for a human",
+            pending_decision="how to proceed?",
+            options=["retry", "abandon"],
+        )
+        blocked = ledger.mark_blocked(run.run_id)
+        assert blocked.terminal_state == str(TerminalState.BLOCKED)
+
+    def test_attestation_alone_is_not_a_reproducible_blocker(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.RESEARCH, "attested only")
+        ledger.attest(run.run_id, Gate.RESEARCHED, "trust me it is blocked")
+        ledger.checkpoint(
+            run.run_id,
+            "stuck",
+            "s",
+            "n",
+            pending_decision="d",
+            options=["a"],
+        )
+        with pytest.raises(LedgerError, match="BLOCKED_REQUIRES_EVIDENCE"):
+            ledger.mark_blocked(run.run_id)
+
+    # ── PAUSED requires an explicit, human-named command ─────────────────────
+
+    def test_pause_requires_non_empty_by(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.QUESTION, "pausable")
+        with pytest.raises(LedgerError, match="PAUSE_REQUIRES_HUMAN"):
+            ledger.pause(run.run_id, "", "taking a break")
+
+    def test_pause_requires_non_whitespace_by(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.QUESTION, "pausable")
+        with pytest.raises(LedgerError, match="PAUSE_REQUIRES_HUMAN"):
+            ledger.pause(run.run_id, "   ", "taking a break")
+
+    def test_pause_with_named_human_sets_terminal_state(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.QUESTION, "pausable")
+        paused = ledger.pause(run.run_id, "jane", "waiting on external input")
+        assert paused.terminal_state == str(TerminalState.PAUSED)
+        artifacts = ledger.artifacts(run.run_id, "pause")
+        assert artifacts and artifacts[-1].actor == "jane"
+        assert artifacts[-1].payload["reason"] == "waiting on external input"
+
+    def test_no_command_sets_paused_as_a_side_effect(self, ledger: Ledger) -> None:
+        # Nothing other than an explicit pause() call may write this state.
+        # record(), attest(), checkpoint(), and close-adjacent calls must
+        # never touch terminal_state=PAUSED implicitly.
+        run = ledger.open(TaskClass.RESEARCH, "never auto-paused")
+        ledger.record(run.run_id, Gate.RESEARCHED, "exit 0")
+        ledger.attest(run.run_id, Gate.RESEARCHED, "note")
+        loaded = ledger.load(run.run_id)
+        assert loaded.terminal_state is None
+
+    # ── three-strikes must leave a genuine decision point behind ─────────────
+
+    def test_three_strikes_auto_creates_a_pending_decision_checkpoint(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.RESEARCH, "escalating")
+        for _ in range(3):
+            ledger.record(run.run_id, Gate.RESEARCHED, "exit 1")
+        loaded = ledger.load(run.run_id)
+        assert loaded.escalated_gates == ["researched"]
+        pending = [
+            cp
+            for cp in loaded.checkpoints
+            if cp.pending_decision is not None and cp.selected_decision is None
+        ]
+        assert len(pending) == 1
+        assert "researched" in pending[0].pending_decision
+
+        # And now the run can be properly certified BLOCKED because the
+        # decision point three-strikes created satisfies mark_blocked().
+        blocked = ledger.mark_blocked(run.run_id)
+        assert blocked.terminal_state == str(TerminalState.BLOCKED)
+
+    def test_three_strikes_does_not_duplicate_an_existing_pending_decision(
+        self, ledger: Ledger
+    ) -> None:
+        run = ledger.open(TaskClass.RESEARCH, "already has a decision")
+        ledger.checkpoint(
+            run.run_id,
+            "planning",
+            "already asked",
+            "wait",
+            pending_decision="pre-existing question",
+            options=["x", "y"],
+        )
+        for _ in range(3):
+            ledger.record(run.run_id, Gate.RESEARCHED, "exit 1")
+        loaded = ledger.load(run.run_id)
+        pending = [
+            cp
+            for cp in loaded.checkpoints
+            if cp.pending_decision is not None and cp.selected_decision is None
+        ]
+        assert len(pending) == 1
+        assert pending[0].pending_decision == "pre-existing question"

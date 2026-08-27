@@ -58,9 +58,13 @@ def _warn(name: str, detail: str, remedy: str = "") -> Result:
     return Result(name, Health.WARN, detail, remedy)
 
 
-def _run(args: list[str], cwd: Path) -> tuple[int, str]:
+def _run(args: list[str], cwd: Path, timeout: float | None = None) -> tuple[int, str]:
     try:
-        done = subprocess.run(args, capture_output=True, text=True, cwd=str(cwd), check=False)
+        done = subprocess.run(
+            args, capture_output=True, text=True, cwd=str(cwd), check=False, timeout=timeout
+        )
+    except subprocess.TimeoutExpired:
+        return 124, f"timed out after {timeout}s: {' '.join(args)}"
     except (OSError, FileNotFoundError) as exc:
         return 127, str(exc)
     return done.returncode, (done.stdout or "") + (done.stderr or "")
@@ -137,7 +141,15 @@ def check_clone_freshness(paths: SmithPaths) -> Result:
     if code != 0:
         return _ok("clone_freshness", "not a git checkout, skipping")
 
-    fetch_code, _fetch_out = _run(["git", "fetch"], paths.root)
+    fetch_code, _fetch_out = _run(
+        ["git", "-c", "credential.interactive=never", "fetch"], paths.root, timeout=15
+    )
+    if fetch_code == 124:
+        return _warn(
+            "clone_freshness",
+            "git fetch timed out (slow network or a stalled credential prompt)",
+            "run 'git fetch' manually to diagnose, or check network access",
+        )
     if fetch_code != 0:
         return _warn(
             "clone_freshness",

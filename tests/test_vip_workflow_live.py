@@ -272,8 +272,14 @@ def test_seed_17fa_black_box_vip_workflow(tmp_path: Path) -> None:
     checked = assert_ok(run_cli(project, "gate", "check", "--diff-base", "HEAD"))
     assert "TESTS_NOT_WEAKENED  ok" in checked
     assert "SCOPE_RESPECTED  ok" in checked
-    closed = assert_ok(run_cli(project, "gate", "close"))
-    assert "COMPLETE  5 gate(s) satisfied" in closed
+
+    # A COMPLETE terminal state requires the linked Seed to actually be
+    # closed, not merely that gate evidence is satisfied.
+    premature_close = run_cli(project, "gate", "close")
+    assert premature_close.returncode == 1
+    assert "SEED_NOT_CLOSED" in premature_close.stdout
+    assert "work-close" in premature_close.stdout
+
     work_closed = assert_ok(run_cli(project, "work-close", "--run", run_id))
     assert f"CLOSED  {issue_id}" in work_closed
     shown = subprocess.run(
@@ -290,5 +296,9 @@ def test_seed_17fa_black_box_vip_workflow(tmp_path: Path) -> None:
     else:
         assert "not found" in (closed_payload.get("error") or "").lower()
     assert "tested=ok/executed" in work_closed
+
+    closed = assert_ok(run_cli(project, "gate", "close"))
+    assert "COMPLETE  5 gate(s) satisfied" in closed
+
     stale = assert_ok(run_cli(project, "resume"))
     assert f"RUN {run_id}  status=stale" in stale

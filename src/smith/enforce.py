@@ -78,6 +78,22 @@ class PlanDecision(StrEnum):
     REJECTED = "rejected"
 
 
+class TerminalState(StrEnum):
+    """The only ways a run may end up looking finished.
+
+    A run with no terminal state is simply active. Anything else is one of
+    exactly three states, each earned by a distinct mechanism: ``COMPLETE`` is
+    computed from gate evidence (and, if linked, a closed Seed); ``BLOCKED``
+    requires a reproducible failure plus a recorded pending human decision;
+    ``PAUSED`` is set only by an explicit human-initiated command. A run can
+    never drift into one of these by omission or by an agent's say-so.
+    """
+
+    COMPLETE = "complete"
+    BLOCKED = "blocked"
+    PAUSED = "paused"
+
+
 # Which gates each task class must satisfy. This table is the contract: it is
 # data, so it can be tested, diffed, and reviewed, unlike a paragraph of prose.
 CONTRACTS: dict[TaskClass, tuple[Gate, ...]] = {
@@ -227,6 +243,7 @@ class Run:
     completeness: CompletenessRecord | None = None
     closed_at: str | None = None
     verdict: str | None = None
+    terminal_state: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> Run:
@@ -249,6 +266,7 @@ class Run:
         values["completeness"] = CompletenessRecord(**completeness) if completeness else None
         values.setdefault("closed_at", None)
         values.setdefault("verdict", None)
+        values.setdefault("terminal_state", None)
         return cls(**values)
 
     def to_dict(self) -> dict[str, object]:
@@ -587,7 +605,95 @@ class Ledger:
             if str(gate) not in run.escalated_gates:
                 run.escalated_gates.append(str(gate))
                 self.save(run)
+            self._ensure_pending_decision_on_escalation(run_id, gate)
         return item
+
+    def _ensure_pending_decision_on_escalation(self, run_id: str, gate: Gate) -> None:
+        """Three strikes must leave a human decision point, not a silent stall.
+
+        A gate that has failed ``MAX_ATTEMPTS`` times is a reproducible blocker.
+        Escalation alone does not make a run properly BLOCKED (see
+        ``mark_blocked``); it does ensure the decision point that BLOCKED
+        requires actually exists, instead of leaving the run merely stuck with
+        nowhere for a human to respond.
+        """
+        run = self.load(run_id)
+        has_pending = any(
+            item.pending_decision is not None and item.selected_decision is None
+            for item in run.checkpoints
+        )
+        if has_pending:
+            return
+        self.checkpoint(
+            run_id,
+            phase="three-strikes",
+            summary=f"gate {gate} failed {MAX_ATTEMPTS} times without a passing attempt",
+            next_action="a human must decide how this run proceeds",
+            pending_decision=f"How should this run proceed after {gate} failed "
+            f"{MAX_ATTEMPTS} times?",
+            options=["retry_with_new_run", "abandon", "override"],
+        )
+
+    # ── terminal state ───────────────────────────────────────────────────────
+    def mark_blocked(self, run_id: str) -> Run:
+        """Mark a run BLOCKED, but only when that is genuinely the case.
+
+        BLOCKED requires both halves: a reproducible blocker (a recorded
+        failing execution, not an attestation) and a pending human decision
+        recorded through the existing checkpoint mechanism. Neither half
+        alone is sufficient - a failure with no decision point is just
+        stuck, and a decision point with no failure is a plan question, not
+        a block.
+        """
+        run = self.load(run_id)
+        evidence = self.evidence(run_id)
+        has_reproducible_blocker = any(
+            not item.passed and not item.command.startswith("ATTEST ") for item in evidence
+        )
+        if not has_reproducible_blocker:
+            raise LedgerError(
+                "BLOCKED_REQUIRES_EVIDENCE: no failing executed gate is recorded; "
+                "record the failing command with 'gate record' first"
+            )
+        pending = next(
+            (
+                item
+                for item in reversed(run.checkpoints)
+                if item.pending_decision is not None and item.selected_decision is None
+            ),
+            None,
+        )
+        if pending is None:
+            raise LedgerError(
+                "BLOCKED_REQUIRES_PENDING_DECISION: record a checkpoint with --pending and "
+                "--option first (gate checkpoint)"
+            )
+        run.terminal_state = str(TerminalState.BLOCKED)
+        self.save(run)
+        return run
+
+    def pause(self, run_id: str, by: str, reason: str) -> Run:
+        """Set PAUSED. Only reachable from an explicit human-named command.
+
+        No other code path may set this state: a run must never pause
+        itself as a side effect of anything else it does.
+        """
+        if not by or not by.strip():
+            raise LedgerError("PAUSE_REQUIRES_HUMAN: --by must name the human pausing this run")
+        run = self.load(run_id)
+        run.terminal_state = str(TerminalState.PAUSED)
+        self.save(run)
+        self.append_artifact(run_id, "pause", by.strip(), {"reason": reason})
+        return run
+
+    def mark_complete(self, run_id: str) -> Run:
+        """Set COMPLETE. Callers must have already verified gates and any linked Seed."""
+        run = self.load(run_id)
+        run.closed_at = datetime.now(UTC).isoformat()
+        run.verdict = "COMPLETE"
+        run.terminal_state = str(TerminalState.COMPLETE)
+        self.save(run)
+        return run
 
     def attest(self, run_id: str, gate: Gate, note: str) -> Evidence:
         """Record a gate that has no command, such as a plan document existing.

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from smith import cli
@@ -266,3 +268,139 @@ def test_nuclear_battery_deliverable_substitution_incident_is_refused(tmp_path: 
     assert closed.returncode == 0, closed.stdout + closed.stderr
     assert "COMPLETE" in closed.stdout
     assert "run 10 indicator scans for Nuclear Battery" in closed.stdout
+
+
+def test_three_strikes_then_pending_decision_then_pause_requires_human(
+    tmp_path: Path,
+) -> None:
+    """Terminal-state workflow, exercised through the real subprocess CLI.
+
+    open run -> record a failing gate 3 times -> a checkpoint with a pending
+    decision now exists automatically -> attempting close is refused ->
+    resolving the decision -> gate pause requires --by -> gate status shows
+    terminal_state=paused.
+    """
+    opened = run_cli(tmp_path, "gate", "open", "research", "flaky investigation")
+    assert opened.returncode == 0, opened.stdout + opened.stderr
+
+    for expected_attempt in range(1, 4):
+        failed = run_cli(
+            tmp_path,
+            "gate",
+            "record",
+            "researched",
+            "--cmd",
+            f'"{sys.executable}" -c "import sys; sys.exit(1)"',
+        )
+        assert failed.returncode == 1
+        assert f"attempt={expected_attempt}" in failed.stdout
+
+    resumed = run_cli(tmp_path, "resume")
+    assert resumed.returncode == 0, resumed.stdout + resumed.stderr
+    assert "PENDING" in resumed.stdout
+    assert "researched" in resumed.stdout
+
+    blocked = run_cli(tmp_path, "gate", "block")
+    assert blocked.returncode == 0, blocked.stdout + blocked.stderr
+    assert "BLOCKED" in blocked.stdout
+
+    status_blocked = run_cli(tmp_path, "gate", "status")
+    assert "terminal_state: blocked" in status_blocked.stdout
+
+    close_attempt = run_cli(tmp_path, "gate", "close")
+    assert close_attempt.returncode == 1
+    assert "REFUSED" in close_attempt.stdout
+    assert "THREE_STRIKES" in close_attempt.stdout
+
+    resolved = run_cli(tmp_path, "gate", "decide", "retry_with_new_run", "--by", "reviewer")
+    assert resolved.returncode == 0, resolved.stdout + resolved.stderr
+
+    missing_by = run_cli(tmp_path, "gate", "pause", "--by", "", "--reason", "waiting")
+    assert missing_by.returncode == 1
+    assert "PAUSE_REQUIRES_HUMAN" in missing_by.stdout
+
+    paused = run_cli(
+        tmp_path, "gate", "pause", "--by", "human-reviewer", "--reason", "waiting on input"
+    )
+    assert paused.returncode == 0, paused.stdout + paused.stderr
+    assert "PAUSED" in paused.stdout
+    assert "human-reviewer" in paused.stdout
+
+    status = run_cli(tmp_path, "gate", "status")
+    assert status.returncode == 0, status.stdout + status.stderr
+    assert "terminal_state: paused" in status.stdout
+
+
+def test_gate_close_refuses_open_seed_then_succeeds_after_work_close(tmp_path: Path) -> None:
+    """A COMPLETE terminal state requires the linked Seed to actually be closed.
+
+    open run linked to a real disposable Seed -> satisfy all gates -> gate
+    close is refused with the Seed still open -> work-close closes the Seed
+    -> gate close now succeeds with terminal_state=complete.
+    """
+    if (
+        subprocess.run(["sd", "--version"], capture_output=True, check=False).returncode != 0
+    ):  # pragma: no cover - environment without the optional tool
+        pytest.skip("live Seed-linkage workflow requires the optional sd executable")
+
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["sd", "init", "--json"], cwd=tmp_path, capture_output=True, check=True)
+    created = subprocess.run(
+        ["sd", "create", "--title", "Seed for terminal-state test", "--type", "task", "--json"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    )
+    issue_id = json.loads(created.stdout)["id"]
+
+    opened = run_cli(
+        tmp_path, "gate", "open", "research", "verify seed linkage", "--issue", issue_id
+    )
+    assert opened.returncode == 0, opened.stdout + opened.stderr
+    run_id = opened.stdout.split()[1]
+    assert f"issue: {issue_id}" in opened.stdout
+
+    recorded = run_cli(
+        tmp_path,
+        "gate",
+        "record",
+        "researched",
+        "--cmd",
+        f'"{sys.executable}" -c "print(1)"',
+        "--run",
+        run_id,
+    )
+    assert recorded.returncode == 0, recorded.stdout + recorded.stderr
+
+    close_before = run_cli(tmp_path, "gate", "close", "--run", run_id)
+    assert close_before.returncode == 1
+    assert "REFUSED" in close_before.stdout
+    assert "SEED_NOT_CLOSED" in close_before.stdout
+    assert issue_id in close_before.stdout
+    assert "work-close" in close_before.stdout
+
+    work_closed = run_cli(tmp_path, "work-close", "--run", run_id)
+    assert work_closed.returncode == 0, work_closed.stdout + work_closed.stderr
+    assert f"CLOSED  {issue_id}" in work_closed.stdout
+
+    close_after = run_cli(tmp_path, "gate", "close", "--run", run_id)
+    assert close_after.returncode == 0, close_after.stdout + close_after.stderr
+    assert "COMPLETE" in close_after.stdout
+
+    status = run_cli(tmp_path, "gate", "status", "--run", run_id)
+    assert "terminal_state: complete" in status.stdout
+
+
+def test_gate_close_with_no_linked_issue_only_requires_gate_close(tmp_path: Path) -> None:
+    """COMPLETE with no linked Seed requires only that gate close succeed."""
+    opened = run_cli(tmp_path, "gate", "open", "question", "no tracker involved")
+    assert opened.returncode == 0, opened.stdout + opened.stderr
+
+    closed = run_cli(tmp_path, "gate", "close")
+    assert closed.returncode == 0, closed.stdout + closed.stderr
+    assert "COMPLETE" in closed.stdout
+
+    status = run_cli(tmp_path, "gate", "status")
+    assert "terminal_state: complete" in status.stdout

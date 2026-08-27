@@ -2666,9 +2666,28 @@ def gate_close(
         _echo("You may not report this work as complete.")
         raise typer.Exit(1)
 
-    run.closed_at = datetime.now(UTC).isoformat()
-    run.verdict = "COMPLETE"
-    ledger.save(run)
+    if run.issue_id:
+        tracker = seeds.Seeds(_workspace().project.root)
+        state, reason = tracker.state()
+        if not state.usable:
+            _echo("")
+            _echo(f"REFUSED  SEED_UNAVAILABLE  linked issue {run.issue_id} but {reason}")
+            _echo("Run 'awino work-close' first, or resolve the tracker, then retry close.")
+            raise typer.Exit(1)
+        issue = tracker.show(run.issue_id)
+        if issue is None or issue.open:
+            _echo("")
+            status = issue.status if issue is not None else "not found"
+            _echo(
+                f"REFUSED  SEED_NOT_CLOSED  linked issue {run.issue_id} is still {status}. "
+                "Gate evidence is satisfied, but a Seed left open is a lie that survives "
+                "in git history."
+            )
+            _echo(f"Run 'awino work-close' first to close {run.issue_id}, then retry close.")
+            raise typer.Exit(1)
+
+    ledger.mark_complete(resolved)
+    run = ledger.load(resolved)
     _echo("")
     _echo(f"COMPLETE  {len(verdict.satisfied)} gate(s) satisfied")
     _echo(
@@ -2677,6 +2696,59 @@ def gate_close(
     )
     if verdict.attested_only:
         _echo(f"NOTE  attested rather than executed: {', '.join(verdict.attested_only)}")
+
+
+@gate_app.command("block")
+def gate_block(
+    run_id: str = typer.Option(None, "--run", help="Run id, defaults to current"),
+) -> None:
+    """Mark a run BLOCKED. Requires a recorded failing gate and a checkpoint
+
+    with an unresolved pending decision (record one first with
+    'gate checkpoint --pending ... --option ...'). This does not create the
+    decision point itself - it only certifies that both halves of a genuine
+    block already exist, so a run cannot be waved to BLOCKED with only a
+    failure or only a question.
+    """
+    resolved = _resolve_run(run_id)
+    ledger = _ledger()
+    try:
+        run = ledger.mark_blocked(resolved)
+    except LedgerError as exc:
+        _ledger_error(exc)
+    _echo(f"BLOCKED  {run.run_id}")
+    pending = next(
+        (
+            item
+            for item in reversed(run.checkpoints)
+            if item.pending_decision is not None and item.selected_decision is None
+        ),
+        None,
+    )
+    if pending is not None:
+        _echo(f"pending: {pending.pending_decision}")
+        _echo(f"options: {', '.join(pending.options)}")
+
+
+@gate_app.command("pause")
+def gate_pause(
+    by: str = typer.Option(..., "--by", help="The human pausing this run. Required."),
+    reason: str = typer.Option(..., "--reason", help="Why this run is being paused."),
+    run_id: str = typer.Option(None, "--run", help="Run id, defaults to current"),
+) -> None:
+    """Explicitly pause a run. A human decision, never an automatic side effect.
+
+    This is a distinct command on purpose: no other command may set PAUSED as
+    a side effect, and this one refuses without a named human.
+    """
+    resolved = _resolve_run(run_id)
+    ledger = _ledger()
+    try:
+        run = ledger.pause(resolved, by, reason)
+    except LedgerError as exc:
+        _ledger_error(exc)
+    _echo(f"PAUSED  {run.run_id}  by={by}")
+    _echo(f"reason: {reason}")
 
 
 @gate_app.command("status")
@@ -2693,6 +2765,7 @@ def gate_status(
     evidence = ledger.evidence(resolved)
     verdict = adjudicate(run, evidence)
     _echo(f"RUN {run.run_id}  class={run.task_class}  objective: {run.objective}")
+    _echo(f"terminal_state: {run.terminal_state or 'active'}")
     _echo(f"skills loaded: {', '.join(run.skills_loaded) or 'none recorded'}")
     _echo(
         f"satisfied={len(verdict.satisfied)} missing={len(verdict.missing)} failing={len(verdict.failing)}"
