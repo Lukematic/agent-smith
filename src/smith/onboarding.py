@@ -58,6 +58,7 @@ class RunnerDecision(StrEnum):
     USE_DETECTED = "use-detected"
     USE_NATIVE = "use-native"
     DEFER_JUST = "defer-just"
+    INSTALL_MISSING = "install-missing"
 
 
 @dataclass

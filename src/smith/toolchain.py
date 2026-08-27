@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sys
 import tomllib
 from dataclasses import dataclass
 from enum import StrEnum
@@ -88,6 +89,47 @@ class Tool:
 
 def _have(binary: str) -> bool:
     return shutil.which(binary) is not None
+
+
+# Real per-platform install commands for tools this project may need but
+# does not manage the installation of. Kept honest and narrow: only tools
+# with a genuine, testable install path on each platform are listed here.
+# A binary with no known command on the current platform is reported as
+# such rather than guessed at.
+_TOOL_INSTALL_COMMANDS: dict[str, dict[str, list[str]]] = {
+    "just": {
+        "nt": ["winget", "install", "--id", "Casey.Just", "--source", "winget"],
+        "darwin": ["brew", "install", "just"],
+        "posix": ["cargo", "install", "just"],
+    },
+    "make": {
+        "darwin": ["brew", "install", "make"],
+        "posix": ["apt-get", "install", "-y", "make"],
+    },
+}
+
+
+def tool_install_command(binary: str) -> tuple[list[str], str] | None:
+    """A real install command for ``binary`` on this platform, plus which
+    package manager it needs. Returns None when no known command exists for
+    this platform, so the caller can say so honestly instead of guessing.
+    """
+    table = _TOOL_INSTALL_COMMANDS.get(binary)
+    if not table:
+        return None
+    if os.name == "nt":
+        platform_key = "nt"
+    elif sys.platform == "darwin":
+        platform_key = "darwin"
+    else:
+        platform_key = "posix"
+    command = table.get(platform_key)
+    if not command:
+        return None
+    manager = command[0]
+    if not _have(manager):
+        return None
+    return command, manager
 
 
 @dataclass
@@ -357,6 +399,31 @@ class Toolchain:
         if self.has("Makefile", "makefile"):
             unavailable.append("Makefile exists but make is unavailable")
         return Runner.NONE, "; ".join(unavailable) or "no task runner found"
+
+    @cached_property
+    def missing_runner_binary(self) -> tuple[str, str] | None:
+        """The binary a runner file in this project needs but does not have.
+
+        Distinct from ``runner`` reporting NONE: that answer already collapses
+        "no task runner declared" and "declared but the tool is missing" into
+        one negative, which is not enough to decide whether installing
+        something would even help. Returns (binary, benefit) so a caller can
+        both name what is missing and explain why it is worth having, rather
+        than assuming the human already knows.
+        """
+        if self.has("justfile", "Justfile", ".justfile") and not _have("just"):
+            return (
+                "just",
+                "runs this project's own justfile recipes directly, instead of "
+                "A.W.I.N.O. improvising an equivalent command from the file contents",
+            )
+        if self.has("Makefile", "makefile") and not _have("make"):
+            return (
+                "make",
+                "runs this project's own Makefile targets directly, instead of "
+                "A.W.I.N.O. improvising an equivalent command from the file contents",
+            )
+        return None
 
     @property
     def recipes(self) -> list[str]:

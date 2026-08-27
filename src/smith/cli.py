@@ -58,7 +58,7 @@ from smith.enforce import (
 from smith.knowledge import BudgetExceeded, FetchError, KnowledgeStore
 from smith.paths import SmithPaths, Workspace
 from smith.tidy import Finding, Tidier
-from smith.toolchain import Manager, Toolchain
+from smith.toolchain import Manager, Toolchain, tool_install_command
 from smith.validate import BROKEN_SELFTEST, Status, discover, validate_file, validate_text
 
 # On Windows, sys.stdout/stderr can default to the legacy console codepage
@@ -1843,6 +1843,20 @@ def project_bootstrap_command(
             _echo(f"  - {item}")
         _echo(f"tracker: {tracker_state} ({tracker_reason})")
         _echo(f"runner: {detected_runner} ({runner_reason})")
+        missing = chain.missing_runner_binary
+        if missing is not None:
+            binary, benefit = missing
+            _echo(f"  {binary} is declared by this project but not installed")
+            _echo(f"  why install it: {benefit}")
+            found = tool_install_command(binary)
+            if found is not None:
+                command, package_manager = found
+                _echo(f"  install with: {' '.join(command)}  (via {package_manager})")
+                _echo(
+                    "  confirm with: awino project-bootstrap ... --runner install-missing --confirm"
+                )
+            else:
+                _echo(f"  no known install command for '{binary}' on this platform")
         _echo("")
         _echo("No changes made. Confirm all three decisions explicitly with:")
         _echo(
@@ -1878,6 +1892,29 @@ def project_bootstrap_command(
     elif environment is onboarding.EnvironmentDecision.NOT_APPLICABLE and chain.python_project:
         _echo("REFUSED  environment cannot be not-applicable for a detected Python project")
         raise typer.Exit(1)
+
+    if runner is onboarding.RunnerDecision.INSTALL_MISSING:
+        missing = chain.missing_runner_binary
+        if missing is None:
+            _echo("REFUSED  no declared task-runner file is missing its binary; nothing to install")
+            raise typer.Exit(1)
+        binary, benefit = missing
+        found = tool_install_command(binary)
+        if found is None:
+            _echo(
+                f"REFUSED  no known install command for '{binary}' on this platform; "
+                "install it manually, then re-run with --runner use-detected"
+            )
+            raise typer.Exit(1)
+        command, package_manager = found
+        _echo(f"RUNNER INSTALL  {binary} via {package_manager}: {' '.join(command)}")
+        _echo(f"  why: {benefit}")
+        code = subprocess.run(command, cwd=str(project), check=False).returncode
+        if code:
+            _echo(f"FAILED  {binary} install exit {code}")
+            raise typer.Exit(code)
+        detected_runner, runner_reason = chain.runner
+        _echo(f"INSTALLED  {binary}; runner is now {detected_runner} ({runner_reason})")
 
     if tracker is onboarding.TrackerDecision.INITIALIZE:
         _echo("TRACKER INITIALIZE  repository-root .seeds and .gitattributes")

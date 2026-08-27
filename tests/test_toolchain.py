@@ -176,3 +176,85 @@ requires-python = ">=3.12"
         assert f"environment: {project / '.venv'}" in result.output
         assert "Run commands with 'uv run'" in result.output
         assert "shell activation is optional" in result.output
+
+
+class TestMissingRunnerBinary:
+    """Declared-but-missing is a distinct answer from no-runner-declared:
+    the first is something installing a tool would fix, the second is not."""
+
+    def test_no_runner_file_at_all_reports_nothing_missing(self, tmp_path: Path) -> None:
+        assert Toolchain(tmp_path).missing_runner_binary is None
+
+    def test_justfile_present_and_just_installed_reports_nothing_missing(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        (tmp_path / "justfile").write_text("test:\n", encoding="utf-8")
+        from smith import toolchain
+
+        monkeypatch.setattr(toolchain, "_have", lambda name: name == "just")
+        assert Toolchain(tmp_path).missing_runner_binary is None
+
+    def test_justfile_present_but_just_missing_names_just(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        (tmp_path / "justfile").write_text("test:\n", encoding="utf-8")
+        from smith import toolchain
+
+        monkeypatch.setattr(toolchain, "_have", lambda name: False)
+        missing = Toolchain(tmp_path).missing_runner_binary
+        assert missing is not None
+        binary, benefit = missing
+        assert binary == "just"
+        assert benefit
+
+    def test_makefile_present_but_make_missing_names_make(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        (tmp_path / "Makefile").write_text("test:\n", encoding="utf-8")
+        from smith import toolchain
+
+        monkeypatch.setattr(toolchain, "_have", lambda name: False)
+        missing = Toolchain(tmp_path).missing_runner_binary
+        assert missing is not None
+        binary, _benefit = missing
+        assert binary == "make"
+
+    def test_justfile_takes_precedence_over_makefile_when_both_missing(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        (tmp_path / "justfile").write_text("test:\n", encoding="utf-8")
+        (tmp_path / "Makefile").write_text("test:\n", encoding="utf-8")
+        from smith import toolchain
+
+        monkeypatch.setattr(toolchain, "_have", lambda name: False)
+        missing = Toolchain(tmp_path).missing_runner_binary
+        assert missing is not None
+        binary, _benefit = missing
+        assert binary == "just"
+
+
+class TestToolInstallCommand:
+    def test_unknown_binary_returns_none(self) -> None:
+        from smith.toolchain import tool_install_command
+
+        assert tool_install_command("does-not-exist-tool") is None
+
+    def test_known_binary_with_no_available_package_manager_returns_none(self, monkeypatch) -> None:
+        from smith import toolchain
+
+        monkeypatch.setattr(toolchain, "_have", lambda name: False)
+        assert toolchain.tool_install_command("just") is None
+
+    def test_known_binary_with_an_available_manager_returns_a_real_command(
+        self, monkeypatch
+    ) -> None:
+        from smith import toolchain
+
+        monkeypatch.setattr(os, "name", "nt")
+        monkeypatch.setattr(toolchain, "_have", lambda name: name == "winget")
+        found = toolchain.tool_install_command("just")
+        assert found is not None
+        command, manager = found
+        assert manager == "winget"
+        assert command[0] == "winget"
+        assert "just" in " ".join(command).lower() or "Just" in " ".join(command)

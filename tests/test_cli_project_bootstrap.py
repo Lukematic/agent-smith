@@ -78,3 +78,47 @@ def test_gate_open_snapshots_bootstrap(tmp_path: Path) -> None:
     payload = json.loads(artifacts.read_text(encoding="utf-8").strip())
     assert payload["kind"] == "bootstrap"
     assert payload["payload"]["confirmed_by"] == "human"
+
+
+def test_install_missing_refuses_when_nothing_is_declared_missing(tmp_path: Path) -> None:
+    # No justfile/Makefile at all: there is nothing installing a tool could
+    # fix here, so the command must refuse rather than doing nothing silently.
+    result = run_cli(
+        tmp_path,
+        "project-bootstrap",
+        "--environment",
+        "not-applicable",
+        "--tracker",
+        "skip",
+        "--runner",
+        "install-missing",
+        "--confirm",
+    )
+    assert result.returncode == 1
+    assert "no declared task-runner file is missing its binary" in result.stdout
+
+
+def test_inspection_surfaces_the_missing_binary_and_why_it_matters(tmp_path: Path) -> None:
+    # A justfile with no just installed anywhere in PATH for this subprocess -
+    # simulate by pointing PATH at an empty directory so 'just' genuinely
+    # cannot be found, matching a real missing-binary machine state.
+    (tmp_path / "justfile").write_text("test:\n    echo hi\n", encoding="utf-8")
+    empty_path_dir = tmp_path / "empty-path"
+    empty_path_dir.mkdir()
+    env = os.environ.copy()
+    env["AWINO_PROJECT"] = str(tmp_path)
+    env["PATH"] = str(empty_path_dir)
+    env.pop("VIRTUAL_ENV", None)
+    result = subprocess.run(
+        [sys.executable, "-m", "smith.cli", "project-bootstrap"],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "just is declared by this project but not installed" in result.stdout
+    assert "why install it" in result.stdout
