@@ -1150,6 +1150,38 @@ def remember_command(
     _echo(f"PROJECT     {saved}")
 
 
+@app.command("ask")
+def ask_command(
+    question: str = typer.Argument(..., help="The planning/clarifying question about to be asked"),
+) -> None:
+    """Check a planning question against this session before asking it.
+
+    This is the mechanical enforcement point the 'adaptive grill' referenced
+    by awino-delegate's planning step needed and did not have: that
+    reference was prose ("use the adaptive grill"), which cannot enforce
+    itself. Call this before posing any clarifying question during planning.
+    Exits 1 with the earlier turn if an equivalent question/answer already
+    exists this session - the same asymmetry onboarding.frontier() already
+    uses for its own fixed six questions, extended to arbitrary planning
+    questions via session_log rather than a closed vocabulary.
+    """
+    workspace = _workspace()
+    session = session_state.load(workspace.state_root)
+    session_id = session.session_id if session else "unknown"
+    duplicate = session_log.find_duplicate_question(
+        workspace.state_root, session_id, question, kind="agent_question"
+    )
+    if duplicate is not None:
+        _echo(
+            f"ALREADY_ASKED  turn={duplicate.turn}  {duplicate.text!r}. "
+            "Do not re-ask this; if the prior answer might be stale, say why "
+            "and confirm instead of asking fresh."
+        )
+        raise typer.Exit(1)
+    ask = session_log.append(workspace.state_root, session_id, "agent_question", question)
+    _echo(f"CLEAR_TO_ASK  turn={ask.turn}")
+
+
 @app.command("note")
 def note_command(
     text: str = typer.Argument(..., help="What the human said, corrected, or asked"),

@@ -83,6 +83,9 @@ class WorkflowPolicy:
     """Project-specific workflow rules, including mechanically enforceable ones."""
 
     one_task_per_session: bool = True
+    # Displayed at SessionStart (project_guard.py) and enforced by 'awino ask',
+    # which refuses a planning question this session already asked/answered.
+    # A value here alone is documentation; the enforcement is that command.
     planning_interview: str = "adaptive-grill"
     issue_required: bool = False
     issue_pattern: str = ""

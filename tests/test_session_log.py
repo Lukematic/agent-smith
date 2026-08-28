@@ -77,11 +77,37 @@ class TestDuplicateDetection:
         found = session_log.find_duplicate_question(tmp_path, "s2", "never rename the config keys")
         assert found is None
 
-    def test_only_user_turn_kind_participates_in_duplicate_detection(self, tmp_path: Path) -> None:
-        # A correction or agent_question with the same words must not be
-        # mistaken for the human repeating themselves.
+    def test_default_kind_only_matches_user_turns(self, tmp_path: Path) -> None:
+        # A correction with the same words must not be mistaken for the
+        # human repeating themselves.
         session_log.append(tmp_path, "s1", "correction", "never rename the config keys")
         found = session_log.find_duplicate_question(tmp_path, "s1", "never rename the config keys")
+        assert found is None
+
+    def test_agent_question_kind_detects_the_agent_reasking_its_own_question(
+        self, tmp_path: Path
+    ) -> None:
+        # Regression for a real bug found live: find_duplicate_question was
+        # hardcoded to only check user_turn entries, so 'awino ask' checking
+        # agent_question entries with the default kind never matched
+        # anything - the exact reworded database question from the incident
+        # this command exists to prevent went undetected until caught live.
+        session_log.append(
+            tmp_path, "s1", "agent_question", "which database should this project use?"
+        )
+        found = session_log.find_duplicate_question(
+            tmp_path,
+            "s1",
+            "what database should we use for this project?",
+            kind="agent_question",
+        )
+        assert found is not None
+
+    def test_agent_question_kind_does_not_match_a_user_turn(self, tmp_path: Path) -> None:
+        session_log.append(tmp_path, "s1", "user_turn", "which database should this project use?")
+        found = session_log.find_duplicate_question(
+            tmp_path, "s1", "which database should this project use?", kind="agent_question"
+        )
         assert found is None
 
 

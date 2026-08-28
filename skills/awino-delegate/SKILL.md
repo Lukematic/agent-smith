@@ -21,7 +21,11 @@ machines while retaining focused subagent execution.
 For non-trivial work:
 
 1. Load confirmed `.smith/project.yaml` and the active issue/run.
-2. If planning decisions remain, use the adaptive grill and wait for approval.
+2. If planning decisions remain, run `awino ask "<question>"` before posing
+   each one. It refuses (exit 1, `ALREADY_ASKED`) if an equivalent question
+   or answer already exists this session, so a repeated planning question
+   is a mechanical refusal rather than a hope the model remembers. Wait for
+   approval after the questions it clears are answered.
 3. Create or link one tracked issue when the project requires it.
 4. Stabilize shared interfaces before parallel work.
 5. Spawn the minimum useful agents in dependency waves.

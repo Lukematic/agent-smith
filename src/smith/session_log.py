@@ -121,22 +121,30 @@ def append(
 
 
 def find_duplicate_question(
-    state_root: Path, session_id: str, text: str, *, threshold: float = 0.6
+    state_root: Path,
+    session_id: str,
+    text: str,
+    *,
+    threshold: float = 0.6,
+    kind: str = "user_turn",
 ) -> Ask | None:
-    """Has the human already said something equivalent to this earlier this session?
+    """Has something equivalent already been logged this session as ``kind``?
 
     Deterministic word-overlap, not embeddings: no extra dependency, and the
     threshold is legible - a reviewer can see exactly why two turns did or
-    did not match. Compares against prior user_turn entries only, since a
-    UserPromptSubmit hook never sees what the agent itself asked or said.
-    Returns the earliest matching prior turn, or None.
+    did not match. ``kind`` selects which prior events count: "user_turn"
+    for detecting the human having to repeat themselves (a UserPromptSubmit
+    hook can never see what the agent itself asked or said), or
+    "agent_question" for detecting the agent about to re-ask its own
+    earlier planning question. Returns the earliest matching prior entry,
+    or None.
     """
     norm = _normalize(text)
     words = set(norm.split())
     if not words:
         return None
     for ask in _read_all(log_path(state_root, session_id)):
-        if ask.kind != "user_turn":
+        if ask.kind != kind:
             continue
         other = set(ask.text_norm.split())
         if not other:
