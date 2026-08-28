@@ -58,7 +58,13 @@ def _warn(name: str, detail: str, remedy: str = "") -> Result:
     return Result(name, Health.WARN, detail, remedy)
 
 
-def _run(args: list[str], cwd: Path, timeout: float | None = None) -> tuple[int, str]:
+def run_command(args: list[str], cwd: Path, timeout: float | None = None) -> tuple[int, str]:
+    """Run a subprocess and capture combined stdout/stderr, never raising.
+
+    Public: fix.py's fix_clone_freshness() shares this exact subprocess
+    contract with check_clone_freshness() so a repair and its own health
+    check agree on what "fetch failed" or "timed out" means.
+    """
     try:
         done = subprocess.run(
             args, capture_output=True, text=True, cwd=str(cwd), check=False, timeout=timeout
@@ -137,11 +143,11 @@ def check_clone_freshness(paths: SmithPaths) -> Result:
     """
     if shutil.which("git") is None:
         return _ok("clone_freshness", "git not on PATH, skipping")
-    code, _ = _run(["git", "rev-parse", "--git-dir"], paths.root)
+    code, _ = run_command(["git", "rev-parse", "--git-dir"], paths.root)
     if code != 0:
         return _ok("clone_freshness", "not a git checkout, skipping")
 
-    fetch_code, _fetch_out = _run(
+    fetch_code, _fetch_out = run_command(
         ["git", "-c", "credential.interactive=never", "fetch"], paths.root, timeout=15
     )
     if fetch_code == 124:
@@ -157,11 +163,11 @@ def check_clone_freshness(paths: SmithPaths) -> Result:
             "check network access or remote credentials",
         )
 
-    status_code, status_out = _run(["git", "status", "--porcelain=v1", "-uno"], paths.root)
+    status_code, status_out = run_command(["git", "status", "--porcelain=v1", "-uno"], paths.root)
     dirty = status_code == 0 and status_out.strip() != ""
 
-    ahead_code, ahead_out = _run(["git", "rev-list", "--count", "@{u}..HEAD"], paths.root)
-    behind_code, behind_out = _run(["git", "rev-list", "--count", "HEAD..@{u}"], paths.root)
+    ahead_code, ahead_out = run_command(["git", "rev-list", "--count", "@{u}..HEAD"], paths.root)
+    behind_code, behind_out = run_command(["git", "rev-list", "--count", "HEAD..@{u}"], paths.root)
     if ahead_code != 0 or behind_code != 0:
         return _ok("clone_freshness", "no upstream tracking branch configured, skipping")
 
@@ -196,7 +202,7 @@ def check_uv(paths: SmithPaths) -> Result:
     venv = paths.root / ".venv"
     if not venv.is_dir():
         return _fail("uv_env", "no .venv in the project", "just install")
-    code, out = _run(["uv", "sync", "--all-groups", "--frozen", "--quiet"], paths.root)
+    code, out = run_command(["uv", "sync", "--all-groups", "--frozen", "--quiet"], paths.root)
     if code != 0:
         # --frozen fails when the lock is out of date, which is the real signal.
         return _fail(
@@ -271,7 +277,7 @@ def check_pyproject(paths: SmithPaths) -> Result:
 
 
 def check_lint(paths: SmithPaths) -> Result:
-    code, out = _run(
+    code, out = run_command(
         ["uv", "run", "ruff", "check", "src", "tests", "--output-format", "concise"], paths.root
     )
     if code == 0:
@@ -281,7 +287,7 @@ def check_lint(paths: SmithPaths) -> Result:
 
 
 def check_format(paths: SmithPaths) -> Result:
-    code, out = _run(["uv", "run", "ruff", "format", "--check", "src", "tests"], paths.root)
+    code, out = run_command(["uv", "run", "ruff", "format", "--check", "src", "tests"], paths.root)
     if code == 0:
         return _ok("format", "formatting consistent")
     return _fail(
@@ -290,7 +296,7 @@ def check_format(paths: SmithPaths) -> Result:
 
 
 def check_tests(paths: SmithPaths) -> Result:
-    code, out = _run(["uv", "run", "pytest", "-q"], paths.root)
+    code, out = run_command(["uv", "run", "pytest", "-q"], paths.root)
     summary = next(
         (ln for ln in reversed(out.splitlines()) if "passed" in ln or "failed" in ln), ""
     )

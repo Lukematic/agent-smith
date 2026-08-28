@@ -220,6 +220,67 @@ def fix_gitkeeps(paths: SmithPaths) -> Repair:
     return _fixed("gitkeeps", f"marked {', '.join(added)} as intentionally empty")
 
 
+def fix_clone_freshness(paths: SmithPaths) -> Repair:
+    """Fast-forward a clean-but-behind clone; report anything less certain.
+
+    A clean clone that is only behind its own remote is fully deterministic
+    to fix: fast-forwarding is catching up to already-published history,
+    which is the exact case this repo's own lessons landed in a stale
+    duplicate clone twice - reported as a WARN nobody acted on until a human
+    went looking for it. Dirty or diverged state is refused, not guessed at,
+    matching updater.update_preflight()'s existing safety contract; a human
+    resolving a real merge conflict is not something a mechanical repair
+    should attempt.
+    """
+    import shutil as _shutil
+
+    from smith.health import run_command
+
+    if _shutil.which("git") is None:
+        return _skipped("clone_freshness", "git not on PATH")
+    if run_command(["git", "rev-parse", "--git-dir"], paths.root)[0] != 0:
+        return _skipped("clone_freshness", "not a git checkout")
+
+    status_code, status_out = run_command(["git", "status", "--porcelain=v1", "-uno"], paths.root)
+    if status_code == 0 and status_out.strip():
+        return Repair(
+            "clone_freshness",
+            Outcome.MANUAL,
+            "uncommitted tracked changes; commit or stash before pulling",
+        )
+
+    fetch_code, _ = run_command(
+        ["git", "-c", "credential.interactive=never", "fetch"], paths.root, timeout=15
+    )
+    if fetch_code != 0:
+        return _skipped("clone_freshness", "could not reach the remote")
+
+    ahead_code, ahead_out = run_command(["git", "rev-list", "--count", "@{u}..HEAD"], paths.root)
+    behind_code, behind_out = run_command(["git", "rev-list", "--count", "HEAD..@{u}"], paths.root)
+    if ahead_code != 0 or behind_code != 0:
+        return _skipped("clone_freshness", "no upstream tracking branch configured")
+
+    ahead = int(ahead_out.strip() or 0)
+    behind = int(behind_out.strip() or 0)
+    if ahead:
+        return Repair(
+            "clone_freshness",
+            Outcome.MANUAL,
+            f"{ahead} local commit(s) not yet pushed; push before relying on this clone",
+        )
+    if not behind:
+        return _skipped("clone_freshness", "already up to date with its remote")
+
+    pull_code, pull_out = run_command(["git", "pull", "--ff-only"], paths.root)
+    if pull_code != 0:
+        return Repair(
+            "clone_freshness",
+            Outcome.MANUAL,
+            f"fast-forward pull failed: {pull_out.strip()[:200]}",
+        )
+    return _fixed("clone_freshness", f"fast-forwarded {behind} commit(s) from origin")
+
+
 def fix_disposable(paths: SmithPaths) -> Repair:
     from smith.knowledge import KnowledgeStore
     from smith.tidy import Finding, Tidier
@@ -329,6 +390,7 @@ SAFE_REPAIRS = (
     fix_folder_docs,
     fix_doc_links,
     fix_disposable,
+    fix_clone_freshness,
 )
 
 REPORT_ONLY = (
