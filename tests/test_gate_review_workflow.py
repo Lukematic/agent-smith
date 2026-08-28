@@ -121,6 +121,8 @@ def test_gate_close_refuses_without_review_then_succeeds_after_gate_review(
         "approved",
         "--diff-base",
         "HEAD",
+        "--by",
+        "independent-reviewer",
     )
     assert reviewed.returncode == 0, reviewed.stdout + reviewed.stderr
     assert "REVIEWED  verdict=approved" in reviewed.stdout
@@ -155,6 +157,8 @@ def test_gate_review_tidy_dry_run_never_modifies_the_project(tmp_path: Path) -> 
         "--diff-base",
         "HEAD",
         "--skip-toolchain",
+        "--by",
+        "independent-reviewer",
     )
     assert reviewed.returncode == 0, reviewed.stdout + reviewed.stderr
 
@@ -192,6 +196,8 @@ def test_in_scope_generated_clutter_blocks_close_while_out_of_scope_only_warns(
         "--diff-base",
         "HEAD",
         "--skip-toolchain",
+        "--by",
+        "independent-reviewer",
     )
     assert reviewed.returncode == 1, reviewed.stdout + reviewed.stderr
     assert "REVIEW_BLOCKED" in reviewed.stdout
@@ -218,6 +224,8 @@ def test_out_of_scope_clutter_alone_only_warns_and_review_proceeds(tmp_path: Pat
         "approved",
         "--diff-base",
         "HEAD",
+        "--by",
+        "independent-reviewer",
     )
     assert reviewed.returncode == 0, reviewed.stdout + reviewed.stderr
     assert "WARN" in reviewed.stdout
@@ -237,3 +245,73 @@ def test_gate_review_requires_a_verdict(tmp_path: Path) -> None:
     assert "Missing option" in reviewed.stdout + reviewed.stderr or "--verdict" in (
         reviewed.stdout + reviewed.stderr
     )
+
+
+def test_gate_review_by_the_same_actor_who_opened_the_run_is_refused_end_to_end(
+    tmp_path: Path,
+) -> None:
+    """Real, end-to-end proof of the completion contract's core requirement:
+    the same identity cannot both open a run and record its own review as an
+    independent one - through the actual CLI, not just the Ledger's own unit
+    tests."""
+    project = _toy_project(tmp_path, name="self-verification-project")
+    _init_repo(project)
+
+    plan = project / "plan.md"
+    plan.write_text("# Plan\n", encoding="utf-8")
+    opened = run_cli(
+        project,
+        "gate",
+        "open",
+        "refactor",
+        "refactor toy module",
+        "--scope",
+        "tests/test_toy.py",
+        "--plan",
+        str(plan),
+        "--by",
+        "claude-session-a",
+    )
+    assert opened.returncode == 0, opened.stdout + opened.stderr
+    run_id = opened.stdout.splitlines()[0].split()[1]
+
+    approved = run_cli(project, "gate", "plan", "approve", "--by", "reviewer", "--run", run_id)
+    assert approved.returncode == 0, approved.stdout + approved.stderr
+
+    self_reviewed = run_cli(
+        project,
+        "gate",
+        "review",
+        "--run",
+        run_id,
+        "--verdict",
+        "approved",
+        "--diff-base",
+        "HEAD",
+        "--by",
+        "claude-session-a",
+    )
+    assert self_reviewed.returncode == 1
+    assert "SELF_VERIFICATION_REFUSED" in self_reviewed.stdout + self_reviewed.stderr
+
+    independently_reviewed = run_cli(
+        project,
+        "gate",
+        "review",
+        "--run",
+        run_id,
+        "--verdict",
+        "approved",
+        "--diff-base",
+        "HEAD",
+        "--by",
+        "claude-session-b",
+    )
+    assert independently_reviewed.returncode == 0, (
+        independently_reviewed.stdout + independently_reviewed.stderr
+    )
+    assert "by=claude-session-b" in independently_reviewed.stdout
+
+    closed = run_cli(project, "gate", "close", "--run", run_id)
+    assert closed.returncode == 0, closed.stdout + closed.stderr
+    assert "COMPLETE" in closed.stdout

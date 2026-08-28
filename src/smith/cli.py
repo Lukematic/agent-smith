@@ -1471,11 +1471,14 @@ def fix_command(
         True, "--check/--no-check", help="Re-run the doctor afterwards"
     ),
 ) -> None:
-    """Repair what is mechanically fixable, report what needs judgement.
+    """Repair what is mechanically fixable in A.W.I.N.O.'s own installation.
 
-    Safe repairs regenerate derived files and remove build artifacts. Anything
-    requiring prose or a real verification command is reported instead, because a
-    synthesised gate passes the validator and means nothing.
+    This writes to A.W.I.N.O.'s home directory, not the project you are working
+    in - the same scope as 'awino doctor', which this re-runs afterward by
+    default. Safe repairs regenerate derived files and remove build artifacts.
+    Anything requiring prose or a real verification command is reported
+    instead, because a synthesised gate passes the validator and means
+    nothing.
     """
     paths = _paths()
     repairs = fix.run_fixes(paths, aggressive=aggressive)
@@ -1523,11 +1526,15 @@ def doctor(
         False, "--record", help="Record the verdict against the current run"
     ),
 ) -> None:
-    """Check project health. Refuses when any gate fails.
+    """Check A.W.I.N.O.'s own installation health. Refuses when any gate fails.
 
-    This is the ledger turned on the repository itself: clean structure, linked
-    docs, working lint, a real justfile, a valid pyproject, a synced uv
-    environment, a single worklist, and a well-formed lessons ledger.
+    This is the ledger turned on A.W.I.N.O.'s own source tree - clean structure,
+    linked docs, working lint, a real justfile, a valid pyproject, a synced uv
+    environment, a well-formed lessons ledger - not the project you are working
+    in. The one exception is the 'seeds' line, which is deliberately swapped to
+    report the current project's own tracker, since Seeds belongs to whatever
+    project you are working on, not to A.W.I.N.O. itself. For your project's own
+    configuration, task-runner conflicts, and drift, use 'awino config-review'.
     """
     paths = _paths()
     results = health.run_all(paths, fast=fast)
@@ -2605,6 +2612,9 @@ def gate_open(
     ),
     plan: Path = typer.Option(None, "--plan", help="Plan file reviewed before execution."),
     issue: str = typer.Option(None, "--issue", help="Open Seeds issue served by this run."),
+    by: str = typer.Option(
+        "", "--by", help="Who/what is opening this run. Recorded so a later review can be checked for independence."
+    ),
 ) -> None:
     """Open a run and print the gates it must satisfy before it can close."""
     required = list(CONTRACTS[task_class]) + list(also or [])
@@ -2638,6 +2648,7 @@ def gate_open(
         extra_gates=list(also or []),
         plan_path=plan_path,
         issue_id=linked_issue.id if linked_issue else None,
+        opened_by=by,
     )
     if intent and intent.bootstrap:
         ledger.append_artifact(
@@ -2981,6 +2992,11 @@ def gate_review(
         False, "--skip-toolchain", help="Skip running detected test/lint commands"
     ),
     run_id: str = typer.Option(None, "--run", help="Run id, defaults to current"),
+    by: str = typer.Option(
+        ...,
+        "--by",
+        help="Who/what is recording this review. Must differ from the run's --by; a run cannot be verified by the actor who opened it.",
+    ),
 ) -> None:
     """Independent completion review, run before ``gate close``.
 
@@ -3089,17 +3105,21 @@ def gate_review(
         raise typer.Exit(1)
 
     gate_results = completion_review.build_provenance(report)
-    record = ledger.record_provenance(
-        resolved,
-        verdict=verdict,
-        gate_results=gate_results,
-        changed_files=report.changed_files,
-        risks=risks,
-    )
-    ledger.attest(resolved, Gate.REVIEWED, f"gate review verdict={verdict}")
+    try:
+        record = ledger.record_provenance(
+            resolved,
+            verdict=verdict,
+            gate_results=gate_results,
+            changed_files=report.changed_files,
+            verified_by=by,
+            risks=risks,
+        )
+    except LedgerError as exc:
+        _ledger_error(exc)
+    ledger.attest(resolved, Gate.REVIEWED, f"gate review verdict={verdict} by={by}")
 
     _echo("")
-    _echo(f"REVIEWED  verdict={record.verdict}")
+    _echo(f"REVIEWED  verdict={record.verdict}  by={record.verified_by}")
     _echo(f"  changed_files={len(record.changed_files)}  risks={record.risks or 'none'}")
     if verdict != ReviewVerdict.APPROVED:
         _echo(f"NOTE  verdict is {verdict}; gate close will still require every gate to pass.")

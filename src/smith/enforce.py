@@ -248,6 +248,12 @@ class ProvenanceRecord:
     and a human-attributable verdict with any risks that remain open. Recording
     this here means ``gate close`` can require it exist rather than trust that
     review happened.
+
+    ``verified_by`` is required and is checked against the run's own
+    ``opened_by`` at record time: a run cannot be closed on a review recorded
+    by the same actor who opened it. Real independence means a distinct
+    identity checked the work - typically a fresh subagent invocation, not the
+    same session re-running its own checks and calling the result a review.
     """
 
     issue_id: str | None
@@ -258,11 +264,13 @@ class ProvenanceRecord:
     verdict: str
     risks: str | None
     recorded_at: str
+    verified_by: str = ""
 
     @property
     def summary(self) -> str:
         risks = self.risks or "none recorded"
-        return f"review={self.verdict} changed_files={len(self.changed_files)} risks={risks}"
+        by = self.verified_by or "unattributed"
+        return f"review={self.verdict} by={by} changed_files={len(self.changed_files)} risks={risks}"
 
 
 @dataclass
@@ -289,6 +297,7 @@ class Run:
     verdict: str | None = None
     terminal_state: str | None = None
     provenance: ProvenanceRecord | None = None
+    opened_by: str = ""
 
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> Run:
@@ -312,6 +321,7 @@ class Run:
         values.setdefault("closed_at", None)
         values.setdefault("verdict", None)
         values.setdefault("terminal_state", None)
+        values.setdefault("opened_by", "")
         provenance = values.get("provenance")
         if provenance:
             gate_results = [
@@ -382,6 +392,7 @@ class Ledger:
         extra_gates: list[Gate] | None = None,
         plan_path: Path | None = None,
         issue_id: str | None = None,
+        opened_by: str = "",
     ) -> Run:
         run_id = f"{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
         required = list(CONTRACTS[task_class]) + list(extra_gates or [])
@@ -394,6 +405,7 @@ class Ledger:
             file_scope=file_scope or [],
             plan_path=str(plan_path) if plan_path is not None else None,
             issue_id=issue_id,
+            opened_by=opened_by,
         )
         self.run_dir(run_id).mkdir(parents=True, exist_ok=True)
         self._meta(run_id).write_text(json.dumps(run.to_dict(), indent=2), encoding="utf-8")
@@ -856,6 +868,7 @@ class Ledger:
         verdict: ReviewVerdict,
         gate_results: list[ProvenanceGateResult],
         changed_files: list[str],
+        verified_by: str,
         risks: str | None = None,
     ) -> ProvenanceRecord:
         """Persist ``gate review``'s findings so ``gate close`` can require them.
@@ -863,8 +876,27 @@ class Ledger:
         The plan hash and Seed id are read from the run itself rather than
         supplied by the caller, so a review cannot be attributed to a plan or
         Seed it did not actually inspect.
+
+        ``verified_by`` is required and refused when it matches the run's own
+        ``opened_by``: a run cannot be closed on a review recorded by the same
+        actor who opened it. Both sides are compared case-insensitively after
+        stripping, so trivial formatting differences do not defeat the check;
+        an empty ``opened_by`` (a run opened before this field existed, or by
+        an identity that was never supplied) skips the comparison rather than
+        refusing every legacy run outright.
         """
+        if not verified_by.strip():
+            raise LedgerError(
+                "VERIFIED_BY_REQUIRED: record_provenance needs a real actor identity, "
+                "not an empty string"
+            )
         run = self.load(run_id)
+        if run.opened_by.strip() and run.opened_by.strip().lower() == verified_by.strip().lower():
+            raise LedgerError(
+                f"SELF_VERIFICATION_REFUSED: this run was opened by {run.opened_by!r}; "
+                "a review must be recorded by a distinct identity, typically a fresh "
+                "subagent invocation - not the same actor re-checking its own work"
+            )
         plan_sha256 = None
         if run.plan_path is not None:
             plan = Path(run.plan_path)
@@ -879,6 +911,7 @@ class Ledger:
             verdict=str(verdict),
             risks=risks,
             recorded_at=datetime.now(UTC).isoformat(),
+            verified_by=verified_by.strip(),
         )
         run.provenance = record
         self.save(run)

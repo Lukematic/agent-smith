@@ -17,7 +17,14 @@ from smith.completion_review import (
     classify_tidy_findings,
     extract_acceptance_criteria,
 )
-from smith.enforce import Ledger, ProvenanceGateResult, ProvenanceRecord, Run, TaskClass
+from smith.enforce import (
+    Ledger,
+    LedgerError,
+    ProvenanceGateResult,
+    ProvenanceRecord,
+    Run,
+    TaskClass,
+)
 from smith.tidy import Clutter, Finding
 
 
@@ -79,6 +86,7 @@ class TestProvenanceRecordModel:
             verdict="approved",  # type: ignore[arg-type]
             gate_results=[ProvenanceGateResult(gate="tested", command="pytest -q", exit_code=0)],
             changed_files=["src/retry.py"],
+            verified_by="independent-reviewer",
             risks="none",
         )
         reloaded = ledger.load(run.run_id)
@@ -103,6 +111,90 @@ class TestProvenanceRecordModel:
         }
         run = Run.from_dict(legacy)
         assert run.provenance is None
+
+
+class TestIndependentVerification:
+    """The exact mechanism the completion contract requires: a review
+    recorded by the same actor who opened the run must be refused. Real
+    independence means a distinct identity checked the work, typically a
+    fresh subagent invocation, not the same session re-running its own
+    checks and calling the result a review."""
+
+    def test_verified_by_matching_opened_by_is_refused(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.CODE_CHANGE, "add retry logic", opened_by="claude-session-a")
+        with pytest.raises(LedgerError, match="SELF_VERIFICATION_REFUSED"):
+            ledger.record_provenance(
+                run.run_id,
+                verdict="approved",  # type: ignore[arg-type]
+                gate_results=[],
+                changed_files=[],
+                verified_by="claude-session-a",
+            )
+
+    def test_matching_is_case_and_whitespace_insensitive(self, ledger: Ledger) -> None:
+        # A trivial formatting difference must not be a loophole that defeats
+        # the check while remaining the same actor in substance.
+        run = ledger.open(TaskClass.CODE_CHANGE, "add retry logic", opened_by="  Claude-Session-A ")
+        with pytest.raises(LedgerError, match="SELF_VERIFICATION_REFUSED"):
+            ledger.record_provenance(
+                run.run_id,
+                verdict="approved",  # type: ignore[arg-type]
+                gate_results=[],
+                changed_files=[],
+                verified_by="claude-session-a",
+            )
+
+    def test_a_genuinely_distinct_verifier_is_accepted(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.CODE_CHANGE, "add retry logic", opened_by="claude-session-a")
+        record = ledger.record_provenance(
+            run.run_id,
+            verdict="approved",  # type: ignore[arg-type]
+            gate_results=[],
+            changed_files=[],
+            verified_by="independent-reviewer-subagent",
+        )
+        assert record.verified_by == "independent-reviewer-subagent"
+
+    def test_empty_opened_by_does_not_block_every_legacy_run(self, ledger: Ledger) -> None:
+        # A run opened before opened_by existed, or by a caller that never
+        # supplied one, must not become permanently unreviewable - the
+        # comparison is skipped rather than refusing everything.
+        run = ledger.open(TaskClass.CODE_CHANGE, "add retry logic")
+        record = ledger.record_provenance(
+            run.run_id,
+            verdict="approved",  # type: ignore[arg-type]
+            gate_results=[],
+            changed_files=[],
+            verified_by="anyone-at-all",
+        )
+        assert record.verified_by == "anyone-at-all"
+
+    def test_empty_verified_by_is_refused_outright(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.CODE_CHANGE, "add retry logic")
+        with pytest.raises(LedgerError, match="VERIFIED_BY_REQUIRED"):
+            ledger.record_provenance(
+                run.run_id,
+                verdict="approved",  # type: ignore[arg-type]
+                gate_results=[],
+                changed_files=[],
+                verified_by="   ",
+            )
+
+    def test_opened_by_persists_through_a_reload(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.CODE_CHANGE, "add retry logic", opened_by="claude-session-a")
+        reloaded = ledger.load(run.run_id)
+        assert reloaded.opened_by == "claude-session-a"
+
+    def test_summary_reports_the_verifier_identity(self, ledger: Ledger) -> None:
+        run = ledger.open(TaskClass.CODE_CHANGE, "add retry logic", opened_by="claude-session-a")
+        record = ledger.record_provenance(
+            run.run_id,
+            verdict="approved",  # type: ignore[arg-type]
+            gate_results=[],
+            changed_files=[],
+            verified_by="independent-reviewer-subagent",
+        )
+        assert "by=independent-reviewer-subagent" in record.summary
 
 
 class TestAcceptanceCriteriaExtraction:
