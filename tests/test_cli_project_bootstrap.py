@@ -122,3 +122,44 @@ def test_inspection_surfaces_the_missing_binary_and_why_it_matters(tmp_path: Pat
     assert result.returncode == 0, result.stdout + result.stderr
     assert "just is declared by this project but not installed" in result.stdout
     assert "why install it" in result.stdout
+
+
+def test_project_scaffold_refuses_against_a_real_multi_project_container(
+    tmp_path: Path,
+) -> None:
+    """End-to-end replay of the exact live incident: running the CLI against
+    a folder shaped like the real ai_explained workspace (several
+    independent-looking subdirectories) must refuse, not silently write a
+    pyproject.toml at the wrong level - which is exactly what happened
+    before this guard existed."""
+    (tmp_path / "sandbox").mkdir()
+    (tmp_path / "sandbox" / ".git").mkdir()
+    (tmp_path / "research_idea").mkdir()
+    (tmp_path / "smith-install").mkdir()
+    (tmp_path / "smith-install" / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+
+    result = run_cli(tmp_path, "project-scaffold")
+
+    assert result.returncode == 1
+    assert "MULTI_PROJECT_CONTAINER" in result.stdout
+    assert not (tmp_path / "pyproject.toml").exists()
+    assert not (tmp_path / "justfile").exists()
+
+
+def test_project_scaffold_proceeds_with_explicit_override(tmp_path: Path) -> None:
+    (tmp_path / "sandbox").mkdir()
+    (tmp_path / "sandbox" / ".git").mkdir()
+    (tmp_path / "other").mkdir()
+    (tmp_path / "other" / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+
+    result = run_cli(tmp_path, "project-scaffold", "--i-know-this-is-the-right-folder")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (tmp_path / "pyproject.toml").is_file()
+
+
+def test_project_scaffold_is_unaffected_for_a_genuine_single_project(tmp_path: Path) -> None:
+    result = run_cli(tmp_path, "project-scaffold")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (tmp_path / "pyproject.toml").is_file()

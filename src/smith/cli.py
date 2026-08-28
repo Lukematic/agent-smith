@@ -1058,6 +1058,11 @@ def project_scaffold_command(
     overwrite: bool = typer.Option(
         False, "--overwrite", help="Replace an existing pyproject.toml/justfile"
     ),
+    force: bool = typer.Option(
+        False,
+        "--i-know-this-is-the-right-folder",
+        help="Override the multi-project-container refusal",
+    ),
 ) -> None:
     """Write a fresh, generic pyproject.toml and justfile into this project.
 
@@ -1067,8 +1072,29 @@ def project_scaffold_command(
     command never reads or stores any project's name/description anywhere
     outside the target project itself; the template is generic and ships
     with A.W.I.N.O., the instantiated file lives only where you run this.
+
+    Refuses when this folder looks like a container of several independent
+    projects (multiple subdirectories each with their own .git/pyproject.toml/
+    package.json) rather than being a single project itself - live-caught
+    running this against exactly that shape of folder, which wrote a real
+    pyproject.toml at the wrong level before this check existed.
     """
     root = _workspace().project.root
+    subprojects = project_template.independent_subprojects(root)
+    if len(subprojects) >= 2 and not force:
+        _echo(
+            f"REFUSED  MULTI_PROJECT_CONTAINER  {root} contains {len(subprojects)} "
+            "independent-looking subdirectories, not itself:"
+        )
+        for item in subprojects[:8]:
+            _echo(f"  - {item.name}")
+        _echo("")
+        _echo(
+            "Run this from inside the specific subproject you mean, or pass "
+            "--i-know-this-is-the-right-folder if this container is genuinely "
+            "the intended scaffolding target."
+        )
+        raise typer.Exit(1)
     resolved_name = name or root.name
     results = project_template.scaffold(
         root, resolved_name, description=description, overwrite=overwrite
@@ -2105,6 +2131,14 @@ def project_bootstrap_command(
     assert environment is not None and tracker is not None and runner is not None
     install = chain.install_command
     if environment is onboarding.EnvironmentDecision.SETUP:
+        subprojects = project_template.independent_subprojects(project)
+        if len(subprojects) >= 2:
+            _echo(
+                f"REFUSED  MULTI_PROJECT_CONTAINER  {project} contains "
+                f"{len(subprojects)} independent-looking subdirectories; run this "
+                "from inside the specific subproject instead"
+            )
+            raise typer.Exit(1)
         if not install.usable:
             _echo(f"REFUSED  environment setup unavailable: {install.reason}")
             raise typer.Exit(1)
@@ -2644,7 +2678,9 @@ def gate_open(
     plan: Path = typer.Option(None, "--plan", help="Plan file reviewed before execution."),
     issue: str = typer.Option(None, "--issue", help="Open Seeds issue served by this run."),
     by: str = typer.Option(
-        "", "--by", help="Who/what is opening this run. Recorded so a later review can be checked for independence."
+        "",
+        "--by",
+        help="Who/what is opening this run. Recorded so a later review can be checked for independence.",
     ),
 ) -> None:
     """Open a run and print the gates it must satisfy before it can close."""

@@ -8,7 +8,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from smith.project_template import render_justfile, render_pyproject, scaffold, slugify
+from smith.project_template import (
+    independent_subprojects,
+    is_multi_project_container,
+    render_justfile,
+    render_pyproject,
+    scaffold,
+    slugify,
+)
 
 
 class TestSlugify:
@@ -91,3 +98,65 @@ class TestScaffold:
         scaffold(tmp_path, "fresh-project")
         raw = (tmp_path / "pyproject.toml").read_bytes()
         assert b"\r\n" not in raw
+
+
+class TestMultiProjectContainerDetection:
+    """Regression for a real, live-caught bug, twice: running project-scaffold
+    against the actual ai_explained workspace (21 loose topic subfolders, no
+    .git of its own, exactly one real subproject: .smith) silently wrote a
+    real pyproject.toml at the wrong level. The first fix attempt required
+    two marker-bearing siblings before refusing and STILL passed against the
+    real folder, because it has only one - the real signal is not "how many
+    siblings", it is "does this folder itself have no identity of its own
+    while something inside it already does.\""""
+
+    def test_a_folder_with_no_marker_of_its_own_and_one_subproject_is_a_container(
+        self, tmp_path: Path
+    ) -> None:
+        # This is the exact real shape that was missed by requiring 2+
+        # siblings: only one genuine subproject, but the parent itself
+        # declares nothing - re-verified live against the actual
+        # ai_explained folder after this fix, not just this synthetic case.
+        (tmp_path / "sub-a" / ".git").mkdir(parents=True)
+        (tmp_path / "loose-topic-folder").mkdir()
+        assert is_multi_project_container(tmp_path) is True
+
+    def test_an_empty_folder_is_not_a_container(self, tmp_path: Path) -> None:
+        assert is_multi_project_container(tmp_path) is False
+
+    def test_a_genuine_single_project_with_a_vendored_dependency_is_not_flagged(
+        self, tmp_path: Path
+    ) -> None:
+        # When root itself already declares a real project, one nested
+        # subproject (a vendored dependency, a git submodule) is normal and
+        # must not alone trip the container check - only a genuine sibling
+        # collision does, which is rarer and left to a human to judge.
+        (tmp_path / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+        (tmp_path / "vendor" / "some-dep" / ".git").mkdir(parents=True)
+        assert is_multi_project_container(tmp_path) is False
+
+    def test_a_project_with_two_independent_siblings_is_still_a_container(
+        self, tmp_path: Path
+    ) -> None:
+        (tmp_path / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+        (tmp_path / "vendor-a" / ".git").mkdir(parents=True)
+        (tmp_path / "vendor-b" / "pyproject.toml").parent.mkdir(parents=True)
+        (tmp_path / "vendor-b" / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+        assert is_multi_project_container(tmp_path) is True
+
+    def test_hidden_directories_are_not_counted_as_subprojects(self, tmp_path: Path) -> None:
+        (tmp_path / ".git").mkdir()
+        (tmp_path / ".venv" / "pyproject.toml").parent.mkdir(parents=True)
+        assert independent_subprojects(tmp_path) == []
+
+    def test_detector_flags_the_exact_live_incident_shape(self, tmp_path: Path) -> None:
+        # Reproduces the exact live incident shape: several independent
+        # subdirectories, one of them already a full install-shaped project.
+        # scaffold() itself has no opinion on this - it is the CLI's job to
+        # ask is_multi_project_container() before calling scaffold() at all,
+        # verified end-to-end in tests/test_cli_project_bootstrap.py.
+        (tmp_path / "sandbox" / ".git").mkdir(parents=True)
+        (tmp_path / "research_idea").mkdir()
+        (tmp_path / "smith-install").mkdir()
+        (tmp_path / "smith-install" / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+        assert is_multi_project_container(tmp_path) is True
