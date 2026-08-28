@@ -47,8 +47,16 @@ Format:
 - [2026-08-26] `OUTPUT_MISTAKEN_FOR_CAPABILITY` — when asked whether a pipeline generalizes, inspect the generating scripts and their parameters, never the presence or absence of past output directories; a missing artifact for input X proves only that the pipeline has not been run on X. (surface: context)
 - [2026-08-26] `UNVERIFIED_AGAINST_ASK` — before claiming done, restate the human's success criterion verbatim, then paste the command output that measures that exact criterion; passing an adjacent test suite is not evidence the stated deliverable exists. (surface: verification)
 
+- [2026-08-28] `PROBE_AS_SHILL` — a diagnostic written in a temp directory proves nothing about the shipped pipeline. Move the logic into the shared module the production scripts import, then run the production script and show the probe output inside its own stdout. A number reported without a run directory the reader can open is indistinguishable from invention. (surface: tools + verification)
+- [2026-08-28] `SAME_SYMPTOM_DIFFERENT_BUGS` — three distinct defects (case/legal-suffix, truncation/prefix, parent/division) all presented as "organization names not merging". Reporting each as "fixed the dedup" reads as repeating one fix. Name the specific defect and the specific mechanism every time, or the reader cannot tell progress from churn. (surface: prompt)
+- [2026-08-28] `HALF_THE_INPUTS_PROBED` — when a system holds two term lists, measure both against every source. Probing only the query list reported zero federal awards for TRISO while the identity term `TRISO fuel` retrieved four real DoD and DOE awards. Which vocabulary works is a property of the source, never an assumption about where each list belongs. (surface: context)
+- [2026-08-28] `WINDOW_UNSTATED` — a retrieval window is a mission parameter, not a default to inherit. A 19-year window silently diluted a five-year trend question and buried current filings under historical noise. State the window in the run output and the README, and make it a flag. (surface: prompt)
+- [2026-08-28] `ARRIVAL_ORDER_TRUNCATION` — never truncate a candidate list before ranking it. Taking the first five of 3,924 filings returned e-commerce prospectuses while nuclear utilities sat unread. Rank by source-supplied signals (relevance score, term specificity, term agreement, industry code, recency), then truncate, and record that truncation defers rather than excludes. (surface: tools)
+- [2026-08-28] `BROAD_TERM_DROPPED_NOT_INTERSECTED` — a term matching thousands of documents is not useless, it is unqualified. Measure the intersection before discarding it: `spent fuel` 622 and `reprocessing` 1,169 intersect to 99 genuinely on-topic filings. Dropping either would have lost all 99. (surface: context)
+
 ---
 
 ## Superseded
 
 <!-- moved here with their supersession date, kept as evidence -->
+
