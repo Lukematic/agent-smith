@@ -85,7 +85,12 @@ Four models fire in a fixed order, because each can invalidate the next:
 
 **The ladder goes first because optimising execution of the wrong artifact is the
 most expensive mistake available.** If `awino plan` reports a misaligned rung,
-reframe and stop. Do not proceed to a skill.
+reframe and stop. Do not proceed to a skill. This is self-discipline, not a
+mechanical gate: no command currently refuses to open a run on a misaligned
+rung (see `ai_explained-42d4` - a naive check produced false positives on
+ordinary bugfix work, so it is not shipped). Treat the printed advice as real
+signal to act on yourself, not as something else in the harness will catch
+if you skip it.
 
 | The user says | Real rung | So author |
 | --- | --- | --- |
@@ -151,6 +156,50 @@ Not "I believe it works", not "it should be fine". The gate decides.
 
 If a gate fails three times, stop. Report what was tried and escalate. Do not
 raise the ceiling.
+
+---
+
+## Plan with the user, not for them
+
+A plan the user was not part of is a guess wearing a task list. Before opening
+a run for anything non-trivial, work through this with the user, in order,
+and check `awino ask "<question>"` before each question you pose - it refuses
+(exit 1) if you already asked something equivalent this session, so you do
+not have to remember not to repeat yourself:
+
+1. **Why.** Why does this need to happen at all? What is broken or missing
+   right now, and why does that matter to the user specifically?
+2. **What exists.** What is the current approach, and what actually happens
+   with it today - not what you assume happens?
+3. **What is wrong with it.** What specifically fails, and for whom?
+4. **Alternatives.** What is a different, possibly simpler approach? Do not
+   default to the most sophisticated solution - overbuilding an
+   over-complicated fix for a problem a smaller change would resolve is a
+   real failure mode, not a safe default.
+5. **Expectations.** What does the user actually expect the result to look
+   or behave like? Ask, do not assume.
+6. **The change itself.** What exactly will you do, and why is that specific
+   change - not a bigger or smaller one - the right size?
+7. **Sufficiency.** Why do you believe this change is enough? What would
+   prove it is not?
+8. **Effect.** What will this change actually do, concretely, once it
+   exists?
+9. **Measurement.** How will you and the user know it worked? Name the exact
+   check, not "it should work."
+
+Decompose the resulting plan into the smallest sequence of individually
+verifiable steps - task 1, then task 2, then task 3 - each one digestible on
+its own. After each step, confirm with the user (or with a real command) that
+it actually holds before adding the next. "It works up to this point, good,
+now let's add the next piece" is the rhythm; skipping straight to the full
+build is how a 20-minute task becomes a 2-hour one.
+
+When the user answers, actually record what they said - `awino note` or
+letting the `UserPromptSubmit` hook capture it - rather than treating an
+apology or "you're right" as the fix. Before acting on a correction, stop and
+name, out loud, what you are about to do and why; "sorry" and "I forgot" are
+symptoms to log via `awino note --as correction`, not substitutes for the
+actual fix and a fresh, real re-verification.
 
 ---
 
@@ -295,6 +344,10 @@ Open every reply with:
 ```
 [A.W.I.N.O. | mode: <mode> | loop: <direct|rpi|ralph|delegate> | run: <id|none> | knowledge: <n>/3]
 ```
+
+The `loop` field is not currently recorded on the run or checked by anything;
+stating it is a declared intent for the human reading the reply, not a
+mechanically verified fact (see `ai_explained-42d4`).
 
 ---
 
