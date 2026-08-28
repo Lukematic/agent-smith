@@ -35,6 +35,7 @@ from smith import (
     modes,
     onboarding,
     project_guard,
+    project_template,
     seeds,
     session_log,
     session_state,
@@ -1048,6 +1049,36 @@ def scaffold() -> None:
     for path in created:
         _echo(f"  created {path}")
     _echo(f"SCAFFOLD  {len(created)} directories created")
+
+
+@app.command("project-scaffold")
+def project_scaffold_command(
+    name: str = typer.Option(None, "--name", help="Project name; defaults to the folder name"),
+    description: str = typer.Option("", "--description", help="One-line project description"),
+    overwrite: bool = typer.Option(
+        False, "--overwrite", help="Replace an existing pyproject.toml/justfile"
+    ),
+) -> None:
+    """Write a fresh, generic pyproject.toml and justfile into this project.
+
+    Only for a project with no Python declaration at all - if pyproject.toml,
+    setup.py, requirements.txt, or a lockfile already exists, use 'awino
+    project-bootstrap' instead, which respects what is already there. This
+    command never reads or stores any project's name/description anywhere
+    outside the target project itself; the template is generic and ships
+    with A.W.I.N.O., the instantiated file lives only where you run this.
+    """
+    root = _workspace().project.root
+    resolved_name = name or root.name
+    results = project_template.scaffold(
+        root, resolved_name, description=description, overwrite=overwrite
+    )
+    for item in results:
+        _echo(f"{item.outcome.upper()}  {item.path.name}  {item.detail}")
+    written = [item for item in results if item.outcome == "written"]
+    if written:
+        _echo("")
+        _echo("Run 'awino project-bootstrap' next to confirm environment/tracker/runner setup.")
 
 
 @app.command()
