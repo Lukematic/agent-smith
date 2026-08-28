@@ -36,6 +36,7 @@ from smith import (
     onboarding,
     project_guard,
     seeds,
+    session_log,
     session_state,
     skill_catalog,
     spawn,
@@ -1071,6 +1072,30 @@ def hook(event: str = typer.Argument("session-start", help="Hook event adapter")
         if intent and intent.source == "confirmed":
             context = project_guard.project_context(intent)
             _echo(project_guard.emit(project_guard.prompt_context(context)))
+        prompt_text = str(payload.get("prompt") or "").strip()
+        if prompt_text:
+            session = session_state.load(workspace.state_root)
+            session_id = session.session_id if session else "unknown"
+            # UserPromptSubmit only sees what the human typed, never what the
+            # agent asked - so this cannot detect "the agent repeated its own
+            # question." What it can detect, directly and mechanically, is
+            # the costlier symptom the user actually reported: having to
+            # restate something because the agent did not retain it.
+            repeat = session_log.find_duplicate_question(
+                workspace.state_root, session_id, prompt_text
+            )
+            session_log.append(workspace.state_root, session_id, "user_turn", prompt_text)
+            if repeat is not None:
+                _echo(
+                    project_guard.emit(
+                        project_guard.prompt_context(
+                            f"[awino] this looks similar to what you said at turn "
+                            f"{repeat.turn}: {repeat.text[:120]!r}. If the agent is asking "
+                            "you to repeat an instruction it should already have, that is "
+                            "the exact failure this note exists to surface."
+                        )
+                    )
+                )
         return
     if event == "pre-tool":
         if intent and intent.source == "confirmed":
@@ -1123,6 +1148,57 @@ def remember_command(
     saved = onboarding.save(project, intent)
     _echo(f"REMEMBERED  {kind}  {value.strip()}")
     _echo(f"PROJECT     {saved}")
+
+
+@app.command("note")
+def note_command(
+    text: str = typer.Argument(..., help="What the human said, corrected, or asked"),
+    kind: str = typer.Option("correction", "--as", help="user_turn, agent_question, or correction"),
+    run_id: str | None = typer.Option(None, "--run", help="Link to the active run, if any"),
+) -> None:
+    """Record one session-scoped ask/instruction/correction.
+
+    This is separate from Seeds and separate from the gate ledger: it holds
+    what was said this conversation, not tasks or verified evidence. Most of
+    a real conversation happens with no open gate run at all, so this exists
+    independently of Run/Checkpoint rather than requiring one.
+    """
+    workspace = _workspace()
+    session = session_state.load(workspace.state_root)
+    session_id = session.session_id if session else "unknown"
+    ask = session_log.append(workspace.state_root, session_id, kind, text, run_id=run_id)
+    _echo(f"NOTED  turn={ask.turn}  kind={kind}")
+
+
+@app.command("session-log")
+def session_log_command(
+    session: str | None = typer.Option(None, "--session", help="Session id, defaults to current"),
+) -> None:
+    """Show this session's recorded corrections and unresolved agent questions.
+
+    Read-only inspection of the log 'awino note' and the UserPromptSubmit
+    hook write to. Corrections are the most direct evidence that an earlier
+    instruction was not honored.
+    """
+    workspace = _workspace()
+    if session is None:
+        current = session_state.load(workspace.state_root)
+        session = current.session_id if current else "unknown"
+    corrections = session_log.corrections(workspace.state_root, session)
+    unresolved = session_log.unresolved_questions(workspace.state_root, session)
+    _echo(f"SESSION  {session}")
+    if corrections:
+        _echo(f"CORRECTIONS  {len(corrections)}")
+        for item in corrections:
+            _echo(f"  turn={item.turn}  {item.text}")
+    else:
+        _echo("CORRECTIONS  none recorded")
+    if unresolved:
+        _echo(f"UNRESOLVED_QUESTIONS  {len(unresolved)}")
+        for item in unresolved:
+            _echo(f"  turn={item.turn}  {item.text}")
+    else:
+        _echo("UNRESOLVED_QUESTIONS  none")
 
 
 @app.command("workflow")
