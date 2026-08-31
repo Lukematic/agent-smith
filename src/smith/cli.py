@@ -30,6 +30,7 @@ from smith import (
     fix,
     harness,
     health,
+    loop,
     mission,
     models,
     modes,
@@ -46,6 +47,7 @@ from smith import (
 )
 from smith.enforce import (
     CONTRACTS,
+    MAX_ATTEMPTS,
     Gate,
     Ledger,
     LedgerError,
@@ -2910,6 +2912,37 @@ def gate_record(
         _echo(
             f"Gate not satisfied. Fix the cause, then record again (attempt {item.attempt + 1} of 3)."
         )
+        raise typer.Exit(1)
+
+
+@gate_app.command("loop")
+def gate_loop(
+    gate: Gate = typer.Argument(..., help="Which gate this evidence satisfies"),
+    cmd: str = typer.Option(..., "--cmd", help="Command to execute, automatically retried"),
+    max_iterations: int = typer.Option(3, "--max-iterations", help="Never exceeds THREE_STRIKES"),
+    run_id: str = typer.Option(None, "--run", help="Run id, defaults to current"),
+) -> None:
+    """Automatically re-invoke --cmd until it passes or the budget is spent.
+
+    For a genuinely non-deterministic command (a flaky test, a resource
+    that needs a moment to become ready) where retrying the SAME command
+    can plausibly succeed. This is not the tool for "the fix needs to
+    change between attempts" - that decision belongs to whoever is fixing
+    the problem, recorded via ordinary 'gate record' calls between edits.
+    Never exceeds the ledger's own THREE_STRIKES cap regardless of
+    --max-iterations.
+    """
+    resolved = _resolve_run(run_id)
+    ledger = _ledger()
+    capped = min(max_iterations, MAX_ATTEMPTS)
+    result = loop.run_loop(
+        ledger, resolved, gate, lambda _n: cmd, max_iterations=capped, cwd=_workspace().project.root
+    )
+    for item in result.iterations:
+        mark = "PASS" if item.passed else "FAIL"
+        _echo(f"  [{item.number}] {mark}  exit={item.exit_code}")
+    _echo(f"{result.outcome.value.upper()}  {result.reason}")
+    if result.outcome is not loop.LoopOutcome.SHIPPED:
         raise typer.Exit(1)
 
 
