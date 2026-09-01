@@ -27,6 +27,7 @@ import os
 import shutil
 import subprocess
 import time
+import uuid
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -48,6 +49,11 @@ class Runner(StrEnum):
     @property
     def available(self) -> bool:
         return self is not Runner.NONE and shutil.which(str(self)) is not None
+
+    @property
+    def enforces_read_only(self) -> bool:
+        """Whether this runner has a known process-level read-only mode."""
+        return self is Runner.CLAUDE
 
     def command(self, prompt_file: Path, *, read_only: bool) -> list[str]:
         """Headless invocation for this runner.
@@ -194,6 +200,8 @@ class SpawnResult:
     output_tail: str
     claimed_complete: bool = False
     verified: bool | None = None
+    invocation_id: str = ""
+    stdout_tail: str = ""
 
     @property
     def trustworthy(self) -> bool:
@@ -279,14 +287,24 @@ def spawn_one(
             "already inside a subagent; nesting is not allowed",
         )
 
-    scratch = project / ".smith" / "assignments"
+    invocation_id = f"{assignment.agent_id}-{uuid.uuid4().hex[:10]}"
+    scratch = project / ".smith" / "state" / "assignments"
     scratch.mkdir(parents=True, exist_ok=True)
-    prompt_file = scratch / f"{assignment.agent_id}.md"
-    prompt_file.write_text(assignment.render(smith_home), encoding="utf-8")
+    prompt_file = scratch / f"{invocation_id}.md"
+    prompt_file.write_text(
+        f"<!-- invocation: {invocation_id} -->\n{assignment.render(smith_home)}", encoding="utf-8"
+    )
 
     if dry_run or runner is Runner.NONE:
         detail = "dry run" if dry_run else "no agent CLI available"
-        return SpawnResult(assignment.agent_id, "PLANNED", 0, 0, f"{detail}: {prompt_file}")
+        return SpawnResult(
+            assignment.agent_id,
+            "PLANNED",
+            0,
+            0,
+            f"{detail}: {prompt_file}",
+            invocation_id=invocation_id,
+        )
 
     command = runner.command(prompt_file, read_only=assignment.role.read_only)
     environment = {**os.environ, SPAWN_DEPTH_ENV: str(current_depth() + 1)}
@@ -306,9 +324,18 @@ def spawn_one(
         )
     except subprocess.TimeoutExpired:
         elapsed = int((time.monotonic() - started) * 1000)
-        return SpawnResult(assignment.agent_id, "TIMEOUT", 124, elapsed, f"exceeded {timeout}s")
+        return SpawnResult(
+            assignment.agent_id,
+            "TIMEOUT",
+            124,
+            elapsed,
+            f"exceeded {timeout}s",
+            invocation_id=invocation_id,
+        )
     except OSError as exc:
-        return SpawnResult(assignment.agent_id, "FAILED", 1, 0, str(exc))
+        return SpawnResult(
+            assignment.agent_id, "FAILED", 1, 0, str(exc), invocation_id=invocation_id
+        )
 
     elapsed = int((time.monotonic() - started) * 1000)
     output = (completed.stdout or "") + (completed.stderr or "")
@@ -332,6 +359,8 @@ def spawn_one(
         elapsed,
         "\n".join(output.strip().splitlines()[-15:]),
         claimed_complete=claimed,
+        invocation_id=invocation_id,
+        stdout_tail="\n".join((completed.stdout or "").strip().splitlines()[-15:]),
     )
 
 

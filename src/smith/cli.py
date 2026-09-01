@@ -28,6 +28,7 @@ from smith import (
     debugging,
     doc_review,
     fix,
+    graph,
     harness,
     health,
     loop,
@@ -2943,6 +2944,58 @@ def gate_loop(
         _echo(f"  [{item.number}] {mark}  exit={item.exit_code}")
     _echo(f"{result.outcome.value.upper()}  {result.reason}")
     if result.outcome is not loop.LoopOutcome.SHIPPED:
+        raise typer.Exit(1)
+
+
+@gate_app.command("graph")
+def gate_graph(
+    task: str = typer.Option(..., "--task", help="Task for each fresh worker invocation"),
+    verify: str = typer.Option(None, "--verify", help="Cross-platform worker verification command"),
+    scope: list[str] = typer.Option(None, "--scope", help="Worker writable file; repeatable"),
+    runner: str = typer.Option(None, "--runner", help="claude, goose, or codex"),
+    max_rounds: int = typer.Option(MAX_ATTEMPTS, "--max-rounds"),
+    confirm_budget: bool = typer.Option(
+        False,
+        "--confirm-budget",
+        help="Explicitly approve up to max-rounds worker and reviewer subprocess pairs",
+    ),
+    run_id: str = typer.Option(None, "--run", help="Run id, defaults to current"),
+) -> None:
+    """Run the bounded independent worker-reviewer graph without closing the run."""
+    if not confirm_budget:
+        _echo("REFUSED  pass --confirm-budget to approve subprocess cost")
+        raise typer.Exit(2)
+    if not verify:
+        _echo("REFUSED  --verify is required")
+        raise typer.Exit(2)
+    if not scope:
+        _echo("REFUSED  at least one --scope is required for the worker")
+        raise typer.Exit(2)
+    if not 1 <= max_rounds <= MAX_ATTEMPTS:
+        _echo(f"REFUSED  max-rounds must be between 1 and {MAX_ATTEMPTS}")
+        raise typer.Exit(2)
+    _echo(f"BUDGET_CONFIRMED  pairs={max_rounds}  subprocesses<={max_rounds * 2}")
+    resolved = _resolve_run(run_id)
+    chosen, reason = spawn.detect_runner(runner)
+    _echo(f"runner: {chosen} ({reason})")
+    workspace = _workspace()
+    result = graph.run_worker_reviewer_graph(
+        _ledger(),
+        resolved,
+        task,
+        workspace.home.root,
+        workspace.project.root,
+        chosen,
+        file_scope=scope,
+        worker_verification=verify,
+        confirmed_budget=True,
+        max_rounds=max_rounds,
+    )
+    for item in result.rounds:
+        _echo(f"  round={item.number} route={item.route.value} feedback={item.feedback or '-'}")
+    _echo(f"{result.outcome.value.upper()}  {result.reason}")
+    _echo("NOTE  graph acceptance does not close the run; gate close remains authoritative")
+    if result.outcome is not graph.GraphOutcome.SHIP:
         raise typer.Exit(1)
 
 
