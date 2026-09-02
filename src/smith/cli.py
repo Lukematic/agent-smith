@@ -3589,5 +3589,110 @@ def resume_command() -> None:
     _echo(f"next: {checkpoint.next_action}")
 
 
+@app.command("start")
+def start_command(
+    fix_it: bool = typer.Option(
+        False, "--fix", help="Perform only mechanical repairs; report the rest"
+    ),
+) -> None:
+    """One command producing the full startup contract: project, mission
+    confidence, toolchain, tracker, active run, pending decision, next action,
+    and route skill.
+
+    Composes context, mission, doctor --fast, resume, and skill routing rather
+    than re-implementing their logic. Read-only unless --fix is passed, and
+    even then only mechanical repairs run; anything else is reported, not
+    guessed at.
+    """
+    workspace = _workspace()
+    paths = _paths()
+
+    project_line = str(workspace.project.root)
+
+    try:
+        tracker = seeds.Seeds(workspace.project.root)
+        found = mission.discover(workspace.project.root, tracker=tracker)
+        mission_confidence = str(found.confidence)
+    except Exception as exc:
+        mission_confidence = f"unknown ({exc})"
+        tracker = None
+
+    try:
+        chain = _toolchain(workspace)
+        toolchain_line = ", ".join(sorted(chain.summary())) or "unknown"
+    except Exception as exc:
+        toolchain_line = f"unknown ({exc})"
+
+    if tracker is not None:
+        try:
+            state, reason = tracker.state()
+            tracker_line = reason if state.usable else f"none ({reason})"
+        except Exception as exc:
+            tracker_line = f"unknown ({exc})"
+    else:
+        tracker_line = "unknown"
+
+    ledger = Ledger(workspace.state_root)
+    inspected = ledger.inspect_current()
+    active_run = inspected.run_id or "none"
+    pending_decision = "none"
+    next_action = "run 'awino gate open <task-class> \"<objective>\"' to start tracked work"
+    if inspected.status == "active" and inspected.run is not None:
+        run = inspected.run
+        pending = next(
+            (
+                item
+                for item in reversed(run.checkpoints)
+                if item.pending_decision is not None and item.selected_decision is None
+            ),
+            None,
+        )
+        if pending is not None:
+            pending_decision = pending.pending_decision or "none"
+        if run.checkpoints:
+            next_action = run.checkpoints[-1].next_action
+
+    try:
+        health_results = health.run_all(paths, fast=True)
+        failing = [r for r in health_results if r.blocking]
+    except Exception as exc:
+        failing = []
+        health_results = []
+        _echo(f"NOTE  health check itself failed: {exc}")
+
+    if fix_it:
+        try:
+            fix.fix_scaffold(paths)
+        except Exception as exc:
+            _echo(f"NOTE  --fix could not run scaffold repair: {exc}")
+
+    route_skill = "direct"
+    try:
+        catalog = _skill_catalog()
+        current = ledger.inspect_current()
+        if current.status == "active" and current.run is not None:
+            recommendation = catalog.recommend(current.run.objective)
+            if recommendation is not None:
+                route_skill = recommendation.skill.name
+    except Exception:
+        pass
+
+    _echo(f"Project: {project_line}")
+    _echo(f"Mission confidence: {mission_confidence}")
+    _echo(f"Toolchain: {toolchain_line}")
+    _echo(f"Tracker: {tracker_line}")
+    _echo(f"Active run: {active_run}")
+    _echo(f"Pending human decision: {pending_decision}")
+    _echo(f"Next recommended action: {next_action}")
+    _echo(f"Route skill: {route_skill}")
+
+    if failing:
+        _echo("")
+        _echo(
+            f"REFUSED  {len(failing)} health gate(s) failing: {', '.join(r.name for r in failing)}"
+        )
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()

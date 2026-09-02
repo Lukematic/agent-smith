@@ -222,10 +222,23 @@ seek confirmation before treating it as authoritative.
 
 ## The pair workflow
 
+Start every session with one command:
+
+```bash
+awino start
+```
+
+`start` composes `context`, `mission`, `doctor --fast`, `resume`, and skill
+routing into a single report: project, mission confidence, toolchain, tracker,
+active run, pending human decision, next recommended action, and route skill.
+It is read-only unless `--fix` is passed, and even then only mechanical
+repairs run. Use `context`, `mission`, `doctor`, and `resume` individually
+when you need one of those reads in isolation.
+
 Use this sequence for non-trivial work:
 
-1. **Orient.** Run `awino onboard`; use `awino context` when you need to inspect
-   the resolved home, project, and toolchain explicitly.
+1. **Orient.** Run `awino start`; use `awino context`, `awino mission`, or
+   `awino doctor` when you need to inspect one of those reads in isolation.
 2. **Select work.** Run `awino work` if the project uses Seeds, or state the task
    directly if it does not.
 3. **Assess the approach.** Run `awino plan "<request>"`. This is an analysis of
@@ -411,6 +424,7 @@ Expect the controller to:
 | Command | Purpose |
 | --- | --- |
 | `awino --help` | List every supported command. |
+| `awino start` | Single startup command: project, mission, toolchain, tracker, active run, next action, route skill. |
 | `awino onboard` | Run the mission-first project handshake. |
 | `awino context` | Show resolved home, project, and toolchain. |
 | `awino doctor` | Check health and refuse on blocking failures. |
