@@ -133,7 +133,16 @@ In short: Python executes code; `venv` isolates packages; `pip` installs package
 ~/.config/kilo/agents/agent-smith.md  Kilo primary persona
 ~/.config/kilo/skills/awino-*/        Kilo skills, linked
 <VS Code prompts>/agent-smith.chatmode.md  GitHub Copilot chat mode
+~/.roo/skills/awino-*/                 Roo skills, linked (agent selection via .roomodes / install-mode, not a persona file here)
 ```
+
+Cline and Codex are **not** installed by `awino install`. Both have a verified
+skills directory on disk (`~/.cline/skills/`, `~/.codex/skills/`), but neither
+has a proven persona/agent-selection location, and writing a guessed path
+would be worse than reporting the gap. They are deliberately absent from the
+`Harness` enum rather than added with a guessed persona location; revisit once
+a real selection mechanism for either tool is confirmed against an actual
+installation.
 
 Skills are **linked**, not copied, so `git pull` updates the live install with
 nothing else to run. The persona is copied, because harnesses read it at startup

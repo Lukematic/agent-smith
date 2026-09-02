@@ -44,6 +44,7 @@ class Harness(StrEnum):
     KILO = "kilo"
     CURSOR = "cursor"
     COPILOT = "copilot"
+    ROO = "roo"
 
     @property
     def label(self) -> str:
@@ -53,6 +54,7 @@ class Harness(StrEnum):
             Harness.KILO: "Kilo",
             Harness.CURSOR: "Cursor",
             Harness.COPILOT: "GitHub Copilot",
+            Harness.ROO: "Roo Code",
         }[self]
 
     @property
@@ -90,6 +92,7 @@ class Harness(StrEnum):
             Harness.KILO: "agents",
             Harness.CURSOR: "rules",
             Harness.COPILOT: "",
+            Harness.ROO: "",
         }[self]
 
     @property
@@ -101,12 +104,25 @@ class Harness(StrEnum):
             Harness.KILO: "awino.md",
             Harness.CURSOR: "awino.mdc",
             Harness.COPILOT: "awino.chatmode.md",
+            Harness.ROO: "awino.md",
         }[self]
+
+    @property
+    def installs_persona_file(self) -> bool:
+        """Whether harness.install() should write a persona markdown file here.
+
+        Roo selects its agent through .roomodes / custom_modes.yaml, installed
+        separately by modes.py's install-mode command - a mechanism already
+        proven against a real installation. Writing an additional persona file
+        to an unproven ~/.roo/agents/ path here would be a guessed location,
+        not a verified one, so this is skills-only for Roo.
+        """
+        return self is not Harness.ROO
 
     @property
     def supports_skills(self) -> bool:
         """Cursor rules and Copilot chat modes are context, not model-invoked skills."""
-        return self in {Harness.CLAUDE, Harness.AGENTS, Harness.KILO}
+        return self in {Harness.CLAUDE, Harness.AGENTS, Harness.KILO, Harness.ROO}
 
     @property
     def uses_plugins(self) -> bool:
@@ -379,23 +395,34 @@ def install(
     actions: list[Action] = []
     label = f"{target.harness}/{target.scope}"
 
-    persona_source = smith_home / "agents" / "awino.md"
-    if not persona_source.is_file():
-        return [Action(label, persona_source, "FAILED", "agents/awino.md is missing")]
-
-    destination = target.persona_path
-    try:
-        outcome, detail = ownership.safe_write(
-            target.root,
-            destination,
-            _persona_for(target.harness, persona_source),
-            "persona",
-            overwrite=overwrite,
+    if not target.harness.installs_persona_file:
+        actions.append(
+            Action(
+                label,
+                target.root,
+                "SKIPPED",
+                f"{target.harness.label} selects its agent via install-mode "
+                "(.roomodes / custom_modes.yaml), not a persona file here",
+            )
         )
-        actions.append(Action(label, destination, outcome, detail))
-    except OSError as exc:
-        actions.append(Action(label, destination, "FAILED", str(exc)))
-        return actions
+    else:
+        persona_source = smith_home / "agents" / "awino.md"
+        if not persona_source.is_file():
+            return [Action(label, persona_source, "FAILED", "agents/awino.md is missing")]
+
+        destination = target.persona_path
+        try:
+            outcome, detail = ownership.safe_write(
+                target.root,
+                destination,
+                _persona_for(target.harness, persona_source),
+                "persona",
+                overwrite=overwrite,
+            )
+            actions.append(Action(label, destination, outcome, detail))
+        except OSError as exc:
+            actions.append(Action(label, destination, "FAILED", str(exc)))
+            return actions
 
     if not skills:
         return actions
@@ -492,6 +519,23 @@ def status(project: Path, targets: list[Target] | None = None) -> list[tuple[Tar
     """Where A.W.I.N.O. is currently installed, and where it is not."""
     out: list[tuple[Target, bool, str]] = []
     for target in targets or discover(project):
+        if not target.harness.installs_persona_file:
+            count = (
+                len(list(target.skills_root.glob("awino-*/SKILL.md")))
+                if target.skills_root.is_dir()
+                else 0
+            )
+            if count:
+                out.append(
+                    (
+                        target,
+                        True,
+                        f"{count} skill(s); agent selection via install-mode, not a persona file",
+                    )
+                )
+            else:
+                out.append((target, False, "no skills installed"))
+            continue
         persona = target.persona_path
         if not persona.is_file():
             out.append((target, False, "persona not installed"))
