@@ -1046,6 +1046,77 @@ def pointer_command() -> None:
     _echo(harness.pointer_text(_workspace().home.root))
 
 
+@app.command("skills-status")
+def skills_status_command(
+    as_json_output: bool = typer.Option(False, "--json", help="Machine-readable output"),
+) -> None:
+    """Show whether each installed skill copy still matches source, by content
+    hash.
+
+    A substring search for a retired filename produces false positives against
+    legitimate prose that explains it no longer exists. This compares bytes.
+    """
+    workspace = _workspace()
+    smith_home = workspace.home.root
+    targets = [t for t in harness.detected(workspace.project.root) if t.harness.supports_skills]
+
+    if as_json_output:
+        payload = {
+            f"{t.harness}/{t.scope}": [
+                {"skill": d.skill, "path": str(d.path), "state": d.state}
+                for d in harness.skill_drift(smith_home, t)
+            ]
+            for t in targets
+        }
+        _echo(json.dumps(payload, indent=2))
+        return
+
+    total_drifted = 0
+    for target in targets:
+        drift = harness.skill_drift(smith_home, target)
+        label = f"{target.harness.label} ({target.scope})"
+        _echo(label)
+        for item in drift:
+            _echo(f"  {item.state:<14} {item.skill}")
+            if item.state == "drifted":
+                total_drifted += 1
+        if not drift:
+            _echo("  (no skills installed here)")
+        _echo("")
+
+    if total_drifted:
+        _echo(
+            f"DRIFTED  {total_drifted} installer-owned copy(ies) out of date; run: awino install-refresh"
+        )
+    else:
+        _echo("CURRENT  every installer-owned copy matches source")
+
+
+@app.command("install-refresh")
+def install_refresh_command(
+    overwrite: bool = typer.Option(
+        False, "--overwrite", help="Also replace copies ownership cannot otherwise resolve"
+    ),
+) -> None:
+    """Repair drifted installer-owned skill copies. Human-modified copies are
+    reported and preserved, never overwritten."""
+    del (
+        overwrite
+    )  # reserved for parity with install --overwrite; refresh never force-replaces human edits
+    workspace = _workspace()
+    smith_home = workspace.home.root
+    targets = [t for t in harness.detected(workspace.project.root) if t.harness.supports_skills]
+
+    any_failed = False
+    for target in targets:
+        for action in harness.refresh_skills(smith_home, target):
+            _echo(f"{action.outcome:<10} {action.path}  {action.detail}")
+            any_failed = any_failed or action.failed
+
+    if any_failed:
+        raise typer.Exit(1)
+
+
 @app.command()
 def scaffold() -> None:
     """Create any missing directories A.W.I.N.O. expects."""

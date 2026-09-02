@@ -420,6 +420,74 @@ def install(
     return actions
 
 
+@dataclass(frozen=True)
+class SkillDrift:
+    """Whether one installed skill copy still matches its source, by content
+    hash - never by substring matching, which produces false positives against
+    legitimate prose that mentions a retired file name."""
+
+    skill: str
+    path: Path
+    state: str  # current | drifted | absent | human-modified
+
+
+def skill_drift(smith_home: Path, target: Target) -> list[SkillDrift]:
+    """Compare every source skill against its installed copy at ``target`` by
+    content hash. Pure read: no write."""
+    if not target.harness.supports_skills:
+        return []
+    results: list[SkillDrift] = []
+    source_skills = smith_home / "skills"
+    for skill_path in sorted(source_skills.glob("awino-*/SKILL.md")):
+        name = skill_path.parent.name
+        installed = target.skills_root / name
+        installed_file = installed / "SKILL.md"
+        if not installed_file.is_file():
+            results.append(SkillDrift(name, installed, "absent"))
+            continue
+        source_hash = ownership.sha256_path(skill_path.parent)
+        installed_hash = ownership.sha256_path(installed)
+        if source_hash == installed_hash:
+            results.append(SkillDrift(name, installed, "current"))
+            continue
+        if not ownership.unchanged(target.skills_root, installed):
+            results.append(SkillDrift(name, installed, "human-modified"))
+            continue
+        results.append(SkillDrift(name, installed, "drifted"))
+    return results
+
+
+def refresh_skills(smith_home: Path, target: Target) -> list[Action]:
+    """Repair installer-owned drift only. A human-modified copy is reported and
+    backed up before any write; an installer-owned drifted copy is re-copied
+    from source and re-recorded."""
+    label = f"{target.harness}/{target.scope}"
+    actions: list[Action] = []
+    for item in skill_drift(smith_home, target):
+        if item.state == "current":
+            actions.append(Action(label, item.path, "SKIPPED", "already current"))
+            continue
+        if item.state == "human-modified":
+            saved = ownership.backup(item.path)
+            actions.append(
+                Action(label, item.path, "SKIPPED", f"human-modified, preserved; backup: {saved}")
+            )
+            continue
+        source = smith_home / "skills" / item.skill
+        if item.path.exists():
+            ownership.backup(item.path)
+            _unlink_any(item.path)
+        try:
+            shutil.copytree(source, item.path)
+        except OSError as exc:
+            actions.append(Action(label, item.path, "FAILED", str(exc)))
+            continue
+        ownership.record(target.skills_root, item.path, "copy")
+        verb = "installed" if item.state == "absent" else "refreshed"
+        actions.append(Action(label, item.path, "REFRESHED", verb))
+    return actions
+
+
 def status(project: Path, targets: list[Target] | None = None) -> list[tuple[Target, bool, str]]:
     """Where A.W.I.N.O. is currently installed, and where it is not."""
     out: list[tuple[Target, bool, str]] = []
