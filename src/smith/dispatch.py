@@ -18,13 +18,32 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
+from pathlib import Path
 
-from smith.enforce import Ledger
+from smith.enforce import MAX_ATTEMPTS, Ledger
 from smith.health import Health, Result, run_all
 from smith.paths import SmithPaths
 from smith.skill_catalog import Recommendation, Skill, SkillCatalog, _tokens
+from smith.spawn import (
+    Assignment,
+    Role,
+    Runner,
+    SpawnResult,
+    current_depth,
+    spawn_one,
+)
+from smith.spawn import verify as spawn_verify
 
 HealthCheck = Callable[..., list[Result]]
+SpawnExecutor = Callable[[Assignment, Path, Path, Runner], SpawnResult]
+DispatchVerifier = Callable[[SpawnResult, Assignment, Path], SpawnResult]
+
+# The skill dispatched when independent verification of a floor fails and the
+# request itself did not already name a debugging need. Rerouting to a fixed,
+# named remediation skill - rather than re-dispatching the same skill again -
+# is what makes "route to another floor" mean something.
+REMEDIATION_SKILL = "awino-debug"
 
 # Two recommendations within this many points are indistinguishable enough that
 # picking one would be a guess, not a match.
@@ -204,3 +223,253 @@ def preflight(
             )
 
     return Preflight(ok=True, blockers=(), reroute_to=None, detail="preconditions satisfied")
+
+
+class DispatchOutcome(StrEnum):
+    """Every way one dispatch trip may end. No silent fourth state."""
+
+    COMPLETE = "complete"
+    UNVERIFIED = "unverified"
+    BLOCKED = "blocked"
+    QUESTION = "question"
+    MAX_ITERATIONS = "max-iterations"
+
+
+@dataclass(frozen=True)
+class DispatchFloor:
+    """One spawned agent's trip: which skill, what it produced, and whether an
+    independent check actually confirmed it - not whether it claimed to."""
+
+    number: int
+    skill: str
+    result: SpawnResult
+    verified: bool | None
+
+
+@dataclass(frozen=True)
+class DispatchResult:
+    outcome: DispatchOutcome
+    floors: tuple[DispatchFloor, ...]
+    reason: str
+    decision: DispatchDecision | None = None
+
+
+def _build_assignment(
+    task: str,
+    skill: str,
+    floor_number: int,
+    feedback: str | None,
+    file_scope: list[str],
+    verification: str,
+) -> Assignment:
+    objective = f"Dispatched to {skill} for: {task}"
+    if feedback:
+        objective += f"\n\nThe previous floor's independent verification failed with:\n{feedback}"
+    return Assignment(
+        agent_id=f"dispatch-f{floor_number}-{skill}",
+        role=Role.BUILDER,
+        objective=objective,
+        file_scope=file_scope,
+        verification=verification,
+    )
+
+
+def _persist_floor(ledger: Ledger, run_id: str, floor: DispatchFloor, budget: int) -> None:
+    ledger.append_artifact(
+        run_id,
+        "dispatch-floor",
+        floor.result.invocation_id or floor.result.agent_id,
+        {
+            "budget": budget,
+            "floor": floor.number,
+            "invocation_id": floor.result.invocation_id or floor.result.agent_id,
+            "outcome": floor.result.outcome,
+            "skill": floor.skill,
+            "verified": floor.verified,
+        },
+    )
+
+
+def _persist_route(
+    ledger: Ledger,
+    run_id: str,
+    floor_number: int,
+    actor: str,
+    outcome: DispatchOutcome,
+    detail: str,
+    budget: int,
+) -> None:
+    ledger.append_artifact(
+        run_id,
+        "dispatch-route",
+        actor,
+        {"budget": budget, "detail": detail, "floor": floor_number, "outcome": outcome.value},
+    )
+    ledger.checkpoint(
+        run_id,
+        phase=f"dispatch-floor-{floor_number}",
+        summary=f"{outcome.value}: {detail}",
+        next_action="finish dispatch"
+        if outcome is DispatchOutcome.COMPLETE
+        else "route to next floor or stop",
+    )
+
+
+def _terminal(
+    ledger: Ledger,
+    run_id: str,
+    outcome: DispatchOutcome,
+    floors: list[DispatchFloor],
+    reason: str,
+    budget: int,
+    decision: DispatchDecision | None = None,
+) -> DispatchResult:
+    ledger.append_artifact(
+        run_id,
+        "dispatch-terminal",
+        "dispatch-engine",
+        {"budget": budget, "floors_used": len(floors), "outcome": outcome.value},
+    )
+    return DispatchResult(outcome, tuple(floors), reason, decision)
+
+
+def run_dispatch(
+    ledger: Ledger,
+    run_id: str,
+    request: str,
+    catalog: SkillCatalog,
+    paths: SmithPaths,
+    smith_home: Path,
+    project: Path,
+    runner: Runner,
+    verification: str,
+    *,
+    file_scope: list[str],
+    confirmed_budget: bool,
+    max_floors: int = MAX_ATTEMPTS,
+    execute: SpawnExecutor = spawn_one,
+    verify_fn: DispatchVerifier = spawn_verify,
+    depth: Callable[[], int] = current_depth,
+    health_check: HealthCheck = run_all,
+) -> DispatchResult:
+    """The full trip: match -> confirm -> dispatch -> wait -> verify -> route -> record.
+
+    A completion claim alone never produces COMPLETE. ``verify_fn`` must set
+    ``SpawnResult.verified`` to ``True`` for a floor to count as done; ``False``
+    reroutes to REMEDIATION_SKILL carrying the exact failure text forward, and
+    ``None`` (never checked) reports UNVERIFIED rather than silently trusting
+    the claim.
+    """
+    if not 1 <= max_floors <= MAX_ATTEMPTS:
+        raise ValueError(f"max_floors must be between 1 and {MAX_ATTEMPTS}")
+    budget = max_floors
+
+    if not confirmed_budget:
+        return _terminal(
+            ledger,
+            run_id,
+            DispatchOutcome.BLOCKED,
+            [],
+            "explicit budget confirmation required",
+            budget,
+        )
+    if depth() >= 1:
+        return _terminal(
+            ledger,
+            run_id,
+            DispatchOutcome.BLOCKED,
+            [],
+            "nested dispatch execution is refused",
+            budget,
+        )
+
+    decision = decide(request, catalog)
+    if decision.confidence != "high":
+        return _terminal(
+            ledger,
+            run_id,
+            DispatchOutcome.QUESTION,
+            [],
+            decision.question or decision.rationale,
+            budget,
+            decision,
+        )
+    assert decision.skill is not None
+
+    pre = preflight(ledger, paths, health_check=health_check)
+    if not pre.ok:
+        return _terminal(ledger, run_id, DispatchOutcome.BLOCKED, [], pre.detail, budget, decision)
+
+    floors: list[DispatchFloor] = []
+    feedback: str | None = None
+    skill = pre.reroute_to or decision.skill.name
+    for number in range(1, budget + 1):
+        assignment = _build_assignment(request, skill, number, feedback, file_scope, verification)
+        spawned = execute(assignment, smith_home, project, runner)
+        spawned = verify_fn(spawned, assignment, project)
+        floor = DispatchFloor(number, skill, spawned, spawned.verified)
+        floors.append(floor)
+        _persist_floor(ledger, run_id, floor, budget)
+
+        if spawned.verified is True:
+            _persist_route(
+                ledger,
+                run_id,
+                number,
+                spawned.invocation_id or spawned.agent_id,
+                DispatchOutcome.COMPLETE,
+                "verified",
+                budget,
+            )
+            return _terminal(
+                ledger,
+                run_id,
+                DispatchOutcome.COMPLETE,
+                floors,
+                f"verified complete on floor {number}",
+                budget,
+                decision,
+            )
+
+        if spawned.verified is None:
+            _persist_route(
+                ledger,
+                run_id,
+                number,
+                spawned.invocation_id or spawned.agent_id,
+                DispatchOutcome.UNVERIFIED,
+                "no verification result recorded",
+                budget,
+            )
+            return _terminal(
+                ledger,
+                run_id,
+                DispatchOutcome.UNVERIFIED,
+                floors,
+                "the floor's completion claim was never independently verified",
+                budget,
+                decision,
+            )
+
+        # spawned.verified is False: reroute, carrying the exact failure forward.
+        feedback = spawned.output_tail or "independent verification failed with no detail"
+        skill = REMEDIATION_SKILL
+        _persist_route(
+            ledger,
+            run_id,
+            number,
+            spawned.invocation_id or spawned.agent_id,
+            DispatchOutcome.BLOCKED,
+            feedback,
+            budget,
+        )
+
+    return _terminal(
+        ledger,
+        run_id,
+        DispatchOutcome.MAX_ITERATIONS,
+        floors,
+        f"did not verify within {budget} floor(s)",
+        budget,
+        decision,
+    )
