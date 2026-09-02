@@ -16,9 +16,15 @@ project's own doctrine warns against.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
+from smith.enforce import Ledger
+from smith.health import Health, Result, run_all
+from smith.paths import SmithPaths
 from smith.skill_catalog import Recommendation, Skill, SkillCatalog, _tokens
+
+HealthCheck = Callable[..., list[Result]]
 
 # Two recommendations within this many points are indistinguishable enough that
 # picking one would be a guess, not a match.
@@ -115,3 +121,86 @@ def decide(request: str, catalog: SkillCatalog) -> DispatchDecision:
         question=None,
         rationale=f"lexical match score {best.score} on {best.skill.name}",
     )
+
+
+@dataclass(frozen=True)
+class Preflight:
+    """Whether it is currently safe to dispatch into this project at all.
+
+    This is the mechanical form of "something is off with you - go to this
+    floor first": a precondition check that runs before any capability is
+    spawned, entirely from already-existing reads (health.run_all and
+    Ledger.inspect_current), so it adds no new source of truth to keep in sync.
+    """
+
+    ok: bool
+    blockers: tuple[str, ...]
+    reroute_to: str | None
+    detail: str
+
+
+def preflight(
+    ledger: Ledger,
+    paths: SmithPaths,
+    *,
+    health_check: HealthCheck = run_all,
+) -> Preflight:
+    """Check project health and the active run's own state before dispatch.
+
+    Pure read: calls ``health_check`` and ``ledger.inspect_current`` only,
+    performs no write of its own. A caller may check this speculatively before
+    committing to any dispatch.
+    """
+    results = health_check(paths, fast=True)
+    failing = [r for r in results if r.health is Health.FAIL]
+    if failing:
+        detail = "; ".join(
+            f"{r.name}: {r.detail} ({r.remedy})" if r.remedy else f"{r.name}: {r.detail}"
+            for r in failing
+        )
+        return Preflight(
+            ok=False,
+            blockers=tuple(r.name for r in failing),
+            reroute_to=None,
+            detail=f"project health failing: {detail}",
+        )
+
+    inspected = ledger.inspect_current()
+    if inspected.status == "active" and inspected.run is not None:
+        run = inspected.run
+        pending = next(
+            (
+                item
+                for item in reversed(run.checkpoints)
+                if item.pending_decision is not None and item.selected_decision is None
+            ),
+            None,
+        )
+        if pending is not None:
+            return Preflight(
+                ok=False,
+                blockers=("pending_decision",),
+                reroute_to=None,
+                detail=f"active run has an unresolved decision: {pending.pending_decision}",
+            )
+
+        failed_gates = sorted(
+            {
+                item.gate
+                for item in ledger.evidence(run.run_id)
+                if not item.passed and not item.command.startswith("ATTEST ")
+            }
+        )
+        if failed_gates:
+            names = ", ".join(failed_gates)
+            return Preflight(
+                ok=False,
+                blockers=tuple(failed_gates),
+                reroute_to="awino-debug",
+                detail=(
+                    f"active run {run.run_id} has a failing recorded gate "
+                    f"({names}); resolve it before dispatching into new work"
+                ),
+            )
+
+    return Preflight(ok=True, blockers=(), reroute_to=None, detail="preconditions satisfied")
