@@ -26,6 +26,7 @@ from smith import (
     completion_review,
     config_review,
     debugging,
+    dispatch,
     doc_review,
     fix,
     graph,
@@ -2996,6 +2997,85 @@ def gate_graph(
     _echo(f"{result.outcome.value.upper()}  {result.reason}")
     _echo("NOTE  graph acceptance does not close the run; gate close remains authoritative")
     if result.outcome is not graph.GraphOutcome.SHIP:
+        raise typer.Exit(1)
+
+
+@app.command("dispatch")
+def dispatch_command(
+    request: str = typer.Argument(..., help="Plain-language description of what needs to happen"),
+    confirm_budget: bool = typer.Option(
+        False, "--confirm-budget", help="Explicitly approve up to max-floors subprocess spawns"
+    ),
+    max_floors: int = typer.Option(MAX_ATTEMPTS, "--max-floors"),
+    runner: str = typer.Option(None, "--runner", help="claude, goose, or codex"),
+    verify: str = typer.Option(None, "--verify", help="Cross-platform verification command"),
+    scope: list[str] = typer.Option(None, "--scope", help="Writable file; repeatable"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Print the routing decision and preflight verdict; spawn nothing"
+    ),
+    run_id: str = typer.Option(None, "--run", help="Run id, defaults to current"),
+) -> None:
+    """Match a plain-language request to a skill, dispatch it, wait, independently
+    verify the result, route to remediation or completion, and record the trip.
+
+    This never closes a gate run; 'gate close' remains the completion authority.
+    """
+    workspace = _workspace()
+    ledger = _ledger()
+    if not 1 <= max_floors <= MAX_ATTEMPTS:
+        _echo(f"REFUSED  max-floors must be between 1 and {MAX_ATTEMPTS}")
+        raise typer.Exit(2)
+    catalog = skill_catalog.SkillCatalog(
+        workspace.project.root, workspace.home.root / "skills", workspace.home.root / "skills"
+    )
+
+    decision = dispatch.decide(request, catalog)
+    _echo(f"REQUEST  {request}")
+    _echo(f"CONFIDENCE  {decision.confidence}")
+    if decision.skill is not None:
+        _echo(f"MATCHED  {decision.skill.name}")
+    if decision.question is not None:
+        _echo(f"QUESTION  {decision.question}")
+
+    pre = dispatch.preflight(ledger, workspace.home)
+    _echo(f"PREFLIGHT  {'ok' if pre.ok else 'blocked'}: {pre.detail}")
+
+    if dry_run:
+        _echo("DRY_RUN  no subprocess was spawned")
+        if decision.confidence != "high" or not pre.ok:
+            raise typer.Exit(1)
+        return
+
+    if not confirm_budget:
+        _echo("REFUSED  pass --confirm-budget to approve subprocess cost")
+        raise typer.Exit(2)
+    chosen, reason = spawn.detect_runner(runner)
+    _echo(f"runner: {chosen} ({reason})")
+    if not chosen.enforces_read_only:
+        _echo(f"REFUSED  {chosen} cannot mechanically enforce read-only dispatch review")
+        raise typer.Exit(1)
+    _echo(f"BUDGET_CONFIRMED  floors={max_floors}  subprocesses<={max_floors}")
+
+    resolved = _resolve_run(run_id)
+    result = dispatch.run_dispatch(
+        ledger,
+        resolved,
+        request,
+        catalog,
+        workspace.home,
+        workspace.home.root,
+        workspace.project.root,
+        chosen,
+        verify or 'python -c "raise SystemExit(0)"',
+        file_scope=scope or [],
+        confirmed_budget=True,
+        max_floors=max_floors,
+    )
+    for floor in result.floors:
+        _echo(f"  floor={floor.number} skill={floor.skill} verified={floor.verified}")
+    _echo(f"{result.outcome.value.upper()}  {result.reason}")
+    _echo("NOTE  dispatch acceptance does not close the run; gate close remains authoritative")
+    if result.outcome is not dispatch.DispatchOutcome.COMPLETE:
         raise typer.Exit(1)
 
 
