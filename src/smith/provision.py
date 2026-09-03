@@ -64,6 +64,23 @@ def _task_runner_command(project: Path) -> str | None:
     return None
 
 
+def discover_verification(project: Path) -> tuple[str, str] | None:
+    """The project's own test command and where it came from, or None.
+
+    Order: just test -> make test -> pytest when pyproject declares it. A
+    dispatch with no real verification would accept any completion claim, so
+    the caller must refuse rather than default to a tautology.
+    """
+    runner = _task_runner_command(project)
+    if runner is not None:
+        source = "justfile" if runner.startswith("just") else "Makefile"
+        return runner, source
+    pyproject = project / "pyproject.toml"
+    if pyproject.is_file() and "[tool.pytest" in pyproject.read_text(encoding="utf-8"):
+        return "pytest -q", "pyproject.toml [tool.pytest]"
+    return None
+
+
 def plan(project: Path, state_root: Path | None = None) -> list[Step]:
     """What this project's environment is missing. Pure read, no writes."""
     steps: list[Step] = []

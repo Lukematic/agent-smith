@@ -142,4 +142,7 @@ quote-style = "double"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q --strict-markers"
+markers = [
+    "integration: full-boundary tests that run the real CLI in a subprocess",
+]
 

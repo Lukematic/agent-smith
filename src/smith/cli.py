@@ -3163,10 +3163,12 @@ def dispatch_command(
         raise typer.Exit(1)
     _echo(f"BUDGET_CONFIRMED  floors={max_floors}  subprocesses<={max_floors}")
     if not verify:
-        _echo(
-            "WARNING  no --verify supplied; the verification step is tautological and "
-            'will accept any completion claim. Pass --verify "<real check>".'
-        )
+        discovered = provision.discover_verification(workspace.project.root)
+        if discovered is None:
+            _echo('REFUSED  no verification command found; pass --verify "<real check>"')
+            raise typer.Exit(2)
+        verify, source = discovered
+        _echo(f"VERIFY  {verify} (from {source})")
 
     # Budget is confirmed, so writing project state is now legitimate.
     ledger = _ledger()
@@ -3180,7 +3182,7 @@ def dispatch_command(
         workspace.home.root,
         workspace.project.root,
         chosen,
-        verify or 'python -c "raise SystemExit(0)"',
+        verify,
         file_scope=scope or [],
         confirmed_budget=True,
         max_floors=max_floors,
@@ -3200,7 +3202,11 @@ app.add_typer(floor_app, name="floor")
 @floor_app.command("open")
 def floor_open(
     request: str = typer.Argument(..., help="Plain-language description of what needs to happen"),
-    verify: str = typer.Option(..., "--verify", help="Real verification command; required"),
+    verify: str = typer.Option(
+        None,
+        "--verify",
+        help="Real verification command; discovered from justfile/Makefile/pytest when omitted",
+    ),
     scope: list[str] = typer.Option(..., "--scope", help="Writable file; repeatable"),
     max_floors: int = typer.Option(MAX_ATTEMPTS, "--max-floors"),
     run_id: str = typer.Option(None, "--run", help="Run id, defaults to current"),
@@ -3211,6 +3217,13 @@ def floor_open(
     then calls 'awino floor close', which re-runs verification itself.
     """
     workspace = _workspace()
+    if not verify:
+        discovered = provision.discover_verification(workspace.project.root)
+        if discovered is None:
+            _echo('REFUSED  no verification command found; pass --verify "<real check>"')
+            raise typer.Exit(2)
+        verify, source = discovered
+        _echo(f"VERIFY  {verify} (from {source})")
     ledger = _ledger()
     resolved = _resolve_run(run_id)
     catalog = _skill_catalog()
