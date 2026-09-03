@@ -7,6 +7,7 @@ remain unsatisfied.
 
 ## Start here
 
+- **Six things to remember:** [Quickstart](docs/quickstart.md)
 - **Using A.W.I.N.O.:** [User guide](docs/user-guide.md)
 - **Understanding the operating model:** [Operating guide](docs/operating-guide.md)
 - **Integrating or operating A.W.I.N.O.:** [Agent and harness guide](docs/agent-guide.md)

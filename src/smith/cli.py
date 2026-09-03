@@ -39,6 +39,7 @@ from smith import (
     models,
     modes,
     onboarding,
+    playbook,
     project_guard,
     project_template,
     provision,
@@ -3798,6 +3799,50 @@ def gate_close(
     )
     if verdict.attested_only:
         _echo(f"NOTE  attested rather than executed: {', '.join(verdict.attested_only)}")
+    # Playbook: task-close order fires here, so the walkthrough and grill are
+    # offered every time work lands rather than when someone remembers.
+    try:
+        workspace = _workspace()
+        tracker = seeds.Seeds(workspace.project.root)
+        open_titles = [i.title for i in tracker.list_open()] if tracker.state()[0].usable else []
+        _echo("")
+        for line in playbook.run_event(
+            "task-close",
+            workspace.state_root,
+            workspace.project.root,
+            ledger=ledger,
+            open_seeds=open_titles,
+        ):
+            _echo(line)
+    except Exception as exc:  # playbook is advisory; never turn a closed run into a failure
+        _echo(f"NOTE  task-close playbook skipped: {exc}")
+
+
+@app.command("best")
+def best_command(
+    end: bool = typer.Option(False, "--end", help="Run the session-end order instead"),
+) -> None:
+    """Run the written session order - the one word to remember.
+
+    Without --end: session-start (startup report, the next Heilmeier gap as a
+    question, the next Seed). With --end: session-end (summary, lesson check,
+    mission refresh). Orders are data in <state>/playbook.json; defaults ship.
+    """
+    workspace = _workspace()
+    tracker = seeds.Seeds(workspace.project.root)
+    open_titles = [i.title for i in tracker.list_open()] if tracker.state()[0].usable else []
+    event = "session-end" if end else "session-start"
+    if not end:
+        start_command(fix_it=False)
+        _echo("")
+    for line in playbook.run_event(
+        event,
+        workspace.state_root,
+        workspace.project.root,
+        ledger=Ledger(workspace.state_root),
+        open_seeds=open_titles,
+    ):
+        _echo(line)
 
 
 @gate_app.command("block")
