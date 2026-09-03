@@ -22,6 +22,7 @@ from pathlib import Path
 import typer
 
 from smith import (
+    auto,
     capability,
     completion_review,
     config_review,
@@ -3217,6 +3218,74 @@ def dispatch_command(
 
 floor_app = typer.Typer(help="Portable dispatch floors: any environment can be the worker.")
 app.add_typer(floor_app, name="floor")
+
+
+@app.command("auto")
+def auto_command(
+    max_seeds: int = typer.Option(..., "--max-seeds", help="Hard cap on Seeds this sitting"),
+    confirm_budget: bool = typer.Option(False, "--confirm-budget"),
+    verify: str = typer.Option(
+        None, "--verify", help="Verification command; discovered when omitted"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show which Seeds would run; touch nothing"
+    ),
+) -> None:
+    """Drive ready Seeds through dispatch floors until done, blocked, or out of
+    budget. One command, bounded loop, no scheduler: a human starts every
+    sitting. Stops on the first Seed that does not verify - a stuck Seed is a
+    human decision, not something to skip past. Never pushes.
+
+    The worker for each floor is whatever agent environment runs this command's
+    printed prompts; in an interactive session, execute each floor prompt and
+    rerun. For a fully hands-off sitting inside an agent session, the agent
+    plays worker between floor open and close.
+    """
+    workspace = _workspace()
+    tracker = seeds.Seeds(workspace.project.root)
+    ready = [i for i in tracker.ready() if i.status == "open"]
+    _echo(f"READY  {len(ready)} seed(s)")
+    for issue in ready[:max_seeds]:
+        _echo(f"  {issue.id}  [{issue.type}] {issue.title[:70]}")
+    if dry_run:
+        _echo("DRY_RUN  nothing was started")
+        return
+    if not confirm_budget:
+        _echo("REFUSED  pass --confirm-budget to approve the sitting")
+        raise typer.Exit(2)
+    if not verify:
+        discovered = provision.discover_verification(workspace.project.root)
+        if discovered is None:
+            _echo('REFUSED  no verification command found; pass --verify "<real check>"')
+            raise typer.Exit(2)
+        verify, source = discovered
+        _echo(f"VERIFY  {verify} (from {source})")
+
+    def worker(state) -> None:
+        _echo(f"FLOOR  {state.floor}/{state.max_floors}  skill={state.skill}")
+        _echo(f"PROMPT  {state.prompt_path}")
+        _echo("Execute the prompt (this session or any agent), then press Enter to verify...")
+        try:
+            input()
+        except EOFError:
+            _echo("(non-interactive: proceeding straight to verification)")
+
+    result = auto.run_auto(
+        _ledger(),
+        tracker,
+        _skill_catalog(),
+        workspace.home.root,
+        workspace.project.root,
+        worker,
+        verify,
+        max_seeds=max_seeds,
+        confirmed_budget=True,
+    )
+    for seed_result in result.seeds:
+        _echo(f"{seed_result.outcome.upper():<8} {seed_result.issue_id}  {seed_result.detail[:90]}")
+    _echo(f"STOPPED  {result.stopped_because}")
+    if any(s.outcome != "closed" for s in result.seeds):
+        raise typer.Exit(1)
 
 
 @app.command("stance")
