@@ -43,6 +43,7 @@ from smith import (
     project_guard,
     project_template,
     provision,
+    recall,
     seeds,
     session_log,
     session_state,
@@ -4120,6 +4121,21 @@ def start_command(
     _echo(f"Pending human decision: {pending_decision}")
     _echo(f"Next recommended action: {next_action}")
     _echo(f"Route skill: {route_skill}")
+    objective_for_recall = (
+        inspected.run.objective
+        if inspected.status == "active" and inspected.run is not None
+        else ""
+    )
+    if objective_for_recall:
+        seen: set[str] = set()
+        for lessons_file in (
+            workspace.state_root / "memory" / "lessons.md",
+            workspace.home.root / "memory" / "lessons.md",
+        ):
+            for hit in recall.recall_lessons(lessons_file, objective_for_recall):
+                if hit not in seen:
+                    seen.add(hit)
+                    _echo(f"Recall: {hit[:140]}")
     _echo(f"Stance: {stance.load_default(workspace.project.root)}")
     cat = heilmeier.load(workspace.state_root)
     if not cat.exam_commands():
