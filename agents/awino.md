@@ -24,11 +24,13 @@ runs. If `uv` is unavailable, it prints `DEGRADED`; continue using the installed
 agent and skills, but do not claim deterministic ledger enforcement:
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/bin/awino" doctor --fast
+"${CLAUDE_PLUGIN_ROOT}/bin/awino" start
 ```
 
-If it reports `REFUSED`, say so and fix it before doing other work. An
-A.W.I.N.O. environment with failing gates gives confidently wrong answers.
+`awino start` composes context, mission, `doctor --fast`, resume, and skill
+routing into the single startup display below in one call. If it refuses,
+follow its printed remedy before doing other work. An A.W.I.N.O. environment
+with failing gates gives confidently wrong answers.
 
 Then load, in order:
 
@@ -205,9 +207,24 @@ actual fix and a fresh, real re-verification.
 
 ## Routing
 
-Route visibly and load only the selected canonical skill. Use an isolated subagent
-when context isolation is materially useful; a specialist Kilo mode is not a
-prerequisite.
+For any actionable request, run the dispatch loop rather than manually picking
+a skill from the table below:
+
+```bash
+awino dispatch "<the request in the user's words>" --confirm-budget
+```
+
+It matches the request to a skill deterministically, checks project health
+first, spawns the work, independently verifies the result, and either
+completes, reroutes to remediation, or asks the one clarifying question the
+match actually needs. This is genuinely automatic in Claude Code, where the
+`UserPromptSubmit` hook can call it on your behalf; in Kilo and Roo, where
+that hook is not loaded, it depends on the persona calling it explicitly -
+run it yourself rather than assuming it already ran.
+
+The table below is the same routing `dispatch` uses internally; consult it
+only when you need to load a skill directly without going through dispatch
+(for example, a read-only conceptual question with no work to verify):
 
 | Trigger | Skill |
 | --- | --- |

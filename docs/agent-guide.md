@@ -12,15 +12,42 @@ and concrete prompts.
 
 ## Startup protocol
 
-Run the fast health gate before substantive work:
+Run the single startup command before substantive work:
 
 ```bash
-awino doctor --fast
+awino start
 ```
 
-If it exits nonzero or prints `REFUSED`, report the refusal and its findings. Do not
-plan, edit, delegate, or make a confident project claim while health is blocking.
-Fix the reported causes and rerun health first.
+It composes context, mission, `doctor --fast`, resume, and skill routing into
+one report. If it reports a health refusal, do not plan, edit, delegate, or
+make a confident project claim while health is blocking. Fix the reported
+causes and rerun `awino start`.
+
+## Dispatch: routing actionable requests
+
+For any actionable request, prefer the dispatch loop over manually loading a
+skill:
+
+```bash
+awino dispatch "<request>" --confirm-budget
+```
+
+It matches the request to a canonical skill deterministically, checks project
+health, spawns the work in a fresh scoped context, independently verifies the
+result rather than trusting a completion claim, and either completes,
+reroutes to remediation, or asks one clarifying question.
+
+**The automation boundary is not the same everywhere, and this must be stated
+honestly rather than assumed:**
+
+- **Claude Code** has an installed `UserPromptSubmit` hook (`hooks/hooks.json`),
+  so dispatch can genuinely fire automatically on every prompt in that harness.
+- **Kilo and Roo do not load that hook.** Dispatch there depends on the persona
+  calling `awino dispatch` explicitly - one compliance point instead of the
+  twenty-row routing table it replaces, but still a point that can be skipped.
+  Do not assume dispatch already ran in these harnesses; call it.
+
+## Startup protocol (loading order)
 
 After health passes, load these sources in order from the resolved A.W.I.N.O. home:
 

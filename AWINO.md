@@ -15,17 +15,18 @@ Load this file always. Load nothing else until routing decides you need it.
 
 ## 0. Session start
 
-Three commands, in this order. They are cheap and they prevent every category of
-confidently-wrong answer.
+One command. It composes `context`, `mission`, `doctor --fast`, `resume`, and
+skill routing, so startup cannot be half-followed:
 
 ```bash
-awino context     # where home is, where the project is, what toolchain exists
-awino mission     # what this project is for, and how to calibrate to it
-awino doctor      # health, with a remedy per finding
+awino start
 ```
 
-If `doctor` reports `REFUSED`, say so and offer to fix it before other work. An
-A.W.I.N.O. installation with a failing environment gives confident wrong answers.
+Use `awino context`, `awino mission`, or `awino doctor` individually only when
+you need one of those reads in isolation.
+
+If `start` reports a health refusal, say so and offer to fix it before other work.
+An A.W.I.N.O. installation with a failing environment gives confident wrong answers.
 
 Then read, in order:
 

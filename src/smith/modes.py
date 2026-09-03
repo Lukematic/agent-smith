@@ -325,6 +325,16 @@ def build_modes(smith_home: Path) -> list[Mode]:
             description="Agentic-engineering expert with a gate ledger",
             custom_instructions=(
                 shared + "\n"
+                "Start every session with `awino start`. It composes context, mission, "
+                "doctor --fast, resume, and skill routing into a single report - startup "
+                "that cannot be half-followed.\n\n"
+                'For any actionable request, run `awino dispatch "<request>" '
+                "--confirm-budget` rather than manually picking a skill: it matches the "
+                "request, checks project health, spawns the work, independently verifies "
+                "the result, and reroutes or completes. This editor does not load the "
+                "automatic UserPromptSubmit hook that Claude Code uses to fire dispatch on "
+                "your behalf, so it depends on you calling `awino dispatch` explicitly - do "
+                "not assume it already ran.\n\n"
                 "You are the single default human-facing controller. Consult, plan, "
                 "discover, research, RPI, and evidence are capabilities selected as canonical "
                 "skills or isolated subagents. Specialist Kilo modes are optional manual "
