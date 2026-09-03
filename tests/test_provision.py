@@ -188,3 +188,17 @@ class TestStepShape:
             assert step.reason
             with pytest.raises(AttributeError):
                 step.kind = StepKind.SCAFFOLD_STATE  # type: ignore[misc]
+
+
+class TestRecipeMustExist:
+    def test_justfile_without_a_test_recipe_plans_no_verify_step(self, tmp_path: Path) -> None:
+        project = _with_pyproject(tmp_path)
+        (project / "justfile").write_text("lint:\n    ruff check .\n", encoding="utf-8")
+        assert not any(s.kind is StepKind.VERIFY_TOOLCHAIN for s in plan(project))
+
+    def test_makefile_without_a_test_target_is_not_offered(self, tmp_path: Path) -> None:
+        from smith.provision import discover_verification
+
+        project = _with_pyproject(tmp_path)
+        (project / "Makefile").write_text("lint:\n\truff check .\n", encoding="utf-8")
+        assert discover_verification(project) is None

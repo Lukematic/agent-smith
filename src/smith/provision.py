@@ -21,6 +21,7 @@ snapshot/restore deliberately does not own.
 
 from __future__ import annotations
 
+import re
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -55,12 +56,24 @@ class Action:
     detail: str
 
 
+_RECIPE = re.compile(r"^test\s*:", re.M)
+
+
 def _task_runner_command(project: Path) -> str | None:
-    """The project's own test entry point, if one is declared."""
-    if (project / "justfile").is_file() or (project / "Justfile").is_file():
-        return "just test"
-    if (project / "Makefile").is_file() or (project / "makefile").is_file():
-        return "make test"
+    """The project's own test entry point - only if the recipe actually exists.
+
+    A justfile with no `test` recipe is not a test command; offering `just test`
+    would fail for the wrong reason and mask the real state of the toolchain.
+    """
+    for name, cmd in (
+        ("justfile", "just test"),
+        ("Justfile", "just test"),
+        ("Makefile", "make test"),
+        ("makefile", "make test"),
+    ):
+        f = project / name
+        if f.is_file() and _RECIPE.search(f.read_text(encoding="utf-8", errors="replace")):
+            return cmd
     return None
 
 
