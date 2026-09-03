@@ -30,6 +30,60 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+# Denylist of secret-shaped patterns redacted before anything lands on disk.
+# The UserPromptSubmit hook feeds every raw prompt through append(), so a
+# pasted credential would otherwise persist in plaintext under .smith state.
+# Each entry is (kind, pattern, replacement); replacements may keep a
+# non-secret prefix (e.g. "Bearer ", "password=") so the entry stays legible.
+_SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
+    (
+        "private-key",
+        re.compile(
+            r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----",
+            re.DOTALL,
+        ),
+        "[REDACTED:private-key]",
+    ),
+    (
+        "aws-access-key",
+        re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
+        "[REDACTED:aws-access-key]",
+    ),
+    (
+        "github-token",
+        re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b"),
+        "[REDACTED:github-token]",
+    ),
+    (
+        "bearer-token",
+        re.compile(r"\b(Bearer\s+)[A-Za-z0-9._~+/=-]{8,}", re.IGNORECASE),
+        r"\1[REDACTED:bearer-token]",
+    ),
+    (
+        "password",
+        re.compile(r"\b(password\s*[=:]\s*)[\"']?[^\s\"']+[\"']?", re.IGNORECASE),
+        r"\1[REDACTED:password]",
+    ),
+    (
+        "api-key",
+        re.compile(r"\b(api[_-]?key\s*[=:]\s*)[\"']?[^\s\"']+[\"']?", re.IGNORECASE),
+        r"\1[REDACTED:api-key]",
+    ),
+)
+
+
+def redact_secrets(text: str) -> str:
+    """Replace secret-shaped substrings with ``[REDACTED:<kind>]`` markers.
+
+    Applied at write time so credentials never persist; ordinary technical
+    content that merely mentions passwords or key-like identifiers without a
+    matching secret shape passes through unchanged.
+    """
+    for _kind, pattern, replacement in _SECRET_PATTERNS:
+        text = pattern.sub(replacement, text)
+    return text
+
+
 _STOPWORDS = frozenset(
     {
         "a",
@@ -104,7 +158,11 @@ def append(
     run_id: str | None = None,
 ) -> Ask:
     """Record one user-facing event. Called by the UserPromptSubmit hook for
-    every incoming prompt, and by 'awino note' for an explicit correction."""
+    every incoming prompt, and by 'awino note' for an explicit correction.
+
+    Text passes through the secret denylist first: credentials and other
+    secret-shaped strings are redacted before anything is persisted."""
+    text = redact_secrets(text)
     path = log_path(state_root, session_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     ask = Ask(

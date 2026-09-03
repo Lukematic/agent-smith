@@ -62,3 +62,4 @@ Format:
 <!-- moved here with their supersession date, kept as evidence -->
 
 - [2026-09-03] `SILENT_CHAIN_NOOP` — a `&&`-chained sequence of `awino gate record` calls returned no output and recorded nothing while the run still showed gates missing; re-running each record individually passed first time. Never infer gate closure from a silent chain: run `awino gate status` after any multi-command gate sequence, and prefer one `gate record` per shell call. (dispatch-loop S9)
+- [2026-09-03] `FLOOR_VERIFY_CWD` - twice now a floor verify command used .smith-relative paths while floor close runs from the outer project root; always write verify commands relative to `awino context`'s project root, and floor open should echo the cwd it will verify from.
