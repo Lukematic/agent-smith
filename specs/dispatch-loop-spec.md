@@ -141,14 +141,14 @@ uv run awino doctor --fast
 
 Routing must be a pure function so it is testable without spawning anything.
 
-- [ ] **S1.1** Open the run:
+- [x] **S1.1** Open the run:
 
   ```powershell
   uv run awino gate open code-change "Dispatch routing decision" --plan specs/dispatch-loop-spec.md --by awino --scope src/smith/dispatch.py --scope tests/test_dispatch_routing.py
   uv run awino gate plan approve --by "<human>" --reason "S1 approved"
   ```
 
-- [ ] **S1.2** Write failing tests:
+- [x] **S1.2** Write failing tests:
   1. `"pytest is failing with a ValueError"` → `awino-debug`, confidence `high`.
   2. `"the agent keeps ignoring my instructions"` → `awino-triage`, confidence `high`.
   3. `"what is a harness"` → `awino-consult`.
@@ -160,9 +160,9 @@ Routing must be a pure function so it is testable without spawning anything.
   8. Routing is pure: calling it twice with the same input returns an identical result
      and performs no filesystem write.
 
-- [ ] **S1.3** Run tests. Paste failures.
+- [x] **S1.3** Run tests. Paste failures.
 
-- [ ] **S1.4** Implement:
+- [x] **S1.4** Implement:
 
   ```python
   @dataclass(frozen=True)
@@ -200,9 +200,9 @@ a guess.
 
 This is "something is off with you — go to this floor first," made mechanical.
 
-- [ ] **S2.1** Open the run. Approve.
+- [x] **S2.1** Open the run. Approve.
 
-- [ ] **S2.2** Write failing tests:
+- [x] **S2.2** Write failing tests:
   1. Health `REFUSED` → dispatch refuses, names the failing check, recommends the
      remedy. Nothing is spawned.
   2. A failing gate already recorded in the active run → reroute to `awino-debug`
@@ -211,9 +211,9 @@ This is "something is off with you — go to this floor first," made mechanical.
   4. Healthy project with no active run → preconditions pass.
   5. Precondition evaluation is read-only.
 
-- [ ] **S2.3** Paste failures.
+- [x] **S2.3** Paste failures.
 
-- [ ] **S2.4** Implement `preflight(project, ledger) -> Preflight` with fields `ok`,
+- [x] **S2.4** Implement `preflight(project, ledger) -> Preflight` with fields `ok`,
       `blockers`, `reroute_to`, `detail`. Compose `health.run_all(fast=True)` and
       `Ledger.inspect_current()`. Do not duplicate their logic.
 
@@ -238,9 +238,9 @@ This is "something is off with you — go to this floor first," made mechanical.
 
 The seven-step trip: match → confirm → dispatch → wait → verify → route → record.
 
-- [ ] **S3.1** Open the run. Approve.
+- [x] **S3.1** Open the run. Approve.
 
-- [ ] **S3.2** Write failing tests, using an injected executor for determinism plus one
+- [x] **S3.2** Write failing tests, using an injected executor for determinism plus one
       real-subprocess test:
   1. Happy path: verified success → `COMPLETE`, artifacts recorded.
   2. Claim without verification → **not** accepted; outcome `UNVERIFIED`.
@@ -255,9 +255,9 @@ The seven-step trip: match → confirm → dispatch → wait → verify → rout
      artifacts.
   10. Real subprocess test proving two dispatches produce two distinct invocation IDs.
 
-- [ ] **S3.3** Paste failures.
+- [x] **S3.3** Paste failures.
 
-- [ ] **S3.4** Implement `run_dispatch(...) -> DispatchResult` with outcomes
+- [x] **S3.4** Implement `run_dispatch(...) -> DispatchResult` with outcomes
       `COMPLETE | UNVERIFIED | BLOCKED | QUESTION | MAX_ITERATIONS`. Reuse
       `spawn.spawn_one`, `spawn.verify`, `Ledger.append_artifact`,
       `Ledger.checkpoint`. Reviewer-style read-only dispatch requires
@@ -284,9 +284,9 @@ cap.
 
 **Touches:** `src/smith/cli.py`, `tests/test_dispatch_cli.py` (new).
 
-- [ ] **S4.1** Open the run. Approve.
+- [x] **S4.1** Open the run. Approve.
 
-- [ ] **S4.2** Write failing tests:
+- [x] **S4.2** Write failing tests:
   1. Missing `--confirm-budget` → refuses, exit 2, nothing spawned.
   2. `--max-floors` outside `1..MAX_ATTEMPTS` → refuses, exit 2, no silent clamp.
   3. `--dry-run` → prints the routing decision and preflight verdict; spawns nothing.
@@ -296,9 +296,9 @@ cap.
   6. Exit code is nonzero unless the outcome is `COMPLETE`.
   7. Runner without enforceable read-only → refuses with a stated reason.
 
-- [ ] **S4.3** Paste failures.
+- [x] **S4.3** Paste failures.
 
-- [ ] **S4.4** Implement:
+- [x] **S4.4** Implement:
 
   ```powershell
   awino dispatch "<request>" [--confirm-budget] [--max-floors N] [--dry-run] [--runner claude] [--run <id>]
@@ -307,7 +307,7 @@ cap.
   Print `BUDGET_CONFIRMED  floors=N  subprocesses<=2N` before executing. Never close a
   gate run; `gate close` remains the completion authority.
 
-- [ ] **S4.5** Live-verify and paste output:
+- [x] **S4.5** Live-verify and paste output:
 
   ```powershell
   uv run awino dispatch "explain what a harness is" --dry-run
@@ -334,9 +334,9 @@ cap.
 **Touches:** `src/smith/cli.py`, `tests/test_start_command.py` (new),
 `docs/user-guide.md`.
 
-- [ ] **S5.1** Open the run. Approve.
+- [x] **S5.1** Open the run. Approve.
 
-- [ ] **S5.2** Write failing tests asserting `start` prints all eight contract fields —
+- [x] **S5.2** Write failing tests asserting `start` prints all eight contract fields —
       `Project`, `Mission confidence`, `Toolchain`, `Tracker`, `Active run`,
       `Pending human decision`, `Next recommended action`, `Route skill` — plus:
   1. exits nonzero when health is `REFUSED`;
@@ -345,12 +345,12 @@ cap.
   4. never opens a ledger run;
   5. reports the gap without crashing when no `.smith/` exists.
 
-- [ ] **S5.3** Paste failures.
+- [x] **S5.3** Paste failures.
 
-- [ ] **S5.4** Implement by composing the internals behind `context`, `mission`,
+- [x] **S5.4** Implement by composing the internals behind `context`, `mission`,
       `doctor --fast`, `resume`, and `skills --route`. No duplicated logic.
 
-- [ ] **S5.5** Update `docs/user-guide.md`: `awino start` is the documented first
+- [x] **S5.5** Update `docs/user-guide.md`: `awino start` is the documented first
       command; the others are granular fallbacks.
 
 **Exit gate**
@@ -380,9 +380,9 @@ Fixes "I fix things and nothing happens."
 `registry_build.ps1` inside a sentence stating the script no longer exists. A substring
 check is `LINTER_FALSE_POSITIVE` (`memory/lessons.md:22`).
 
-- [ ] **S6.1** Open the run. Approve.
+- [x] **S6.1** Open the run. Approve.
 
-- [ ] **S6.2** Write failing tests:
+- [x] **S6.2** Write failing tests:
   1. `test_matching_copy_mentioning_retired_script_is_not_flagged` — the regression test
      for the false positive.
   2. Byte difference → `drifted`.
@@ -391,16 +391,16 @@ check is `LINTER_FALSE_POSITIVE` (`memory/lessons.md:22`).
      preserved byte-for-byte, and backed up before any write.
   5. Refresh is idempotent.
 
-- [ ] **S6.3** Paste failures.
+- [x] **S6.3** Paste failures.
 
-- [ ] **S6.4** Implement `SkillDrift`, `skill_drift(...)`, `refresh_skills(...)` in
+- [x] **S6.4** Implement `SkillDrift`, `skill_drift(...)`, `refresh_skills(...)` in
       `harness.py` using `ownership.sha256_path`, `ownership.entry`,
       `ownership.unchanged`, `ownership.backup`, `ownership.record`.
 
-- [ ] **S6.5** Add `awino skills-status [--json]` and `awino install-refresh
+- [x] **S6.5** Add `awino skills-status [--json]` and `awino install-refresh
       [--overwrite]`.
 
-- [ ] **S6.6** Live-verify and paste all three outputs:
+- [x] **S6.6** Live-verify and paste all three outputs:
 
   ```powershell
   uv run awino skills-status
@@ -429,9 +429,9 @@ check is `LINTER_FALSE_POSITIVE` (`memory/lessons.md:22`).
 **Touches:** `src/smith/harness.py`, `tests/test_harness_surfaces.py` (new),
 `docs/install.md`.
 
-- [ ] **S7.1** Open the run. Approve.
+- [x] **S7.1** Open the run. Approve.
 
-- [ ] **S7.2** Re-confirm and paste:
+- [x] **S7.2** Re-confirm and paste:
 
   ```powershell
   Get-ChildItem "$env:USERPROFILE\.roo\skills" -Force | Select-Object -First 3 Name
@@ -439,17 +439,17 @@ check is `LINTER_FALSE_POSITIVE` (`memory/lessons.md:22`).
   Test-Path "$env:USERPROFILE\.claude\agents\awino.md"
   ```
 
-- [ ] **S7.3** Write failing tests:
+- [x] **S7.3** Write failing tests:
   1. Roo skills install to `~/.roo/skills/<name>/SKILL.md`.
   2. Roo mode support still resolves through `modes.py`.
   3. `install-status` reports Cline and Codex as `DEFERRED` with the reason
      "persona location not proven", not as failures.
   4. Nothing is written to `~/.cline` or `~/.codex`.
 
-- [ ] **S7.4** Implement `Harness.ROO` with the probed root. Do **not** add Cline or
+- [x] **S7.4** Implement `Harness.ROO` with the probed root. Do **not** add Cline or
       Codex members; record the deferral in `docs/install.md` with the probe evidence.
 
-- [ ] **S7.5** Live-install and paste output:
+- [x] **S7.5** Live-install and paste output:
 
   ```powershell
   uv run awino install --harness roo --scope global --force
@@ -477,9 +477,9 @@ check is `LINTER_FALSE_POSITIVE` (`memory/lessons.md:22`).
 
 **Touches:** `src/smith/cli.py`, `tests/test_update_selfheal.py` (new).
 
-- [ ] **S8.1** Open the run. Approve.
+- [x] **S8.1** Open the run. Approve.
 
-- [ ] **S8.2** Write failing tests:
+- [x] **S8.2** Write failing tests:
   1. `update` ensures project state: a `.smith/` lacking `run/` gains it.
   2. Refreshes **detected** harnesses only; an absent harness stays absent.
   3. Preserves project-specific state: `project.yaml`, `memory/`, `run/` byte-identical
@@ -487,13 +487,13 @@ check is `LINTER_FALSE_POSITIVE` (`memory/lessons.md:22`).
   4. Idempotent: a second consecutive `update` reports zero changes.
   5. Prints one summary block ending with the active version.
 
-- [ ] **S8.3** Paste failures.
+- [x] **S8.3** Paste failures.
 
-- [ ] **S8.4** Implement inside `update_command`, after the existing version branch:
+- [x] **S8.4** Implement inside `update_command`, after the existing version branch:
       `ensure_state()` → `refresh_skills` for detected targets → `doctor --fast` → one
       summary. Call `updater.snapshot`/`restore`; do not modify `updater.py`.
 
-- [ ] **S8.5** Live-verify and paste:
+- [x] **S8.5** Live-verify and paste:
 
   ```powershell
   uv run awino update
@@ -524,9 +524,9 @@ from the printed `BACKUP`.
 **Touches:** `agents/awino.md`, `AWINO.md`, `src/smith/modes.py`,
 `tests/test_dispatch_wiring.py` (new), `docs/agent-guide.md`.
 
-- [ ] **S9.1** Open the run. Approve.
+- [x] **S9.1** Open the run. Approve.
 
-- [ ] **S9.2** Write failing tests:
+- [x] **S9.2** Write failing tests:
   1. The persona's startup section names exactly `awino start` as the first command.
   2. The persona instructs `awino dispatch` for any actionable request, replacing the
      multi-command routing list.
@@ -535,13 +535,13 @@ from the printed `BACKUP`.
   4. Docs state honestly that Claude Code can fire dispatch from the installed
      `UserPromptSubmit` hook, while Kilo and Roo depend on the persona calling it.
 
-- [ ] **S9.3** Paste failures.
+- [x] **S9.3** Paste failures.
 
-- [ ] **S9.4** Edit the persona, constitution, and mode generator so the routing table
+- [x] **S9.4** Edit the persona, constitution, and mode generator so the routing table
       collapses into `awino dispatch`. Keep the failure-mode and honesty sections
       intact.
 
-- [ ] **S9.5** Propagate and verify:
+- [x] **S9.5** Propagate and verify:
 
   ```powershell
   uv run awino install --force
@@ -567,6 +567,37 @@ from the printed `BACKUP`.
 ---
 
 ## 15. S10 — Config review, remediation, acceptance, push
+
+**Status before S10 starts (2026-09-03):** S1–S9 closed, each with a ledger run whose
+five gates executed (planned attested; tested, linted, tests_not_weakened,
+scope_respected executed). Full suite: 726 passed, 1 skipped. Commits `d97d169`
+through `34b6902` on `main`, not yet pushed.
+
+### Execution log — what actually happened, including deviations
+
+| Seed | Run | Commit | Deviations from the written step |
+| --- | --- | --- | --- |
+| S1 | `20260902-220504-85ac67` | `d97d169` | Test phrases in §6.2 ("what is a harness", "do the thing") did not route as the spec assumed. Verified against the real catalog and rewritten to phrases whose scores were measured before being asserted. Rule 7 applied to test inputs, not only paths. |
+| S2 | `20260902-221951-8da930` | `47f899b` | None. |
+| S3 | `20260902-223058-cc061f` | `5752c6e` | `verified is None` produces `UNVERIFIED`; `False` reroutes; `True` completes. Spec §8.2 listed `UNVERIFIED` and reroute as separate tests without naming the three-state rule; the code now names it explicitly. |
+| S4 | `20260902-224743-43d82a` | `1a46091` | Tests caught that `--dry-run` bypassed `--max-floors` validation. Validation moved ahead of the dry-run short-circuit. |
+| S5 | `20260902-230355-16664a` | `cd2fa34` | `_ledger()` calls `ensure_state()` and would have written `.smith/.gitignore`. `start` constructs `Ledger` directly to stay read-only. `--fix` runs `fix.fix_scaffold` only; there is no `Fixer` class. |
+| S6 | `20260902-232241-8b9793` | `a1ff943` | `refresh_skills` also installs `absent` skills, not only `drifted`. Live run filled the empty Goose target. Live `skills-status` showed every prior copy already `current`, confirming the earlier grep-based "stale" finding was a false positive. |
+| S7 | `20260902-233742-290d06` | `1bbf8ab` | Added `Harness.installs_persona_file` so Roo is skills-only; agent selection stays with `modes.py`. A guessed `~/.roo/agents/` path was written and then removed before commit. Cline and Codex are not `Harness` members, so `install-status` cannot mark them `DEFERRED`; the deferral is recorded in `docs/install.md` instead. |
+| S8 | `20260902-235358-ea7b02` | `170232f` | Self-healing applies to the standalone-clone path only. The Claude-plugin path reinstalls via `claude plugin update` and needs a restart, so refreshing there would read pre-restart files. This machine is a plugin install; the standalone path was live-verified against a disposable clone with `AWINO_HOME` and `USERPROFILE` overridden. |
+| S9 | `20260903-001232-c760e1` | `34b6902` | Adding CLI examples to the shared `role` text broke `test_modes_without_command_do_not_advertise_executable_cli_commands`: read-only modes must not advertise commands. Moved into the primary mode's `custom_instructions` only. |
+
+### Process defect found while closing S9
+
+A chained `&&` command that recorded four gates, closed the Seed, and closed the run
+returned **no output and recorded nothing**; the run still showed `satisfied=1
+missing=4`. Nothing failed loudly. Re-running each `gate record` individually
+succeeded on the first attempt. Cause not determined (likely the shell swallowing a
+nonzero intermediate exit inside the `&&` chain). Consequence: **verify `gate status`
+after any chained gate command; never infer closure from a silent chain.** Recorded
+as a lesson in S10.
+
+### S10 steps
 
 **Touches:** whatever the review names, within the declared scope only.
 
