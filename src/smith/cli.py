@@ -39,6 +39,7 @@ from smith import (
     onboarding,
     project_guard,
     project_template,
+    provision,
     seeds,
     session_log,
     session_state,
@@ -462,6 +463,15 @@ def update_command() -> None:
     _echo("UPDATED  source is clean and fast-forwarded")
 
     workspace.ensure_state()
+    # Rebase-style second half: project state was snapshotted and restored above;
+    # now re-provision the environment it lives in. Auto-steps only - a question
+    # mid-update would block unattended updates, so those are reported instead.
+    for step in provision.plan(workspace.project.root):
+        if step.needs_question:
+            _echo(f"MISSING  {step.kind.value}: {step.reason} (run 'awino start --fix')")
+            continue
+        for action in provision.apply_steps(workspace.project.root, [step], ask=lambda _q: False):
+            _echo(f"{action.outcome:<9} {action.kind.value}  {action.detail}")
     detected_targets = [
         t for t in harness.detected(workspace.project.root) if t.harness.supports_skills
     ]
@@ -3839,6 +3849,26 @@ def start_command(
             fix.fix_scaffold(paths)
         except Exception as exc:
             _echo(f"NOTE  --fix could not run scaffold repair: {exc}")
+
+        def _ask(question: str) -> bool:
+            if not sys.stdin.isatty():
+                _echo(f"QUESTION  {question}  (non-interactive: declined; answer via a terminal)")
+                return False
+            try:
+                return typer.confirm(question, default=False)
+            except (typer.Abort, EOFError):
+                _echo(f"QUESTION  {question}  (no answer: declined)")
+                return False
+
+        for action in provision.apply_steps(
+            workspace.project.root,
+            provision.plan(workspace.project.root),
+            ask=_ask,
+        ):
+            _echo(f"{action.outcome:<9} {action.kind.value}  {action.detail}")
+    else:
+        for step in provision.plan(workspace.project.root):
+            _echo(f"MISSING  {step.kind.value}: {step.reason} (run 'awino start --fix')")
 
     route_skill = "direct"
     try:
