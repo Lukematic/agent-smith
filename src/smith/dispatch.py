@@ -16,6 +16,8 @@ project's own doctrine warns against.
 
 from __future__ import annotations
 
+import subprocess
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
@@ -233,6 +235,7 @@ class DispatchOutcome(StrEnum):
     BLOCKED = "blocked"
     QUESTION = "question"
     MAX_ITERATIONS = "max-iterations"
+    REVISE = "revise"
 
 
 @dataclass(frozen=True)
@@ -473,3 +476,252 @@ def run_dispatch(
         budget,
         decision,
     )
+
+
+# ── Portable floors: any environment can be the worker ──────────────────────
+#
+# Phase 0 of the partner spec proved the external-runner assumption wrong on a
+# real machine: `claude -p` demands its own login even when a perfectly good
+# authenticated agent session is already running. Splitting the trip into
+# open_floor / close_floor, with the ledger holding state between calls, lets
+# whatever harness is present - Kilo, Claude Code, a human - execute the work.
+# The closer re-runs verification itself, so a completion claim alone still
+# never produces COMPLETE no matter who the worker was.
+
+
+@dataclass(frozen=True)
+class FloorState:
+    """Everything a harness needs to execute one floor of a dispatch trip."""
+
+    run_id: str
+    floor: int
+    skill: str
+    invocation_id: str
+    prompt_path: str
+    verification: str
+    max_floors: int
+
+
+@dataclass(frozen=True)
+class FloorResult:
+    outcome: DispatchOutcome
+    detail: str
+    next_state: FloorState | None = None
+
+
+def _skill_text(smith_home: Path, skill: str) -> str:
+    path = smith_home / "skills" / skill / "SKILL.md"
+    if path.is_file():
+        return path.read_text(encoding="utf-8")
+    return f"(skill file not found at {path})"
+
+
+def _write_floor_prompt(
+    ledger: Ledger,
+    run_id: str,
+    request: str,
+    skill: str,
+    smith_home: Path,
+    verification: str,
+    file_scope: list[str],
+    floor: int,
+    max_floors: int,
+    feedback: str | None,
+) -> FloorState:
+    invocation_id = f"dispatch-f{floor}-{skill}-{uuid.uuid4().hex[:10]}"
+    objective = f"Dispatched to {skill} for: {request}"
+    if feedback:
+        objective += f"\n\nThe previous floor's independent verification failed with:\n{feedback}"
+    assignment = Assignment(
+        agent_id=f"dispatch-f{floor}-{skill}",
+        role=Role.BUILDER,
+        objective=objective,
+        file_scope=file_scope,
+        verification=verification,
+    )
+    prompt = (
+        f"<!-- invocation: {invocation_id} -->\n"
+        + assignment.render(smith_home)
+        + "\n\n## The skill you were routed to - follow this procedure\n\n"
+        + _skill_text(smith_home, skill)
+    )
+    scratch = ledger.state_root / "assignments"
+    scratch.mkdir(parents=True, exist_ok=True)
+    prompt_path = scratch / f"{invocation_id}.md"
+    prompt_path.write_text(prompt, encoding="utf-8", newline="")
+
+    state = FloorState(
+        run_id=run_id,
+        floor=floor,
+        skill=skill,
+        invocation_id=invocation_id,
+        prompt_path=str(prompt_path),
+        verification=verification,
+        max_floors=max_floors,
+    )
+    ledger.append_artifact(
+        run_id,
+        "dispatch-pending",
+        invocation_id,
+        {
+            "floor": floor,
+            "invocation_id": invocation_id,
+            "max_floors": max_floors,
+            "prompt_path": str(prompt_path),
+            "request": request,
+            "skill": skill,
+            "smith_home": str(smith_home),
+            "verification": verification,
+            "file_scope": list(file_scope),
+        },
+    )
+    return state
+
+
+def open_floor(
+    ledger: Ledger,
+    run_id: str,
+    request: str,
+    catalog: SkillCatalog,
+    smith_home: Path,
+    verification: str,
+    *,
+    file_scope: list[str],
+    max_floors: int = MAX_ATTEMPTS,
+) -> FloorState:
+    """Route the request and write the floor-1 prompt for whatever harness is
+    present to execute. Raises rather than guessing when routing is not
+    unambiguous, and refuses a second concurrent trip on the same run."""
+    if not 1 <= max_floors <= MAX_ATTEMPTS:
+        raise ValueError(f"max_floors must be between 1 and {MAX_ATTEMPTS}")
+    if not verification.strip():
+        raise ValueError("a real verification command is required")
+
+    pending = ledger.latest_artifact(run_id, "dispatch-pending")
+    closed = ledger.artifacts(run_id, "dispatch-floor")
+    if pending is not None and len(closed) < int(pending.payload["floor"]):
+        raise ValueError(f"floor {pending.payload['floor']} is already open; close it first")
+
+    decision = decide(request, catalog)
+    if decision.confidence != "high" or decision.skill is None:
+        raise ValueError(
+            f"routing confidence is {decision.confidence}, not high: "
+            f"{decision.question or decision.rationale}"
+        )
+
+    return _write_floor_prompt(
+        ledger,
+        run_id,
+        request,
+        decision.skill.name,
+        smith_home,
+        verification,
+        file_scope,
+        1,
+        max_floors,
+        None,
+    )
+
+
+def close_floor(ledger: Ledger, run_id: str, project: Path) -> FloorResult:
+    """Verify the pending floor's work by re-running its verification command
+    ourselves, then route: complete, open the next floor with the failure text
+    carried forward, or stop at the budget."""
+    pending = ledger.latest_artifact(run_id, "dispatch-pending")
+    closed = ledger.artifacts(run_id, "dispatch-floor")
+    if pending is None or len(closed) >= int(pending.payload["floor"]):
+        raise ValueError("no pending floor to close on this run")
+
+    payload = pending.payload
+    floor = int(payload["floor"])
+    max_floors = int(payload["max_floors"])
+    verification = str(payload["verification"])
+    invocation_id = str(payload["invocation_id"])
+    skill = str(payload["skill"])
+
+    try:
+        completed = subprocess.run(
+            verification,
+            shell=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            cwd=str(project),
+            check=False,
+        )
+        verified = completed.returncode == 0
+        tail = "\n".join(
+            ((completed.stdout or "") + (completed.stderr or "")).strip().splitlines()[-8:]
+        )
+    except OSError as exc:
+        verified = False
+        tail = str(exc)
+
+    ledger.append_artifact(
+        run_id,
+        "dispatch-floor",
+        invocation_id,
+        {
+            "budget": max_floors,
+            "floor": floor,
+            "invocation_id": invocation_id,
+            "outcome": "VERIFIED" if verified else "FAILED_VERIFICATION",
+            "skill": skill,
+            "verified": verified,
+        },
+    )
+
+    if verified:
+        ledger.append_artifact(
+            run_id,
+            "dispatch-terminal",
+            "dispatch-engine",
+            {"budget": max_floors, "floors_used": floor, "outcome": "complete"},
+        )
+        ledger.checkpoint(
+            run_id,
+            phase=f"dispatch-floor-{floor}",
+            summary=f"complete: verified on floor {floor}",
+            next_action="finish dispatch",
+        )
+        return FloorResult(DispatchOutcome.COMPLETE, f"verified on floor {floor}")
+
+    if floor >= max_floors:
+        ledger.append_artifact(
+            run_id,
+            "dispatch-terminal",
+            "dispatch-engine",
+            {"budget": max_floors, "floors_used": floor, "outcome": "max-iterations"},
+        )
+        ledger.checkpoint(
+            run_id,
+            phase=f"dispatch-floor-{floor}",
+            summary=f"max-iterations: verification still failing after {floor} floor(s)",
+            next_action="human decides whether to continue",
+        )
+        return FloorResult(
+            DispatchOutcome.MAX_ITERATIONS,
+            f"verification failed on the final floor {floor}: {tail}",
+        )
+
+    feedback = tail or "independent verification failed with no output"
+    next_state = _write_floor_prompt(
+        ledger,
+        run_id,
+        str(payload["request"]),
+        REMEDIATION_SKILL,
+        Path(str(payload["smith_home"])),
+        verification,
+        list(payload.get("file_scope", [])),
+        floor + 1,
+        max_floors,
+        feedback,
+    )
+    ledger.checkpoint(
+        run_id,
+        phase=f"dispatch-floor-{floor}",
+        summary=f"revise: {feedback[:120]}",
+        next_action=f"execute floor {floor + 1} prompt",
+    )
+    return FloorResult(DispatchOutcome.REVISE, feedback, next_state)

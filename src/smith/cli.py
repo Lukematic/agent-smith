@@ -3183,6 +3183,76 @@ def dispatch_command(
         raise typer.Exit(1)
 
 
+floor_app = typer.Typer(help="Portable dispatch floors: any environment can be the worker.")
+app.add_typer(floor_app, name="floor")
+
+
+@floor_app.command("open")
+def floor_open(
+    request: str = typer.Argument(..., help="Plain-language description of what needs to happen"),
+    verify: str = typer.Option(..., "--verify", help="Real verification command; required"),
+    scope: list[str] = typer.Option(..., "--scope", help="Writable file; repeatable"),
+    max_floors: int = typer.Option(MAX_ATTEMPTS, "--max-floors"),
+    run_id: str = typer.Option(None, "--run", help="Run id, defaults to current"),
+) -> None:
+    """Route the request and write a floor prompt for whatever agent is present
+    to execute - this session, Claude Code, Cline, or a human. No external agent
+    CLI or login is needed; the harness that is already running does the work,
+    then calls 'awino floor close', which re-runs verification itself.
+    """
+    workspace = _workspace()
+    ledger = _ledger()
+    resolved = _resolve_run(run_id)
+    catalog = _skill_catalog()
+    try:
+        state = dispatch.open_floor(
+            ledger,
+            resolved,
+            request,
+            catalog,
+            workspace.home.root,
+            verify,
+            file_scope=scope,
+            max_floors=max_floors,
+        )
+    except ValueError as exc:
+        _echo(f"REFUSED  {exc}")
+        raise typer.Exit(2) from exc
+    _echo(f"FLOOR_OPEN  floor={state.floor}/{state.max_floors}  skill={state.skill}")
+    _echo(f"INVOCATION  {state.invocation_id}")
+    _echo(f"PROMPT  {state.prompt_path}")
+    _echo("Execute the prompt in this or any agent environment, then run: awino floor close")
+
+
+@floor_app.command("close")
+def floor_close(
+    run_id: str = typer.Option(None, "--run", help="Run id, defaults to current"),
+) -> None:
+    """Independently verify the pending floor's work and route the trip.
+
+    The closer runs the verification command itself; a worker's completion claim
+    is never sufficient, regardless of which environment did the work.
+    """
+    workspace = _workspace()
+    ledger = _ledger()
+    resolved = _resolve_run(run_id)
+    try:
+        result = dispatch.close_floor(ledger, resolved, workspace.project.root)
+    except ValueError as exc:
+        _echo(f"REFUSED  {exc}")
+        raise typer.Exit(2) from exc
+    _echo(f"{result.outcome.value.upper()}  {result.detail}")
+    if result.next_state is not None:
+        _echo(
+            f"FLOOR_OPEN  floor={result.next_state.floor}/{result.next_state.max_floors}"
+            f"  skill={result.next_state.skill}"
+        )
+        _echo(f"PROMPT  {result.next_state.prompt_path}")
+    _echo("NOTE  floor completion does not close the run; gate close remains authoritative")
+    if result.outcome is not dispatch.DispatchOutcome.COMPLETE:
+        raise typer.Exit(1)
+
+
 @gate_app.command("record-completeness")
 def gate_record_completeness(
     achieved: int = typer.Option(..., "--achieved", help="Units actually produced"),
