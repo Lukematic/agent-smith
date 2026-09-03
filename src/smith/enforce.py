@@ -270,7 +270,9 @@ class ProvenanceRecord:
     def summary(self) -> str:
         risks = self.risks or "none recorded"
         by = self.verified_by or "unattributed"
-        return f"review={self.verdict} by={by} changed_files={len(self.changed_files)} risks={risks}"
+        return (
+            f"review={self.verdict} by={by} changed_files={len(self.changed_files)} risks={risks}"
+        )
 
 
 @dataclass
