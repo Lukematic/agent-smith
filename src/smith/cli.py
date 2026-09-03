@@ -45,6 +45,7 @@ from smith import (
     session_state,
     skill_catalog,
     spawn,
+    stance,
     updater,
     watch,
 )
@@ -3199,6 +3200,48 @@ floor_app = typer.Typer(help="Portable dispatch floors: any environment can be t
 app.add_typer(floor_app, name="floor")
 
 
+@app.command("stance")
+def stance_command(
+    set_name: str = typer.Option(None, "--set", help="Persist a default stance for this project"),
+    for_text: str = typer.Option(
+        None, "--for", help="Print the stance this message calls for, and why"
+    ),
+) -> None:
+    """Show, set, or detect the conversational stance.
+
+    A stance is the controller's posture toward the human - advisor,
+    steel-man, teach-back - switched by the human's own words rather than a
+    name they must remember. Switches are never silent: callers print one
+    STANCE line whenever detection differs from the current stance.
+    """
+    workspace = _workspace()
+    project = workspace.project.root
+
+    if set_name is not None:
+        try:
+            stance.save_default(project, set_name)
+        except ValueError as exc:
+            _echo(f"REFUSED  {exc}")
+            raise typer.Exit(2) from exc
+        _echo(f"STANCE_DEFAULT  {set_name}")
+        return
+
+    current = stance.load_default(project)
+    if for_text is not None:
+        detected = stance.detect(for_text)
+        if detected is None or detected.name == current:
+            _echo(f"STANCE  {current} (unchanged)")
+        else:
+            _echo(f"STANCE  -> {detected.name} ({detected.trigger_description})")
+            _echo(detected.rules)
+        return
+
+    _echo(f"STANCE  {current} (default for this project)")
+    for item in stance.STANCES:
+        marker = "*" if item.name == current else " "
+        _echo(f"  {marker} {item.name:<17} {item.trigger_description}")
+
+
 @floor_app.command("open")
 def floor_open(
     request: str = typer.Argument(..., help="Plain-language description of what needs to happen"),
@@ -3902,6 +3945,7 @@ def start_command(
     _echo(f"Pending human decision: {pending_decision}")
     _echo(f"Next recommended action: {next_action}")
     _echo(f"Route skill: {route_skill}")
+    _echo(f"Stance: {stance.load_default(workspace.project.root)}")
 
     if failing:
         _echo("")
