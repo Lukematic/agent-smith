@@ -1241,6 +1241,25 @@ def hook(event: str = typer.Argument("session-start", help="Hook event adapter")
             _echo(project_guard.emit(project_guard.prompt_context(context)))
         prompt_text = str(payload.get("prompt") or "").strip()
         if prompt_text:
+            # Routing + stance, injected as context so the persona sees what
+            # dispatch would do and which posture the words call for. Advisory
+            # only: the hook never spawns - budget confirmation is mandatory
+            # and a hook has nobody to confirm it.
+            decision = dispatch.decide(prompt_text, _skill_catalog())
+            detected = stance.detect(prompt_text)
+            current = stance.load_default(workspace.project.root)
+            lines = []
+            if decision.confidence == "high" and decision.skill is not None:
+                lines.append(
+                    f"[awino] MATCHED {decision.skill.name} conf=high - run "
+                    f"'awino dispatch' or 'awino floor open' to execute"
+                )
+            elif decision.question:
+                lines.append(f"[awino] ROUTING {decision.confidence}: {decision.question}")
+            if detected is not None and detected.name != current:
+                lines.append(f"[awino] STANCE -> {detected.name} ({detected.trigger_description})")
+            if lines:
+                _echo(project_guard.emit(project_guard.prompt_context("\n".join(lines))))
             session = session_state.load(workspace.state_root)
             session_id = session.session_id if session else "unknown"
             # UserPromptSubmit only sees what the human typed, never what the

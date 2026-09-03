@@ -64,4 +64,6 @@ class TestDocsHonestlyStateTheAutomationBoundary:
         # the Claude Code hook without the persona-dependency qualifier nearby.
         lowered = " ".join(text.lower().split())
         assert "depends on the persona calling" in lowered
-        assert "does **not** yet call dispatch" in " ".join(text.split())
+        # The hook routes and detects stance but must remain advisory: the doc
+        # has to say it never spawns, or it is overclaiming automation again.
+        assert "it never spawns" in lowered

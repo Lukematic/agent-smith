@@ -41,11 +41,12 @@ reroutes to remediation, or asks one clarifying question.
 honestly rather than assumed:**
 
 - **Claude Code** has an installed `UserPromptSubmit` hook (`hooks/hooks.json`)
-  that runs `awino hook prompt` on every prompt. Today that handler records the
-  prompt and detects repeated questions; it does **not** yet call dispatch. So in
-  Claude Code the wiring to make dispatch fire automatically exists, but the
-  automatic call itself is not implemented - dispatch there also depends on the
-  persona calling `awino dispatch` until the hook is extended.
+  that runs `awino hook prompt` on every prompt. The handler records the prompt,
+  detects repeated questions, and injects the dispatch routing verdict
+  (`MATCHED <skill>` / `ROUTING <confidence>`) plus any stance switch the
+  message calls for. It is advisory: it never spawns - budget confirmation is
+  mandatory and a hook has nobody to confirm it - so executing the matched
+  skill still requires `awino dispatch` or `awino floor open`.
 - **Kilo and Roo do not load that hook at all.** Dispatch there depends on the
   persona calling `awino dispatch` explicitly - one compliance point instead of
   the twenty-row routing table it replaces, but still a point that can be
