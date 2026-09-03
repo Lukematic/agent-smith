@@ -33,6 +33,7 @@ from smith import (
     graph,
     harness,
     health,
+    heilmeier,
     loop,
     mission,
     models,
@@ -1985,15 +1986,56 @@ def work_close_command(
 @app.command("mission")
 def mission_command(
     as_json_output: bool = typer.Option(False, "--json", help="Machine-readable output"),
+    heilmeier_walk: bool = typer.Option(
+        False, "--heilmeier", help="Walk the Heilmeier catechism as a living mission document"
+    ),
+    set_answer: str = typer.Option(
+        None, "--set", help="Answer a Heilmeier question: key=text (multi-line with \\n)"
+    ),
 ) -> None:
     """Read what the project is for, from its own authored sources.
 
     A.W.I.N.O. never invents a mission. An agent acting confidently on a fabricated
     purpose is worse than one that asks, because the fabrication propagates into
     every downstream plan.
+
+    --heilmeier turns the mission into a living document: eight questions,
+    prefilled where the project already knows the answer (labeled), one gap
+    asked at a time in the stance that question calls for, exams wired to
+    verification commands, and derived insights written to .smith/MISSION.md.
     """
     workspace = _workspace()
     tracker = seeds.Seeds(workspace.project.root)
+
+    if heilmeier_walk or set_answer:
+        cat = heilmeier.load(workspace.state_root)
+        if set_answer:
+            key, _, text = set_answer.partition("=")
+            if key not in {q.key for q in heilmeier.QUESTIONS}:
+                _echo(
+                    f"REFUSED  unknown key {key!r}; keys: {', '.join(q.key for q in heilmeier.QUESTIONS)}"
+                )
+                raise typer.Exit(2)
+            cat.answers[key] = text.replace("\\n", "\n").strip()
+            cat.source[key] = "human"
+            heilmeier.save(workspace.state_root, cat)
+            _echo(f"ANSWERED  {key}")
+        open_titles = [i.title for i in tracker.list_open()] if tracker.state()[0].usable else []
+        doc = heilmeier.render(workspace.state_root, cat, open_seeds=open_titles)
+        _echo(f"MISSION_DOC  {doc}")
+        answered = sum(1 for q in heilmeier.QUESTIONS if cat.answers.get(q.key, "").strip())
+        _echo(f"ANSWERED  {answered}/8")
+        for line in heilmeier.insights(cat, open_seeds=open_titles):
+            _echo(f"INSIGHT  {line}")
+        gap = cat.next_gap()
+        if gap is not None:
+            _echo(f"STANCE  -> {gap.stance}")
+            _echo(f"QUESTION  [{gap.key}] {gap.text}")
+            _echo(f'          answer with: awino mission --set "{gap.key}=<your answer>"')
+        else:
+            _echo("COMPLETE  all eight answered; exam commands are gate-ready")
+        return
+
     found = mission.discover(workspace.project.root, tracker=tracker)
 
     if as_json_output:
@@ -4034,6 +4076,13 @@ def start_command(
     _echo(f"Next recommended action: {next_action}")
     _echo(f"Route skill: {route_skill}")
     _echo(f"Stance: {stance.load_default(workspace.project.root)}")
+    cat = heilmeier.load(workspace.state_root)
+    if not cat.exam_commands():
+        _echo(
+            "Mission exams: none wired - run 'awino mission --heilmeier' so success is a command, not a sentence"
+        )
+    else:
+        _echo(f"Mission exams: {len(cat.exam_commands())} command(s) wired")
 
     if failing:
         _echo("")
