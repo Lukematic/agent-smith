@@ -460,6 +460,30 @@ def update_command() -> None:
         raise typer.Exit(1) from exc
     _echo(f"BACKUP  {backup}")
     _echo("UPDATED  source is clean and fast-forwarded")
+
+    workspace.ensure_state()
+    detected_targets = [
+        t for t in harness.detected(workspace.project.root) if t.harness.supports_skills
+    ]
+    refreshed_total = 0
+    for target in detected_targets:
+        for action in harness.refresh_skills(workspace.home.root, target):
+            if action.outcome == "REFRESHED":
+                refreshed_total += 1
+    if detected_targets:
+        _echo(
+            f"HARNESS  refreshed {refreshed_total} skill copy(ies) across {len(detected_targets)} detected target(s)"
+        )
+
+    health_results = health.run_all(_paths(), fast=True)
+    failing_health = [r for r in health_results if r.blocking]
+    if failing_health:
+        _echo(
+            f"HEALTH  {len(failing_health)} gate(s) failing: {', '.join(r.name for r in failing_health)}"
+        )
+    else:
+        _echo("HEALTH  ok")
+
     _echo(f"VERSION  {_version()}")
 
 
