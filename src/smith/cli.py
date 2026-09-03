@@ -3821,17 +3821,33 @@ def gate_close(
 
 @app.command("best")
 def best_command(
+    request: str = typer.Argument(
+        None, help="What you want, in your words - the operator names the floor and guides you"
+    ),
     end: bool = typer.Option(False, "--end", help="Run the session-end order instead"),
 ) -> None:
     """Run the written session order - the one word to remember.
 
-    Without --end: session-start (startup report, the next Heilmeier gap as a
-    question, the next Seed). With --end: session-end (summary, lesson check,
-    mission refresh). Orders are data in <state>/playbook.json; defaults ship.
+    `awino best` alone: session-start (startup report, the next Heilmeier gap
+    as a question, the next Seed, relevant lessons). `awino best "<request>"`:
+    elevator mode - locate where you are, route your words to one skill,
+    switch stance if your words call for it, recall what we learned last time,
+    and print the exact next commands or the one question that blocks routing.
+    Nothing is spawned. --end: session-end order.
     """
     workspace = _workspace()
     tracker = seeds.Seeds(workspace.project.root)
     open_titles = [i.title for i in tracker.list_open()] if tracker.state()[0].usable else []
+    if request:
+        for line in playbook.elevator(
+            request,
+            workspace.state_root,
+            workspace.project.root,
+            ledger=Ledger(workspace.state_root),
+            catalog=_skill_catalog(),
+        ):
+            _echo(line)
+        return
     event = "session-end" if end else "session-start"
     if not end:
         start_command(fix_it=False)

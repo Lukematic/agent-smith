@@ -36,6 +36,39 @@ DEFAULT_PLAYBOOK: dict[str, list[str]] = {
 
 StepFn = Callable[["Context"], list[str]]
 
+# Which canonical skill each step draws on. "direct" means the step is plain
+# ledger/state reading with no skill procedure behind it. Validated by tests
+# against the real catalog, so a step cannot claim a skill that does not exist.
+STEP_SKILLS: dict[str, str] = {
+    "start": "direct",
+    "mission-gap": "awino-discover",
+    "next-seed": "direct",
+    "walkthrough": "awino-consult",
+    "grill-offer": "awino-consult",
+    "mission-refresh": "awino-discover",
+    "summary": "direct",
+    "lesson-check": "awino-memory",
+}
+
+_CLASS_FOR_SKILL: dict[str, str] = {
+    "awino-debug": "bugfix",
+    "awino-triage": "bugfix",
+    "awino-rpi": "code-change",
+    "awino-delegate": "code-change",
+    "awino-ralph": "code-change",
+    "awino-author-agent": "authoring",
+    "awino-author-tool": "authoring",
+    "awino-consult": "question",
+    "awino-evidence": "research",
+    "awino-discover": "research",
+    "awino-config-review": "research",
+    "awino-visualize": "question",
+    "awino-memory": "question",
+    "awino-self-update": "question",
+    "awino-reproducibility": "code-change",
+    "awino-bootstrap": "code-change",
+}
+
 
 class Context:
     def __init__(self, state_root: Path, project: Path, ledger: Ledger, open_seeds: list[str]):
@@ -208,6 +241,62 @@ def run_event(
     ctx = Context(state_root, project, ledger, open_seeds)
     out: list[str] = []
     for step in book[event]:
-        out.append(f"[{step}]")
+        out.append(f"[{step}] skill={STEP_SKILLS.get(step, 'direct')}")
         out += [f"  {ln}" for ln in STEPS[step](ctx)]
+    return out
+
+
+def elevator(
+    request: str,
+    state_root: Path,
+    project: Path,
+    *,
+    ledger: Ledger,
+    catalog,
+) -> list[str]:
+    """The operator: take the human's words, name the floor, and guide them there.
+
+    Locate (where are we), route (which skill, deterministically), stance
+    (how the words ask to be answered), recall (what we learned doing this
+    before), preflight (is it safe to go), then the exact next commands - or
+    one question when routing is genuinely ambiguous. Nothing is spawned;
+    this is the operator pointing, not pressing.
+    """
+    from smith import dispatch, recall, stance
+
+    out: list[str] = []
+    inspected = ledger.inspect_current()
+    active = inspected.run_id if inspected.status == "active" else "none"
+    out.append(f"HERE  project={project.name}  active_run={active}")
+
+    current = stance.load_default(project)
+    detected = stance.detect(request)
+    if detected is not None and detected.name != current:
+        out.append(f"STANCE  -> {detected.name} ({detected.trigger_description})")
+
+    decision = dispatch.decide(request, catalog)
+    if decision.confidence != "high" or decision.skill is None:
+        out.append(f"QUESTION  {decision.question or decision.rationale}")
+        return out
+    skill = decision.skill.name
+    out.append(f"FLOOR  {skill}  ({decision.rationale})")
+
+    seen: set[str] = set()
+    for lessons in (
+        state_root / "memory" / "lessons.md",
+        project / ".smith" / "memory" / "lessons.md",
+    ):
+        for hit in recall.recall_lessons(lessons, request):
+            if hit not in seen:
+                seen.add(hit)
+                out.append(f"RECALL  {hit[:140]}")
+
+    task_class = _CLASS_FOR_SKILL.get(skill, "code-change")
+    if task_class == "question":
+        out.append(f"NEXT  load skill {skill} and answer directly; no run needed for a question")
+        return out
+    out.append(f'NEXT  awino gate open {task_class} "<objective in your words>" --scope <files>')
+    out.append(f'      awino floor open "{request[:80]}" --scope <files>   # routes to {skill}')
+    out.append("      (execute the printed prompt here, then) awino floor close")
+    out.append("      awino gate close   # walks you through it and grills you")
     return out
