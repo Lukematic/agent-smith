@@ -466,7 +466,7 @@ def update_command() -> None:
     # Rebase-style second half: project state was snapshotted and restored above;
     # now re-provision the environment it lives in. Auto-steps only - a question
     # mid-update would block unattended updates, so those are reported instead.
-    for step in provision.plan(workspace.project.root):
+    for step in provision.plan(workspace.project.root, workspace.state_root):
         if step.needs_question:
             _echo(f"MISSING  {step.kind.value}: {step.reason} (run 'awino start --fix')")
             continue
@@ -3862,12 +3862,12 @@ def start_command(
 
         for action in provision.apply_steps(
             workspace.project.root,
-            provision.plan(workspace.project.root),
+            provision.plan(workspace.project.root, workspace.state_root),
             ask=_ask,
         ):
             _echo(f"{action.outcome:<9} {action.kind.value}  {action.detail}")
     else:
-        for step in provision.plan(workspace.project.root):
+        for step in provision.plan(workspace.project.root, workspace.state_root):
             _echo(f"MISSING  {step.kind.value}: {step.reason} (run 'awino start --fix')")
 
     route_skill = "direct"

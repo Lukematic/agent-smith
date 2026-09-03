@@ -64,11 +64,11 @@ def _task_runner_command(project: Path) -> str | None:
     return None
 
 
-def plan(project: Path) -> list[Step]:
+def plan(project: Path, state_root: Path | None = None) -> list[Step]:
     """What this project's environment is missing. Pure read, no writes."""
     steps: list[Step] = []
 
-    state_dir = project / ".smith"
+    state_dir = state_root if state_root is not None else project / ".smith"
     if not ((state_dir / "run").is_dir() and (state_dir / "memory").is_dir()):
         steps.append(
             Step(
