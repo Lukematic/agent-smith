@@ -62,4 +62,6 @@ class TestDocsHonestlyStateTheAutomationBoundary:
         # The document must state the dependency, not the false positive: it
         # should not claim automatic firing for Kilo/Roo in the same breath as
         # the Claude Code hook without the persona-dependency qualifier nearby.
-        assert "depends on the persona" in text.lower() or "persona must call" in text.lower()
+        lowered = " ".join(text.lower().split())
+        assert "depends on the persona calling" in lowered
+        assert "does **not** yet call dispatch" in " ".join(text.split())

@@ -40,12 +40,16 @@ reroutes to remediation, or asks one clarifying question.
 **The automation boundary is not the same everywhere, and this must be stated
 honestly rather than assumed:**
 
-- **Claude Code** has an installed `UserPromptSubmit` hook (`hooks/hooks.json`),
-  so dispatch can genuinely fire automatically on every prompt in that harness.
-- **Kilo and Roo do not load that hook.** Dispatch there depends on the persona
-  calling `awino dispatch` explicitly - one compliance point instead of the
-  twenty-row routing table it replaces, but still a point that can be skipped.
-  Do not assume dispatch already ran in these harnesses; call it.
+- **Claude Code** has an installed `UserPromptSubmit` hook (`hooks/hooks.json`)
+  that runs `awino hook prompt` on every prompt. Today that handler records the
+  prompt and detects repeated questions; it does **not** yet call dispatch. So in
+  Claude Code the wiring to make dispatch fire automatically exists, but the
+  automatic call itself is not implemented - dispatch there also depends on the
+  persona calling `awino dispatch` until the hook is extended.
+- **Kilo and Roo do not load that hook at all.** Dispatch there depends on the
+  persona calling `awino dispatch` explicitly - one compliance point instead of
+  the twenty-row routing table it replaces, but still a point that can be
+  skipped. Do not assume dispatch already ran in any harness; call it.
 
 ## Startup protocol (loading order)
 

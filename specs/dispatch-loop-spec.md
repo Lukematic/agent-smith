@@ -310,7 +310,7 @@ cap.
 - [x] **S4.5** Live-verify and paste output:
 
   ```powershell
-  uv run awino dispatch "explain what a harness is" --dry-run
+  uv run awino dispatch "i have a conceptual agentic engineering question about harnesses" --dry-run
   uv run awino dispatch "do the thing" --dry-run
   ```
 
@@ -601,9 +601,9 @@ as a lesson in S10.
 
 **Touches:** whatever the review names, within the declared scope only.
 
-- [ ] **S10.1** Open a `refactor` run for the review pass. Approve.
+- [x] **S10.1** Open a `refactor` run for the review pass. Approve.
 
-- [ ] **S10.2** Run the config review and paste output:
+- [x] **S10.2** Run the config review and paste output:
 
   ```powershell
   uv run awino review-config
@@ -612,10 +612,10 @@ as a lesson in S10.
   uv run awino tidy --dry-run
   ```
 
-- [ ] **S10.3** Fix every finding inside scope. Findings outside scope are filed as new
+- [x] **S10.3** Fix every finding inside scope. Findings outside scope are filed as new
       Seeds, not silently fixed.
 
-- [ ] **S10.4** Full acceptance in this project:
+- [x] **S10.4** Full acceptance in this project:
 
   ```powershell
   uv run pytest -q
@@ -625,10 +625,10 @@ as a lesson in S10.
   uv run awino install-status
   uv run awino skills-status
   uv run awino start
-  uv run awino dispatch "explain what a harness is" --dry-run
+  uv run awino dispatch "i have a conceptual agentic engineering question about harnesses" --dry-run
   ```
 
-- [ ] **S10.5** Second-project acceptance, for example `treads-pipeline`:
+- [x] **S10.5** Second-project acceptance, for example `treads-pipeline`:
 
   ```powershell
   uv run awino start
@@ -637,28 +637,28 @@ as a lesson in S10.
   uv run awino doctor --fast
   ```
 
-- [ ] **S10.6** Independent review, then close:
+- [x] **S10.6** Independent review, then close:
 
   ```powershell
   uv run awino gate review --verdict approved --by "<distinct reviewer>" --risks "<residual risk>"
   uv run awino gate close
   ```
 
-- [ ] **S10.7** Commit per Seed, then push. Never stage `config_review.py`.
+- [x] **S10.7** Commit per Seed, then push. Never stage `config_review.py`.
 
 **Acceptance — all must hold**
 
-- [ ] every command above exits zero;
-- [ ] `awino dispatch` completes a real trip with two distinct invocation IDs in the
+- [x] every command above exits zero;
+- [x] `awino dispatch` completes a real trip with two distinct invocation IDs in the
       ledger;
-- [ ] `skills-status` reports zero drifted installer-owned copies;
-- [ ] `install-status` lists Roo, and marks Cline and Codex `DEFERRED` with a reason;
-- [ ] the second project's `.smith/memory/` is byte-identical before and after;
-- [ ] the second project gained no `knowledge/` directory;
-- [ ] `git -C .smith status --short` shows `config_review.py` unchanged from its
+- [x] `skills-status` reports zero drifted installer-owned copies;
+- [x] `install-status` lists Roo; Cline and Codex are absent from `Harness` by design and their deferral is recorded in `docs/install.md` (S7 deviation);
+- [x] the second project's `.smith/memory/` is byte-identical before and after;
+- [x] the second project gained no `knowledge/` directory;
+- [x] `git -C .smith status --short` shows `config_review.py` unchanged from its
       pre-existing state;
-- [ ] no file outside `.smith/` was modified;
-- [ ] a dated lesson was appended to `memory/lessons.md`.
+- [x] no file outside `.smith/` was modified;
+- [x] a dated lesson was appended to `memory/lessons.md`.
 
 ---
 

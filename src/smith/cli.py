@@ -3116,7 +3116,9 @@ def dispatch_command(
     This never closes a gate run; 'gate close' remains the completion authority.
     """
     workspace = _workspace()
-    ledger = _ledger()
+    # Read-only until budget is confirmed: _ledger() would call ensure_state()
+    # and write .smith/.gitignore even under --dry-run.
+    ledger = Ledger(workspace.state_root)
     if not 1 <= max_floors <= MAX_ATTEMPTS:
         _echo(f"REFUSED  max-floors must be between 1 and {MAX_ATTEMPTS}")
         raise typer.Exit(2)
@@ -3150,7 +3152,14 @@ def dispatch_command(
         _echo(f"REFUSED  {chosen} cannot mechanically enforce read-only dispatch review")
         raise typer.Exit(1)
     _echo(f"BUDGET_CONFIRMED  floors={max_floors}  subprocesses<={max_floors}")
+    if not verify:
+        _echo(
+            "WARNING  no --verify supplied; the verification step is tautological and "
+            'will accept any completion claim. Pass --verify "<real check>".'
+        )
 
+    # Budget is confirmed, so writing project state is now legitimate.
+    ledger = _ledger()
     resolved = _resolve_run(run_id)
     result = dispatch.run_dispatch(
         ledger,
