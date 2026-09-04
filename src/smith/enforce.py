@@ -28,6 +28,10 @@ from enum import StrEnum
 from pathlib import Path
 
 MAX_ATTEMPTS = 3
+
+# The four loops the constitution names. A run declares one at open so the
+# header's [loop: ...] is read from the ledger, not typed from memory.
+LOOPS: tuple[str, ...] = ("direct", "rpi", "ralph", "delegate")
 OUTPUT_KEEP_CHARS = 4000
 
 # Vocabulary an agent has used to make skipped work sound principled instead
@@ -300,6 +304,7 @@ class Run:
     terminal_state: str | None = None
     provenance: ProvenanceRecord | None = None
     opened_by: str = ""
+    loop: str = "direct"
 
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> Run:
@@ -324,6 +329,7 @@ class Run:
         values.setdefault("verdict", None)
         values.setdefault("terminal_state", None)
         values.setdefault("opened_by", "")
+        values.setdefault("loop", "direct")
         provenance = values.get("provenance")
         if provenance:
             gate_results = [
@@ -395,7 +401,10 @@ class Ledger:
         plan_path: Path | None = None,
         issue_id: str | None = None,
         opened_by: str = "",
+        loop: str = "direct",
     ) -> Run:
+        if loop not in LOOPS:
+            raise LedgerError(f"unknown loop {loop!r}; one of {', '.join(LOOPS)}")
         run_id = f"{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
         required = list(CONTRACTS[task_class]) + list(extra_gates or [])
         run = Run(
@@ -408,13 +417,40 @@ class Ledger:
             plan_path=str(plan_path) if plan_path is not None else None,
             issue_id=issue_id,
             opened_by=opened_by,
+            loop=loop,
         )
         self.run_dir(run_id).mkdir(parents=True, exist_ok=True)
         self._meta(run_id).write_text(json.dumps(run.to_dict(), indent=2), encoding="utf-8")
         self._evidence(run_id).touch()
         self._artifacts(run_id).touch()
         self._current().write_text(run_id, encoding="utf-8")
+        self._record_rung(run_id, objective, task_class)
         return run
+
+    def _record_rung(self, run_id: str, objective: str, task_class: TaskClass) -> None:
+        """Log the leverage-ladder verdict as an artifact. Advisory by design:
+        detect_rung compares against a fixed stated=PROMPT default, so any
+        execution-flavoured objective reads as misaligned; blocking on it would
+        add friction to ordinary bugfixes. Recorded so it can be audited, never
+        so it can refuse."""
+        try:
+            from smith.models import detect_rung
+
+            verdict = detect_rung(objective)
+            self.append_artifact(
+                run_id,
+                "rung-verdict",
+                "ladder",
+                {
+                    "actual": verdict.actual.name.lower(),
+                    "stated": verdict.stated.name.lower(),
+                    "task_class": str(task_class),
+                    "misaligned": bool(verdict.misaligned),
+                    "reason": verdict.reason[:200],
+                },
+            )
+        except Exception:  # never let an advisory verdict break gate open
+            return
 
     def current_id(self) -> str | None:
         if not self._current().is_file():

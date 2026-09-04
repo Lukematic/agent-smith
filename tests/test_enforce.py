@@ -149,7 +149,10 @@ class TestRunArtifacts:
         second = ledger.append_artifact(run.run_id, "debug", "agent", {"phase": "root"})
 
         assert first.payload_sha256
-        assert ledger.artifacts(run.run_id) == [first, second]
+        assert [a for a in ledger.artifacts(run.run_id) if a.kind != "rung-verdict"] == [
+            first,
+            second,
+        ]
         assert ledger.artifacts(run.run_id, "bootstrap") == [first]
         assert ledger.latest_artifact(run.run_id, "bootstrap") == first
 

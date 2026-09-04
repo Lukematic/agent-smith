@@ -75,7 +75,10 @@ def test_gate_open_snapshots_bootstrap(tmp_path: Path) -> None:
     assert opened.returncode == 0, opened.stdout + opened.stderr
     run_id = opened.stdout.split()[1]
     artifacts = tmp_path / ".smith" / "run" / run_id / "artifacts.jsonl"
-    payload = json.loads(artifacts.read_text(encoding="utf-8").strip())
+    rows = [
+        json.loads(ln) for ln in artifacts.read_text(encoding="utf-8").splitlines() if ln.strip()
+    ]
+    payload = next(r for r in rows if r["kind"] == "bootstrap")
     assert payload["kind"] == "bootstrap"
     assert payload["payload"]["confirmed_by"] == "human"
 

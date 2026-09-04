@@ -38,6 +38,7 @@ from smith.cli import (
 )
 from smith.enforce import (
     CONTRACTS,
+    LOOPS,
     Gate,
     Ledger,
     LedgerError,
@@ -182,8 +183,16 @@ def gate_open(
         "--by",
         help="Who/what is opening this run. Recorded so a later review can be checked for independence.",
     ),
+    loop: str = typer.Option(
+        "direct",
+        "--loop",
+        help="direct | rpi | ralph | delegate. Recorded on the run; the reply header reads it from here.",
+    ),
 ) -> None:
     """Open a run and print the gates it must satisfy before it can close."""
+    if loop not in LOOPS:
+        _echo(f"LOOP_INVALID  {loop!r}; one of {', '.join(LOOPS)}")
+        raise typer.Exit(2)
     required = list(CONTRACTS[task_class]) + list(also or [])
     if Gate.PLANNED in required and plan is None:
         _echo("PLAN_REQUIRED  schema v2 runs containing the planned gate require --plan")
@@ -216,6 +225,7 @@ def gate_open(
         plan_path=plan_path,
         issue_id=linked_issue.id if linked_issue else None,
         opened_by=by,
+        loop=loop,
     )
     if intent and intent.bootstrap:
         ledger.append_artifact(
@@ -234,7 +244,7 @@ def gate_open(
         except RuntimeError as exc:
             _echo(f"NEW_SESSION_REQUIRED  {exc}")
             raise typer.Exit(2) from exc
-    _echo(f"RUN {run.run_id}  class={run.task_class}")
+    _echo(f"RUN {run.run_id}  class={run.task_class}  loop={run.loop}")
     _echo(f"objective: {run.objective}")
     if run.file_scope:
         _echo(f"scope: {', '.join(run.file_scope)}")
@@ -847,7 +857,7 @@ def gate_status(
         _ledger_error(exc)
     evidence = ledger.evidence(resolved)
     verdict = adjudicate(run, evidence)
-    _echo(f"RUN {run.run_id}  class={run.task_class}  objective: {run.objective}")
+    _echo(f"RUN {run.run_id}  class={run.task_class}  loop={run.loop}  objective: {run.objective}")
     _echo(f"terminal_state: {run.terminal_state or 'active'}")
     _echo(f"skills loaded: {', '.join(run.skills_loaded) or 'none recorded'}")
     _echo(

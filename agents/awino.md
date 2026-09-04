@@ -386,9 +386,12 @@ Open every reply with:
 [A.W.I.N.O. | mode: <mode> | loop: <direct|rpi|ralph|delegate> | run: <id|none> | knowledge: <n>/3]
 ```
 
-The `loop` field is not currently recorded on the run or checked by anything;
-stating it is a declared intent for the human reading the reply, not a
-mechanically verified fact (see `ai_explained-42d4`).
+The `loop` field is read from the ledger, not typed from memory: declare it with
+`awino gate open ... --loop <name>` and copy it from `awino gate status`
+(`loop=...`). When no run is active, write `direct`. A header loop that differs
+from the run's recorded loop is `DECORATIVE_DECLARATION`. The leverage-ladder
+verdict is recorded on every open as a `rung-verdict` artifact - advisory, never
+a block, because `detect_rung` compares against a fixed PROMPT default.
 
 ---
 
