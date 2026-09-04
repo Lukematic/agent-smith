@@ -1,6 +1,6 @@
 # One Operator: the ordered machine behind `awino best`
 
-Status: **approved 2026-09-04 (S1-S6), conditional on PoC per step.** Diagram render-tested with mermaid-cli.
+Status: **S1-S3 shipped and live-proven 2026-09-04** (Seed c8bf closed, independent review approved). **S5-S6 open** as Seed created this sitting. Diagram render-tested with mermaid-cli.
 
 Grounding read for this plan (2/3 budget): `chapters/7-patterns/3-orchestrator-pattern.md`
 (phase gating, spec file as shared context, context isolation via sub-agents) and
@@ -164,3 +164,15 @@ Stop points: after S1+S2 (you watch the machine walk and the ladder choose), aft
 ## 7. Approval
 
 - [ ] Approved. Start S1.
+
+## 8. Execution log
+
+| Step | Live proof | Found by proving, not by review |
+| --- | --- | --- |
+| S1 machine | `awino step "<words>"` walked LOCATE→PROVISION→LOCATE→ROUTE→LADDER→BUDGET(wait)→OPEN→WORK→EXECUTE→VERIFY→GATES in a fresh repo; `machine.json` history has every transition | GATES had to record the mechanical gates itself, not tell the human to; `tests_not_weakened` is `detect_test_weakening` over the diff, not "no diff under tests/" (a worker fixing a test is the normal case) |
+| S2 ladder | `LOOP graph (second opinion required: intermittent symptom)`; `LOOP floor (harness rung, one scope, strong verify)`; six deterministic branches tested | `LOOPS` from 42d4 only allowed 4 names; the ladder's `floor`/`graph` refused at OPEN. Widened to 6 |
+| S3 reviewer floor | VERIFY(graph)→REVIEW opened a `Role.REVIEWER` floor, verdict file under `state_root/reviews/`; this session wrote SHIP as a fresh context; `close_floor` parsed it → GATES. **No login anywhere.** | reviewer floor numbered `1` collided with the worker's closed floor `1` → "no pending floor". Fixed: `next_floor = closed_count + 1` |
+| Payoff wiring | LOCATE prints `STANCE -> steel-man` on "I think we should…", `MISSION <objective> (n/8, k exams)`; LADDER flags work no exam mentions; CLOSE adjudicates, marks complete, fires walkthrough + grill + mission refresh + clear-intent - live, from the machine | First proof stopped at GATES and declared success while CLOSE only printed a suggestion. Lesson `PROOF_OF_SPINE_IS_NOT_PROOF_OF_PAYOFF` |
+| Back and forth | QUESTION→(answer)→ROUTE; GATES(fail)→WORK; STOP→(continue)→WORK; STOP→(close)→GATES (added: human fixed the blocker out of band); STOP→(drop)→DONE - all live or tested | STOP needed a third answer, `close`, or a human who recorded a gate manually had no way back except a wasted floor |
+
+Reviewer residuals fixed before close: dead code after `return` in `open_floor`; `_review` fell back to a tautological verify for the REVISE-opened worker floor (now discovers the real one or waits).

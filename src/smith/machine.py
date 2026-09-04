@@ -78,6 +78,7 @@ EDGES: dict[tuple[Node, str], Node] = {
     (Node.GATES, "exhausted"): Node.STOP,
     (Node.CLOSE, "closed"): Node.DONE,
     (Node.STOP, "continue"): Node.WORK,
+    (Node.STOP, "close"): Node.GATES,  # human fixed the blocker out of band; re-check gates
     (Node.STOP, "drop"): Node.DONE,
     (Node.DONE, "start"): Node.LOCATE,
     (Node.ANSWER, "start"): Node.LOCATE,
@@ -95,6 +96,7 @@ class Machine:
     request: str = ""
     skill: str | None = None
     why: str = ""
+    stance: str = "advisor"
     updated: str = ""
     history: list[dict[str, str]] = field(default_factory=list)
 

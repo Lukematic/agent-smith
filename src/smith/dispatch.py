@@ -763,26 +763,6 @@ def open_floor(
         None,
     )
 
-    decision = decide(request, catalog)
-    if decision.confidence != "high" or decision.skill is None:
-        raise ValueError(
-            f"routing confidence is {decision.confidence}, not high: "
-            f"{decision.question or decision.rationale}"
-        )
-
-    return _write_floor_prompt(
-        ledger,
-        run_id,
-        request,
-        decision.skill.name,
-        smith_home,
-        verification,
-        file_scope,
-        1,
-        max_floors,
-        None,
-    )
-
 
 def _close_review_floor(ledger: Ledger, run_id: str, payload: dict) -> FloorResult:
     floor = int(payload["floor"])

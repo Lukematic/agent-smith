@@ -201,7 +201,7 @@ class TestCommandSurfaceIsUnchanged:
             f"unexpected={sorted(registered - PRE_SPLIT_COMMANDS)}"
         )
 
-    def test_eighty_six_commands(self) -> None:
+    def test_command_count_is_exactly_the_registered_set(self) -> None:
         assert len(PRE_SPLIT_COMMANDS) == 89
         assert len(_registered(cli.app)) == 89
 

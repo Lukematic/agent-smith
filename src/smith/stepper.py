@@ -8,6 +8,7 @@ ledger, and apart from cli/ so the actions can be driven by tests directly.
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,12 +44,35 @@ Action = Callable[[Machine, StepContext], str]
 
 
 def _locate(m: Machine, ctx: StepContext) -> str:
+    """Where are we: health, provisioning gaps, relevant lessons, the mission's
+    state, and the stance the human's words call for. All reads."""
+    from smith import heilmeier, stance
+
     results = health.run_all(ctx.paths, fast=True)
     failing = [r for r in results if r.blocking]
     steps = provision.plan(ctx.project, ctx.state_root)
     auto = [s for s in steps if not s.needs_question]
     for hit in recall.recall_lessons(ctx.home / "memory" / "lessons.md", m.request or "")[:2]:
         ctx.say(f"RECALL  {hit[:120]}")
+
+    detected = stance.detect(m.request or "")
+    current = stance.load_default(ctx.project)
+    if detected is not None and detected.name != current:
+        m.stance = detected.name
+        ctx.say(f"STANCE  -> {detected.name} ({detected.trigger_description})")
+    else:
+        m.stance = current
+
+    cat = heilmeier.load(ctx.state_root)
+    answered = sum(1 for q in heilmeier.QUESTIONS if cat.answers.get(q.key, "").strip())
+    objective = cat.answers.get("objective", "").strip()
+    if objective:
+        ctx.say(
+            f"MISSION  {objective[:100]}  ({answered}/8 answered, {len(cat.exam_commands())} exam(s))"
+        )
+    else:
+        ctx.say("MISSION  unanswered - the plan has nothing to serve; awino mission --heilmeier")
+
     if failing:
         ctx.say(f"HEALTH  {len(failing)} failing: {', '.join(r.name for r in failing)}")
     if auto:
@@ -84,11 +108,23 @@ def _question(m: Machine, ctx: StepContext) -> str:
 
 
 def _ladder(m: Machine, ctx: StepContext) -> str:
-    from smith import ladder
+    from smith import heilmeier, ladder, recall
 
     choice = ladder.choose(m.request, m.skill or "", ctx.verify, ctx.scope or [])
     m.loop, m.why = choice.loop, choice.why
-    ctx.say(f"LOOP  {choice.loop}  ({choice.why})")
+    ctx.say(f"LOOP  {choice.loop}  ({choice.why}; stance={m.stance or 'advisor'})")
+
+    # Does this work serve the mission? Token overlap with the exams, advisory:
+    # a request no exam would notice finishing is exactly the "37 untied seeds"
+    # insight, surfaced at the moment it can still change the plan.
+    cat = heilmeier.load(ctx.state_root)
+    exams = cat.answers.get("exams", "")
+    if exams:
+        words = set(recall._tokens(m.request))
+        if not words & recall._tokens(exams):
+            ctx.say(
+                "MISSION  no exam mentions this work; finishing it would not move any mission exam"
+            )
     return choice.loop
 
 
@@ -179,7 +215,15 @@ def _review(m: Machine, ctx: StepContext) -> str:
             return "revise"
         return "blocked"
 
-    verify = ctx.verify or 'echo "reviewer verdict pending"'
+    verify = ctx.verify
+    if not verify:
+        found = provision.discover_verification(ctx.project)
+        if found is None:
+            ctx.say(
+                'REFUSED  no verification command for the worker floor a REVISE would open; awino step --verify "<check>"'
+            )
+            return "waiting"
+        verify = found[0]
     state = dispatch.open_floor(
         ctx.ledger,
         m.run_id or "",
@@ -228,26 +272,54 @@ def _gates(m: Machine, ctx: StepContext) -> str:
 
 
 def _gate_commands(ctx: StepContext) -> dict[str, str]:
-    """The project's own commands for the gates that have one."""
+    """The project's own commands for the gates that have one.
+
+    tests_not_weakened is NOT "no diff under tests/": a worker fixing a test is
+    the normal case. It is enforce.detect_test_weakening - deleted assertions,
+    added skips - run over the real diff, as `gate check` does. Expressed as a
+    command so the ledger records a real exit code, not our opinion."""
     out: dict[str, str] = {}
     found = provision.discover_verification(ctx.project)
     if found:
         out["tested"] = found[0]
         out["researched"] = found[0]
     if (ctx.project / "pyproject.toml").is_file():
-        out["linted"] = "ruff check ."
-    out["tests_not_weakened"] = "git diff --exit-code -- tests"
+        out["linted"] = f'"{sys.executable}" -m ruff check . || ruff check .'
+    out["tests_not_weakened"] = (
+        f'"{sys.executable}" -c "import subprocess,sys; from smith.enforce import '
+        "detect_test_weakening as d; diff=subprocess.run(['git','diff','HEAD','--'],"
+        "capture_output=True,text=True,encoding='utf-8',errors='replace').stdout; "
+        'f=d(diff); print(chr(10).join(f)); sys.exit(1 if f else 0)"'
+    )
     return out
 
 
 def _close(m: Machine, ctx: StepContext) -> str:
-    ctx.say(f"CLOSE  run: awino gate close --run {m.run_id}")
+    """Close for real: the ledger adjudicates, marks complete, and the task-close
+    order fires - walkthrough, grill questions, mission refresh, intent cleared.
+    Printing "run gate close" was a suggestion; a machine node is an action."""
+    from smith.enforce import adjudicate
+
+    run = ctx.ledger.load(m.run_id or "")
+    verdict = adjudicate(run, ctx.ledger.evidence(run.run_id))
+    if not verdict.can_close:
+        ctx.say(f"CLOSE  refused: {verdict.blocked_reason}")
+        return "waiting"
+    if run.issue_id:
+        ctx.say(f"CLOSE  linked seed {run.issue_id}: run 'awino work-close {run.issue_id}' first")
+        return "waiting"
+    ctx.ledger.mark_complete(run.run_id)
+    ctx.say(f"COMPLETE  {len(verdict.satisfied)} gate(s) satisfied  run={run.run_id}")
+    for line in playbook.run_event(
+        "task-close", ctx.state_root, ctx.project, ledger=ctx.ledger, open_seeds=[]
+    ):
+        ctx.say(line)
     return "closed"
 
 
 def _stop(_m: Machine, ctx: StepContext) -> str:
-    ctx.say("STOP  human decision: awino step --answer continue | drop")
-    if ctx.answer in ("continue", "drop"):
+    ctx.say("STOP  human decision: awino step --answer continue | close | drop")
+    if ctx.answer in ("continue", "close", "drop"):
         return ctx.answer
     return "waiting"
 
