@@ -37,13 +37,15 @@ def test_plain_best_labels_each_step_with_its_skill(tmp_path: Path) -> None:
     assert "[next-seed] skill=direct" in result.stdout
 
 
-def test_best_with_a_request_routes_and_names_the_next_command(tmp_path: Path) -> None:
+def test_best_with_a_request_routes_and_walks_to_budget(tmp_path: Path) -> None:
     result = _cli(
         ["best", "pytest is failing with a ValueError in the loader"], cwd=_project(tmp_path)
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "FLOOR  awino-debug" in result.stdout
-    assert "NEXT  awino gate open bugfix" in result.stdout
+    # best walks the machine to the first human decision instead of printing commands
+    assert "LOOP" in result.stdout
+    assert "BUDGET" in result.stdout
 
 
 def test_best_with_a_request_spawns_nothing(tmp_path: Path) -> None:

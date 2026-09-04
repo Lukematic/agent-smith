@@ -325,16 +325,17 @@ def build_modes(smith_home: Path) -> list[Mode]:
             description="Agentic-engineering expert with a gate ledger",
             custom_instructions=(
                 shared + "\n"
-                "Start every session with `awino start`. It composes context, mission, "
-                "doctor --fast, resume, and skill routing into a single report - startup "
-                "that cannot be half-followed.\n\n"
-                'For any actionable request, run `awino dispatch "<request>" '
-                "--confirm-budget` rather than manually picking a skill: it matches the "
-                "request, checks project health, spawns the work, independently verifies "
-                "the result, and reroutes or completes. This editor does not load the "
-                "automatic UserPromptSubmit hook that Claude Code uses to fire dispatch on "
-                "your behalf, so it depends on you calling `awino dispatch` explicitly - do "
-                "not assume it already ran.\n\n"
+                "Start every session with `awino best`. It prints the startup report, runs "
+                "the session-start order, and continues any open trip - startup that cannot "
+                "be half-followed. `awino start` alone is the read-only report.\n\n"
+                'For any actionable request, run `awino best "<request>" --scope <files>` '
+                "rather than manually picking a skill: it walks the machine - locate, route, "
+                "ladder, budget, open, work, verify, review, gates, close - and stops only "
+                "where you are needed (approve the cost, answer a question, execute the "
+                "printed prompt, decide at a stop), telling you the one flag to pass back. "
+                "Nothing is spawned; the present harness executes the prompt. No editor "
+                "fires this for you - you call `awino best` yourself; do not assume it "
+                "already ran.\n\n"
                 "You are the single default human-facing controller. Consult, plan, "
                 "discover, research, RPI, and evidence are capabilities selected as canonical "
                 "skills or isolated subagents. Specialist Kilo modes are optional manual "

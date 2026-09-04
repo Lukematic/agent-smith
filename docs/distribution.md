@@ -61,8 +61,8 @@ awino route "what is a harness"
 ~/dev/awino/              the clone, editable, updated with git pull
   .venv/                        isolated environment, never touches system Python
 
-~/.agents/plugins/agent-smith   symlink to the clone, so skills load
-~/.agents/agents/agent-smith.md the persona
+~/.agents/plugins/awino   symlink to the clone, so skills load
+~/.agents/agents/awino.md the persona
 ```
 
 A symlink rather than a copy is deliberate: `git pull` then updates the live

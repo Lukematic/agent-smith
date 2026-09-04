@@ -25,7 +25,7 @@ Merely pasting the repository URL into chat cannot safely trigger installation.
 Plugin installation crosses a user trust boundary, so one explicit user action is
 required. The agent must not simulate consent by running a global Bash installer.
 
-The plugin supplies the `awino` agent and exactly 14 canonical `awino-*` skills. It
+The plugin supplies the `awino` agent and exactly 16 canonical `awino-*` skills. It
 does not initialize `.seeds` or `.smith`. A.W.I.N.O. asks before project setup and
 uses `awino work-init` after approval.
 
@@ -126,13 +126,13 @@ In short: Python executes code; `venv` isolates packages; `pip` installs package
 ~/dev/awino/               the clone, editable, updated with git pull
   .venv/                         isolated environment
 
-~/.claude/agents/agent-smith.md  persona, if Claude Code is present
+~/.claude/agents/awino.md  persona, if Claude Code is present
 ~/.claude/skills/awino-*/        skills, junctioned to the clone
-~/.agents/agents/agent-smith.md  persona, if Goose is present
-~/.agents/plugins/agent-smith/   the whole plugin, linked
-~/.config/kilo/agents/agent-smith.md  Kilo primary persona
+~/.agents/agents/awino.md  persona, if Goose is present
+~/.agents/plugins/awino/   the whole plugin, linked
+~/.config/kilo/agents/awino.md  Kilo primary persona
 ~/.config/kilo/skills/awino-*/        Kilo skills, linked
-<VS Code prompts>/agent-smith.chatmode.md  GitHub Copilot chat mode
+<VS Code prompts>/awino.chatmode.md  GitHub Copilot chat mode
 ~/.roo/skills/awino-*/                 Roo skills, linked (agent selection via .roomodes / install-mode, not a persona file here)
 ```
 
@@ -177,13 +177,13 @@ A.W.I.N.O. cannot fork its own knowledge base, and per-project copies will.
 
 ### Manual, for any tool that reads a system prompt
 
-The persona is `agents/agent-smith.md` in the clone. Point your tool at it:
+The persona is `agents/awino.md` in the clone. Point your tool at it:
 
 | Tool | Where the file goes |
 | --- | --- |
-| Claude Code | `~/.claude/agents/agent-smith.md` |
+| Claude Code | `~/.claude/agents/awino.md` |
 | Claude Projects | paste the file body into project instructions |
-| Cursor | `.cursor/rules/agent-smith.mdc`, needs `alwaysApply` frontmatter |
+| Cursor | `.cursor/rules/awino.mdc`, needs `alwaysApply` frontmatter |
 | Continue, Cline, Roo | the custom-mode or persona field in settings |
 | OpenAI Assistants | the `instructions` field |
 | Anything with a system prompt | paste the body, or reference the path |

@@ -7,7 +7,7 @@ remain unsatisfied.
 
 ## Start here
 
-- **Six things to remember:** [Quickstart](docs/quickstart.md)
+- **One thing to remember (`awino best`):** [Quickstart](docs/quickstart.md)
 - **Using A.W.I.N.O.:** [User guide](docs/user-guide.md)
 - **Understanding the operating model:** [Operating guide](docs/operating-guide.md)
 - **Integrating or operating A.W.I.N.O.:** [Agent and harness guide](docs/agent-guide.md)
@@ -32,7 +32,7 @@ claude plugin marketplace add Lukematic/agent-smith
 claude plugin install awino@awino
 ```
 
-The native install provides the `awino` agent and all 14 canonical `awino-*` skills
+The native install provides the `awino` agent and all 16 canonical `awino-*` skills
 automatically. It does not initialize `.seeds` or `.smith`, install Python, or run a
 global shell installer. The deterministic gate ledger is an optional CLI layer and
 requires `uv`. Its launcher automatically creates or refreshes a locked `.venv`

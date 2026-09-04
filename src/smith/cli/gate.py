@@ -187,7 +187,7 @@ def gate_open(
     loop: str = typer.Option(
         "direct",
         "--loop",
-        help="direct | rpi | ralph | delegate. Recorded on the run; the reply header reads it from here.",
+        help="direct | floor | ralph | graph | rpi | delegate. Normally chosen by the ladder inside awino best; recorded on the run.",
     ),
 ) -> None:
     """Open a run and print the gates it must satisfy before it can close."""

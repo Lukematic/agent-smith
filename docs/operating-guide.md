@@ -46,7 +46,7 @@ The header is a declaration of current operating state, not decoration.
 | --- | --- | --- |
 | `A.W.I.N.O.` | The primary controller is speaking. | It does not prove the CLI or ledger is healthy; check the orientation and health output. |
 | `mode: architecture` | The current work role or phase is architectural analysis. Other useful labels include `discovery`, `research`, `planning`, `implementation`, `testing`, and `review`. | It is not the user-selected restrictive Kilo/Roo mode. |
-| `loop: direct` | The selected execution pattern is `direct`. The alternatives are `rpi`, `ralph`, and `delegate`. | It does not grant autonomy by itself. Verifier strength still limits how far work may proceed. |
+| `loop: direct` | The selected execution pattern is `direct`. The alternatives are `floor`, `ralph`, `graph`, `rpi`, and `delegate`; the LADDER node picks it. | It does not grant autonomy by itself. Verifier strength still limits how far work may proceed. |
 | `run: none` | No active gate-ledger run is attached to the response. An active run shows its actual ID. | It does not mean there is no project, Seed, plan, or previous closed run. |
 | `knowledge: 0/3` | No upstream knowledge body has been opened for this task out of a maximum of three. | It is not money, token usage, project files read, tool calls, skills, or sources supplied by you. |
 
@@ -262,16 +262,17 @@ awino gate skill awino-rpi --state used --reason "research and plan phases follo
 
 Canonical current capabilities include discovery, consultation, triage, evidence
 review, reproducibility, RPI, Ralph, delegation, agent/tool authoring, memory,
-self-update, visualization routing, and bootstrap. A routing recommendation is not
-proof that the skill was loaded or used.
+self-update, visualization routing, bootstrap, debugging (`awino-debug`, with the
+`awino debug` command family), and configuration review (`awino-config-review`,
+`awino config-review`). A routing recommendation is not proof that the skill was
+loaded or used. Completion is the gate-ledger verdict plus the independent `gate
+review` provenance record; it is not a separate completion agent and not a
+universal correctness oracle.
 
-**Planned, not current:** dedicated debugger, configuration-review, and completion
-skills/capabilities may be added in future releases. Do not interpret those labels
-as installed canonical skills today. Current debugging is provided by triage,
-project commands, captured gate output, and bounded healing where a mechanical
-remedy exists. Current configuration review uses ordinary inspection and relevant
-validators. Current completion is the gate-ledger verdict—not a separate
-completion agent and not a universal correctness oracle.
+**Planned, not current:** running `rpi` and `delegate` node-by-node inside `awino
+best` (today they are declared loops the machine stops at OPEN for), and deleting the
+legacy executors `gate graph` / `gate loop` / `dispatch` (Seed e860). Do not read a
+loop name in the header as proof the machine walked it.
 
 ### 6. Work in explicit phases and checkpoint
 
@@ -549,7 +550,7 @@ The prompt → context → harness → loop → factory model used to identify t
 artifact to change. It is not the status `mode`.
 
 **Loop**  
-The declared workflow pattern: `direct`, `rpi`, `ralph`, or `delegate`.
+The loop the ladder chose for the run: `direct`, `floor`, `ralph`, `graph`, `rpi`, or `delegate`.
 
 **Mode (status)**  
 An explicit label for A.W.I.N.O.'s present role or phase, such as `research` or

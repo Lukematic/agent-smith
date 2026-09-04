@@ -1,6 +1,6 @@
 # A.W.I.N.O. Dispatch Loop — Executable Plan
 
-Status: **awaiting approval**. Nothing implemented.
+Status: **executed 2026-09-02..03 (S1-S10 closed).** Its in-process runner `run_dispatch` is superseded by floors and scheduled for deletion in one-operator-spec S5 (Seed e860); this file archives with it.
 
 One sentence: build the elevator operator. The user describes a need in plain language;
 A.W.I.N.O. matches it to a capability, dispatches a scoped fresh-context agent, waits,

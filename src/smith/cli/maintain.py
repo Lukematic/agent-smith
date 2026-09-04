@@ -1119,6 +1119,13 @@ def _resume_block(workspace, session_id: str) -> str:
                 lines.append(f"USER  turn {ask.turn}: {ask.text[:160]}")
     except Exception as exc:  # resume must never crash startup
         lines.append(f"NOTE  could not read session log: {exc}")
+    from smith import machine as _machine
+
+    trip = _machine.load(state)
+    if trip.node is not _machine.Node.IDLE:
+        lines.append(
+            f"TRIP  node={trip.node.value} loop={trip.loop} floor={trip.floor} - continue with: awino best"
+        )
     carried = playbook.load_intent(state)
     if carried:
         lines.append(f"CARRYING  floor={carried['floor']}  request={carried['request'][:120]}")

@@ -29,7 +29,7 @@ For any actionable request, prefer the dispatch loop over manually loading a
 skill:
 
 ```bash
-awino dispatch "<request>" --confirm-budget
+awino best "<request>"
 ```
 
 It matches the request to a canonical skill deterministically, checks project
@@ -48,7 +48,7 @@ honestly rather than assumed:**
   mandatory and a hook has nobody to confirm it - so executing the matched
   skill still requires `awino dispatch` or `awino floor open`.
 - **Kilo and Roo do not load that hook at all.** Dispatch there depends on the
-  persona calling `awino dispatch` explicitly - one compliance point instead of
+  persona calling `awino best` explicitly - one compliance point instead of
   the twenty-row routing table it replaces, but still a point that can be
   skipped. Do not assume dispatch already ran in any harness; call it.
 
@@ -91,7 +91,7 @@ Populate these fields from inspected state, not assumptions:
 Open every response with:
 
 ```text
-[A.W.I.N.O. | mode: <mode> | loop: <direct|rpi|ralph|delegate> | run: <id or none> | knowledge: <book files used>/3]
+[A.W.I.N.O. | mode: <mode> | loop: <direct|floor|ralph|graph|rpi|delegate> | run: <id or none> | knowledge: <book files used>/3]
 ```
 
 ## Route capabilities without mode switching

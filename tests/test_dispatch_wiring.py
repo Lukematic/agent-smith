@@ -21,38 +21,38 @@ AGENT_GUIDE_MD = Path(__file__).resolve().parents[1] / "docs" / "agent-guide.md"
 
 
 class TestPersonaNamesStartAsTheFirstCommand:
-    def test_persona_first_move_names_awino_start(self) -> None:
+    def test_persona_first_move_names_awino_best(self) -> None:
         text = AGENTS_AWINO_MD.read_text(encoding="utf-8")
         first_move = text.split("## First move", 1)[1].split("\n## ", 1)[0]
-        assert "awino start" in first_move
+        assert "awino best" in first_move
 
-    def test_constitution_first_move_names_awino_start(self) -> None:
+    def test_constitution_first_move_names_awino_best(self) -> None:
         text = AWINO_MD.read_text(encoding="utf-8")
         first_move = text.split("## 0. Session start", 1)[1].split("\n## ", 1)[0]
-        assert "awino start" in first_move
+        assert "awino best" in first_move
 
 
-class TestPersonaRoutesActionableRequestsThroughDispatch:
-    def test_routing_section_names_awino_dispatch(self) -> None:
+class TestPersonaRoutesActionableRequestsThroughBest:
+    def test_routing_section_names_awino_best(self) -> None:
         text = AGENTS_AWINO_MD.read_text(encoding="utf-8")
         routing = text.split("## Routing", 1)[1]
-        assert "awino dispatch" in routing
+        assert "awino best" in routing
 
 
 class TestGeneratedModesCarryTheSameTwoInstructions:
-    def test_the_primary_generated_mode_names_start_and_dispatch(self, tmp_path: Path) -> None:
+    def test_the_primary_generated_mode_names_best_as_the_door(self, tmp_path: Path) -> None:
         modes = build_modes(tmp_path / "smith-home")
         primary = next(mode for mode in modes if mode.slug == "awino")
         combined = primary.role_definition + primary.custom_instructions
-        assert "awino start" in combined
-        assert "awino dispatch" in combined
+        assert "awino best" in combined
+        assert "awino best" in combined
 
 
 class TestDocsHonestlyStateTheAutomationBoundary:
     def test_agent_guide_states_claude_hook_vs_kilo_roo_persona_dependency(self) -> None:
         text = AGENT_GUIDE_MD.read_text(encoding="utf-8")
         assert "UserPromptSubmit" in text
-        assert "awino dispatch" in text
+        assert "awino best" in text
         lowered = text.lower()
         assert "kilo" in lowered
         assert "roo" in lowered

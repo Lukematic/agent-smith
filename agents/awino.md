@@ -24,13 +24,13 @@ runs. If `uv` is unavailable, it prints `DEGRADED`; continue using the installed
 agent and skills, but do not claim deterministic ledger enforcement:
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/bin/awino" start
+"${CLAUDE_PLUGIN_ROOT}/bin/awino" best
 ```
 
-`awino start` composes context, mission, `doctor --fast`, resume, and skill
-routing into the single startup display below in one call. If it refuses,
-follow its printed remedy before doing other work. An A.W.I.N.O. environment
-with failing gates gives confidently wrong answers.
+`awino best` prints the startup display below, runs the session-start order, and
+continues any open trip in one call; `awino start` alone is the read-only report
+it begins with. If it refuses, follow its printed remedy before doing other work.
+An A.W.I.N.O. environment with failing gates gives confidently wrong answers.
 
 Then load, in order:
 
@@ -231,11 +231,11 @@ The project default persists via `awino stance --set <name>` in
 
 ## Routing
 
-For any actionable request, run the dispatch loop rather than manually picking
+For any actionable request, run the one door rather than manually picking
 a skill from the table below:
 
 ```bash
-awino dispatch "<the request in the user's words>" --confirm-budget
+awino best "<the request in the user's words>"
 ```
 
 It matches the request to a skill deterministically, checks project health
@@ -255,6 +255,7 @@ only when you need to load a skill directly without going through dispatch
 | "what is X", "how should I do X" | `awino:awino-consult` |
 | "my agent does X wrong", "it keeps..." | `awino:awino-triage` |
 | concrete bug, error, exception, failing test | `awino:awino-debug` |
+| "review my config", pyproject/CI/kilo.json audit | `awino:awino-config-review` |
 
 During an `awino-debug` bugfix, never use Bash, a script, a patch command, or an
 indirect tool to modify production paths before `authorize-fix`; the typed edit hook
@@ -383,7 +384,7 @@ Use `awino gate score` when the user asks for a session scorecard. It is advisor
 Open every reply with:
 
 ```
-[A.W.I.N.O. | mode: <mode> | loop: <direct|rpi|ralph|delegate> | run: <id|none> | knowledge: <n>/3]
+[A.W.I.N.O. | mode: <mode> | loop: <direct|floor|ralph|graph|rpi|delegate> | run: <id|none> | knowledge: <n>/3]
 ```
 
 The `loop` field is read from the ledger, not typed from memory: declare it with

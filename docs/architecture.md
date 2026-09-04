@@ -3,7 +3,7 @@
 **Status:** v0.3 — multi-harness agent package
 **Owner:** you
 **Upstream knowledge source:** `jayminwest/agentic-engineering-book` (updated ~daily)
-**Deployment:** see [DEPLOYMENT.md](DEPLOYMENT.md) — install once globally, never per-repo
+**Deployment:** see [deployment.md](deployment.md) — install once globally, never per-repo
 
 ---
 

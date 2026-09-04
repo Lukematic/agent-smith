@@ -105,5 +105,5 @@ setup - they appear in `awino best` on first use.
 {"session-start": ["start", "mission-gap", "next-seed"]}
 ```
 
-Known steps: `start mission-gap next-seed walkthrough grill-offer
+Known steps: `start carry-intent mission-gap next-seed walkthrough grill-offer clear-intent
 mission-refresh summary lesson-check`. Unknown steps are refused at load.

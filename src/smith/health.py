@@ -567,8 +567,8 @@ def check_knowledge(paths: SmithPaths) -> Result:
 def check_harness_install(_paths: SmithPaths) -> Result:
     """Is A.W.I.N.O. actually reachable as a plugin and a persona?"""
     home = Path.home()
-    plugin = home / ".agents" / "plugins" / "agent-smith"
-    persona = home / ".agents" / "agents" / "agent-smith.md"
+    plugin = home / ".agents" / "plugins" / "awino"
+    persona = home / ".agents" / "agents" / "awino.md"
     have_plugin = plugin.exists() or plugin.is_symlink()
     if have_plugin and persona.is_file():
         return _ok("harness", "plugin linked and persona installed")

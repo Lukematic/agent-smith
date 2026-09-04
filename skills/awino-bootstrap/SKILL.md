@@ -30,7 +30,7 @@ your project folders.
   knowledge/{SOURCES.yaml, REGISTRY.yaml, MANIFEST.json, cache/}
   skills/                   # awino-* skills
   memory/{lessons.md, SESSION_LOG.md, expertise/}
-  templates/{agent.md.tmpl, skill.md.tmpl, spec.md.tmpl}
+  templates/{agent.md.tmpl}
   specs/                    # spec-as-contract output
   emitted/                  # staged agents/skills awaiting human promotion
 ```

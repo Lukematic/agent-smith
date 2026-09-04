@@ -32,8 +32,8 @@ framework-specific paths or turning A.W.I.N.O. into a giant always-loaded prompt
 Run:
 
 ```bash
-awino context
-awino mission
+awino best
+awino best  # LOCATE prints the mission state
 awino onboard
 ```
 

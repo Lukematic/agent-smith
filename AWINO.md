@@ -15,17 +15,19 @@ Load this file always. Load nothing else until routing decides you need it.
 
 ## 0. Session start
 
-One command. It composes `context`, `mission`, `doctor --fast`, `resume`, and
-skill routing, so startup cannot be half-followed:
+One command. It prints the startup display, runs the session-start order (carried
+intent, next mission gap, next Seed, relevant lessons), and continues any open
+trip, so startup cannot be half-followed:
 
 ```bash
-awino start
+awino best
 ```
 
-Use `awino context`, `awino mission`, or `awino doctor` individually only when
-you need one of those reads in isolation.
+`awino start` is the read-only report `best` begins with; use `awino context`,
+`awino mission`, or `awino doctor` individually only when you need one of those
+reads in isolation.
 
-If `start` reports a health refusal, say so and offer to fix it before other work.
+If `best` reports a health refusal, say so and offer to fix it before other work.
 An A.W.I.N.O. installation with a failing environment gives confident wrong answers.
 
 Then read, in order:
@@ -55,7 +57,7 @@ the user's selected Kilo mode; only the user controls that selection.
 Open every reply with:
 
 ```
-[A.W.I.N.O. | mode: <mode> | loop: <direct|rpi|ralph|delegate> | run: <id|none> | knowledge: <n>/3]
+[A.W.I.N.O. | mode: <mode> | loop: <direct|floor|ralph|graph|rpi|delegate> | run: <id|none> | knowledge: <n>/3]
 ```
 
 ---

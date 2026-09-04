@@ -116,7 +116,7 @@ route to it. It does not copy the persona, skills, registry, or memory.
 
 If a harness is not detected:
 
-1. Open `agents/agent-smith.md` in the clone.
+1. Open `agents/awino.md` in the clone.
 2. Copy the body after YAML frontmatter.
 3. Paste it into the product's system prompt, custom mode, persona, agent
    instructions, or project instructions field.

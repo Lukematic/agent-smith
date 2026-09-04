@@ -1101,43 +1101,58 @@ def stance_command(
 @app.command("best")
 def best_command(
     request: str = typer.Argument(
-        None, help="What you want, in your words - the operator names the floor and guides you"
+        None, help="What you want, in your words. Omit to continue the open trip."
     ),
     end: bool = typer.Option(False, "--end", help="Run the session-end order instead"),
+    confirm_budget: bool = typer.Option(False, "--confirm-budget", help="Approve the printed cost"),
+    answer: str = typer.Option(
+        None, "--answer", help="Answer the pending QUESTION/STOP, or 'done' after EXECUTE"
+    ),
+    verify: str = typer.Option(None, "--verify"),
+    scope: list[str] = typer.Option(None, "--scope"),
 ) -> None:
-    """Run the written session order - the one word to remember.
+    """The one door.
 
-    `awino best` alone: session-start (startup report, the next Heilmeier gap
-    as a question, the next Seed, relevant lessons). `awino best "<request>"`:
-    elevator mode - locate where you are, route your words to one skill,
-    switch stance if your words call for it, recall what we learned last time,
-    and print the exact next commands or the one question that blocks routing.
-    Nothing is spawned. --end: session-end order.
+    `awino best "<words>"` starts a trip and walks the machine as far as it can
+    on its own: locate, route, ladder, budget. `awino best` alone shows where the
+    sitting stands and, if a trip is open, keeps walking it. It stops only where
+    a human is genuinely needed - approve the cost, answer a question, decide at a
+    stop, or do the work at EXECUTE - and tells you the one flag to pass back.
+    --end runs the session-end order.
     """
     workspace = _workspace()
     tracker = seeds.Seeds(workspace.project.root)
     open_titles = [i.title for i in tracker.list_open()] if tracker.state()[0].usable else []
-    if request:
-        for line in playbook.elevator(
-            request,
+    if end:
+        for line in playbook.run_event(
+            "session-end",
             workspace.state_root,
             workspace.project.root,
             ledger=Ledger(workspace.state_root),
-            catalog=_skill_catalog(),
+            open_seeds=open_titles,
         ):
             _echo(line)
         return
-    event = "session-end" if end else "session-start"
-    if not end:
+
+    ctx = _step_context(confirm_budget, answer, verify, scope)
+    if request is None:
         start_command(fix_it=False)
         _echo("")
-    for line in playbook.run_event(
-        event,
-        workspace.state_root,
-        workspace.project.root,
-        ledger=Ledger(workspace.state_root),
-        open_seeds=open_titles,
-    ):
+        for line in playbook.run_event(
+            "session-start",
+            workspace.state_root,
+            workspace.project.root,
+            ledger=Ledger(workspace.state_root),
+            open_seeds=open_titles,
+        ):
+            _echo(line)
+        _echo("")
+        from smith import machine as _m
+
+        if _m.load(ctx.state_root).node is _m.Node.IDLE:
+            return
+    _machine, lines = stepper.run(ctx, request)
+    for line in lines:
         _echo(line)
 
 

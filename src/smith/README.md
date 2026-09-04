@@ -22,7 +22,25 @@ belong in a prompt, so it lives here instead.
 | `modes.py` | Kilo and Roo selectable modes, split by tool restriction. |
 | `seeds.py` | Optional integration with the seeds issue tracker. |
 | `fair.py` | Enforces that every meaningful directory is documented. |
-
+| `machine.py` | Node enum + fixed edge table; the persisted program counter (`machine.json`). |
+| `stepper.py` | One action per node; `step` (one square) and `run` (walk to the next human decision). |
+| `ladder.py` | `choose()`: rung + verifier strength + scope -> direct/floor/ralph/graph/delegate. |
+| `dispatch.py` | Deterministic routing (`decide`), preflight, and portable worker/reviewer floors. |
+| `provision.py` | Plan/apply environment repairs with consent; `discover_verification`. |
+| `heilmeier.py` | Eight-question living mission document; exams become verify commands. |
+| `playbook.py` | session-start / task-close / session-end orders; intent memory. |
+| `recall.py` | Token-overlap retrieval of relevant lessons. |
+| `stance.py` | Conversational stance catalog, detection, and per-project default. |
+| `guard.py` | Pre-push canonical-root and remote identity check (`awino push`). |
+| `drift.py` | Symbol drift: identifiers removed from code but surviving in prose. |
+| `exam.py` | Live FIRES/SILENT probes of every claimed capability. |
+| `auto.py` | Bounded Seed driver over floors. |
+| `spawn.py` | Assignments, roles, fresh-subprocess runners, independent `verify`. |
+| `graph.py`, `loop.py` | Legacy executors superseded by floors; deletion tracked in Seed e860. |
+| `skill_catalog.py` | Skill discovery and lexical routing scores. |
+| `session_log.py`, `session_state.py` | Per-project session events (redacted, locked) and session binding. |
+| `onboarding.py`, `project_guard.py`, `project_template.py` | Mission handshake, pre-tool guard, project scaffold. |
+| `capability.py`, `completion_review.py`, `config_review.py`, `debugging.py`, `doc_review.py`, `healing.py`, `ownership.py`, `updater.py`, `watch.py` | Probes, independent review provenance, config audit, debug ledger, doc rubric, self-healing, install ownership, self-update, upstream watch. |
 ## Usage
 
 Installed as the `awino` console script by `pyproject.toml`.

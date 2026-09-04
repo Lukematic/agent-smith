@@ -165,3 +165,43 @@ class TestBackAndForth:
         m, lines = stepper.step(ctx)
         assert m.node is Node.STOP
         assert any("human decision" in ln for ln in lines)
+
+
+class TestRunWalksUntilAHumanIsNeeded:
+    """One door: `run` keeps stepping until the machine genuinely needs a
+    human (budget, question, stop) or is done. It never spins: a hard cap on
+    ticks per call turns any accidental loop into a visible WAITING line."""
+
+    def test_new_request_walks_to_budget_in_one_call(self, ctx: stepper.StepContext) -> None:
+        m, lines = stepper.run(ctx, "pytest is failing with a ValueError in the loader")
+        assert m.node is Node.BUDGET
+        assert any("WAITING" in ln for ln in lines)
+        assert sum(1 for ln in lines if ln.startswith("NODE")) >= 3
+
+    def test_confirmed_budget_walks_from_budget_to_execute(self, ctx: stepper.StepContext) -> None:
+        stepper.run(ctx, "pytest is failing with a ValueError in the loader")
+        ctx.confirmed_budget = True
+        m, lines = stepper.run(ctx)
+        assert m.node is Node.EXECUTE  # waits for the harness
+        assert any(ln.startswith("PROMPT") for ln in lines)
+
+    def test_ambiguous_request_stops_at_question(self, ctx: stepper.StepContext) -> None:
+        m, lines = stepper.run(ctx, "xyzzy plugh wibble")
+        assert m.node is Node.QUESTION
+        assert sum(1 for ln in lines if ln.startswith("QUESTION")) == 1
+
+    def test_run_with_no_open_trip_reports_idle(self, ctx: stepper.StepContext) -> None:
+        m, lines = stepper.run(ctx)
+        assert m.node is Node.IDLE
+        assert any("no open trip" in ln for ln in lines)
+
+    def test_tick_cap_makes_a_spin_visible_instead_of_hanging(
+        self, ctx: stepper.StepContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Force LOCATE to always observe "missing" and PROVISION to always
+        # "provisioned": a genuine ping-pong the table allows.
+        monkeypatch.setitem(stepper.ACTIONS, Node.LOCATE, lambda _m, _c: "missing")
+        monkeypatch.setitem(stepper.ACTIONS, Node.PROVISION, lambda _m, _c: "provisioned")
+        m, lines = stepper.run(ctx, "pytest is failing", max_ticks=6)
+        assert any("TICK_CAP" in ln for ln in lines)
+        assert m.node in (Node.LOCATE, Node.PROVISION)

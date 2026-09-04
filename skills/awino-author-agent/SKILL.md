@@ -117,7 +117,7 @@ Include the propulsion clause verbatim:
 ### Step 5: Lint
 
 ```powershell
-& .smith\scripts\lint_agent.ps1 -Path .smith\emitted\<name>.md
+awino validate .smith/emitted/<name>.md -v
 ```
 
 Paste the output. Any FAIL blocks completion.

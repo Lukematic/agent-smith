@@ -94,6 +94,9 @@ def _route(m: Machine, ctx: StepContext) -> str:
     if decision.confidence == "high" and decision.skill is not None:
         m.skill = decision.skill.name
         ctx.say(f"FLOOR  {m.skill}  ({decision.rationale})")
+        # The trip is the intent: persist it so session-start and RESUME carry
+        # it across processes and compaction, exactly as the elevator did.
+        playbook.save_intent(ctx.state_root, m.request, m.skill, "awino best")
         return "high"
     ctx.say(f"QUESTION  {decision.question or decision.rationale}")
     return decision.confidence  # "ambiguous" | "none"
@@ -103,7 +106,7 @@ def _question(m: Machine, ctx: StepContext) -> str:
     if ctx.answer:
         m.request = ctx.answer
         return "answered"
-    ctx.say('WAITING  answer with: awino step --answer "<clearer request>"')
+    ctx.say('WAITING  answer with: awino best --answer "<clearer request>"')
     return "waiting"
 
 
@@ -138,7 +141,7 @@ def _budget(m: Machine, ctx: StepContext) -> str:
     per = 2 if m.loop == "graph" else 1
     ctx.say(f"BUDGET  loop={m.loop}  floors<={floors}  subprocesses<={floors * per}")
     if not ctx.confirmed_budget:
-        ctx.say("WAITING  approve with: awino step --confirm-budget")
+        ctx.say("WAITING  approve with: awino best --confirm-budget")
         return "waiting"
     return "confirmed"
 
@@ -161,7 +164,7 @@ def _work(m: Machine, ctx: StepContext) -> str:
     if not verify:
         found = provision.discover_verification(ctx.project)
         if found is None:
-            ctx.say('REFUSED  no verification command found; awino step --verify "<check>"')
+            ctx.say('REFUSED  no verification command found; awino best --verify "<check>"')
             return "waiting"
         verify, source = found
         ctx.say(f"VERIFY  {verify} (from {source})")
@@ -181,8 +184,15 @@ def _work(m: Machine, ctx: StepContext) -> str:
 
 
 def _execute(_m: Machine, ctx: StepContext) -> str:
-    ctx.say("EXECUTE  run the prompt in this or any agent environment, then: awino step")
-    return "executed"
+    """The harness does the work here. The first visit prints the prompt and
+    waits; the human (or the agent playing worker) says `--answer done` when
+    the prompt has been executed, and the machine moves on to verify it."""
+    if ctx.answer == "done":
+        return "executed"
+    ctx.say(
+        "EXECUTE  run the prompt in this or any agent environment, then: awino best --answer done"
+    )
+    return "waiting"
 
 
 def _verify(m: Machine, ctx: StepContext) -> str:
@@ -220,7 +230,7 @@ def _review(m: Machine, ctx: StepContext) -> str:
         found = provision.discover_verification(ctx.project)
         if found is None:
             ctx.say(
-                'REFUSED  no verification command for the worker floor a REVISE would open; awino step --verify "<check>"'
+                'REFUSED  no verification command for the worker floor a REVISE would open; awino best --verify "<check>"'
             )
             return "waiting"
         verify = found[0]
@@ -239,7 +249,9 @@ def _review(m: Machine, ctx: StepContext) -> str:
     ctx.say(f"REVIEW_OPEN  floor={state.floor}/{state.max_floors}")
     ctx.say(f"PROMPT  {state.prompt_path}")
     ctx.say(f"VERDICT_FILE  {state.verdict_path}")
-    ctx.say("EXECUTE  the reviewer prompt in this or any agent environment, then: awino step")
+    ctx.say(
+        "EXECUTE  the reviewer prompt in this or any agent environment, then: awino best --answer done"
+    )
     return "waiting"
 
 
@@ -265,7 +277,7 @@ def _gates(m: Machine, ctx: StepContext) -> str:
     missing = [g for g in run.required if g not in have]
     if missing:
         ctx.say(
-            f"GATES  need a human: {', '.join(missing)}  (awino gate record <gate> --cmd ..., then: awino step)"
+            f"GATES  need a human: {', '.join(missing)}  (awino gate record <gate> --cmd ..., then: awino best)"
         )
         return "waiting"
     return "hold"
@@ -318,7 +330,7 @@ def _close(m: Machine, ctx: StepContext) -> str:
 
 
 def _stop(_m: Machine, ctx: StepContext) -> str:
-    ctx.say("STOP  human decision: awino step --answer continue | close | drop")
+    ctx.say("STOP  human decision: awino best --answer continue | close | drop")
     if ctx.answer in ("continue", "close", "drop"):
         return ctx.answer
     return "waiting"
@@ -361,3 +373,40 @@ def step(ctx: StepContext, request: str | None = None) -> tuple[Machine, list[st
     machine.save(ctx.state_root, m)
     ctx.say(f"NODE  {before.value} -> {m.node.value}  ({obs})")
     return m, ctx.lines
+
+
+# Nodes where the machine must stop and let a human speak. Everything else is
+# an observation the machine can take on its own.
+HUMAN_NODES: frozenset[Node] = frozenset({Node.BUDGET, Node.QUESTION, Node.STOP, Node.EXECUTE})
+
+
+def run(
+    ctx: StepContext, request: str | None = None, *, max_ticks: int = 40
+) -> tuple[Machine, list[str]]:
+    """Walk the machine until it needs a human or is done.
+
+    `step` is one square; `run` is the whole sitting. It stops at BUDGET
+    (approve cost), QUESTION (clarify), STOP (decide), EXECUTE (the harness
+    does the work) and DONE - never anywhere else, so the human is asked only
+    when the machine genuinely cannot proceed. The tick cap exists so a
+    table edge that ping-pongs cannot hang: it prints TICK_CAP and returns.
+    """
+    all_lines: list[str] = []
+    m = machine.load(ctx.state_root)
+    if request is None and m.node is Node.IDLE:
+        return m, ['no open trip - say what you want: awino best "<request>"']
+    for _ in range(max_ticks):
+        m, lines = step(ctx, request)
+        request = None
+        all_lines += lines
+        last = lines[-1] if lines else ""
+        if last.endswith("(waiting)") or last.endswith("(done)") or m.node is Node.DONE:
+            return m, all_lines
+        if m.node in HUMAN_NODES:
+            # Enter the human node so its action prints what it needs (the
+            # cost, the question, the prompt path), then stop there.
+            m, lines = step(ctx)
+            all_lines += lines
+            return m, all_lines
+    all_lines.append(f"TICK_CAP  {max_ticks} ticks without a human decision; node={m.node.value}")
+    return m, all_lines
