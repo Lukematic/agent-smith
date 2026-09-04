@@ -761,6 +761,9 @@ def doctor(
 @app.command("config-review")
 def config_review_command(
     as_json_output: bool = typer.Option(False, "--json", help="Machine-readable output"),
+    path: Path = typer.Option(
+        None, "--path", help="Directory to audit; defaults to the resolved project root"
+    ),
 ) -> None:
     """Audit project configuration for drift, conflicts, and unsafe defaults.
 
@@ -769,7 +772,10 @@ def config_review_command(
     the exact file (and line, when addressable) it came from.
     """
     workspace = _workspace()
-    project = workspace.project.root
+    project = path.resolve() if path is not None else workspace.project.root
+    if not project.is_dir():
+        _echo(f"REFUSED  not a directory: {project}")
+        raise typer.Exit(2)
     findings = config_review.review(project)
     has_error = any(str(finding.severity) == "error" for finding in findings)
 

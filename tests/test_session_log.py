@@ -234,3 +234,21 @@ class TestLiveIncidentReplay:
         assert shown.returncode == 0, shown.stdout + shown.stderr
         assert "CORRECTIONS  1" in shown.stdout
         assert "renamed config_key to configKey" in shown.stdout
+
+
+class TestConcurrentAppendsGetDistinctTurns:
+    """2750: two writers appending at once must never share a turn number."""
+
+    def test_parallel_appends_yield_unique_monotonic_turns(self, tmp_path: Path) -> None:
+        import concurrent.futures as cf
+
+        from smith import session_log
+
+        def one(i: int) -> int:
+            return session_log.append(tmp_path, "sess", "user_turn", f"turn {i}").turn
+
+        with cf.ThreadPoolExecutor(max_workers=8) as pool:
+            turns = sorted(pool.map(one, range(40)))
+        assert turns == list(range(1, 41))
+        rows = session_log._read_all(session_log.log_path(tmp_path, "sess"))
+        assert len(rows) == 40

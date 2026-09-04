@@ -68,3 +68,4 @@ Format:
 - [2026-09-04] `ELEVATOR_AMNESIA` - awino best routed a request and forgot it on exit; every routing decision a human will act on must persist (state/intent.json) and be carried at the next session-start until work lands.
 - [2026-09-04] `FRESH_REPO_AMNESIA` - the elevator recalled only project lessons, so every new repo lost all 40 home lessons; the exam caught it. Recall must read home lessons as well as project lessons.
 - [2026-09-04] `COMMIT_BEFORE_CLOSE` - committed and pushed before gate close had returned COMPLETE; a chained script ran git after a REFUSED lint gate. Commit only after gate close prints COMPLETE, never in the same chain.
+- [2026-09-04] `SELF_AUDIT_BLIND_SPOT` - config-review resolved the parent project from a nested home and reported CLEAN while the home had 31 findings; any auditor needs a --path so it can be pointed at itself.

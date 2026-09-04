@@ -25,7 +25,9 @@ job.
 from __future__ import annotations
 
 import json
+import os
 import re
+import time
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -165,17 +167,50 @@ def append(
     text = redact_secrets(text)
     path = log_path(state_root, session_id)
     path.parent.mkdir(parents=True, exist_ok=True)
-    ask = Ask(
-        turn=_next_turn(path),
-        ts=datetime.now(UTC).isoformat(),
-        kind=kind,
-        text=text,
-        text_norm=_normalize(text),
-        run_id=run_id,
-    )
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(asdict(ask)) + "\n")
+    # Read-then-append is a race: two hooks firing together each compute the same
+    # next turn. The turn is assigned and written under one process-level lock
+    # (a sibling .lock file), so the number is unique even across processes.
+    with _locked(path):
+        ask = Ask(
+            turn=_next_turn(path),
+            ts=datetime.now(UTC).isoformat(),
+            kind=kind,
+            text=text,
+            text_norm=_normalize(text),
+            run_id=run_id,
+        )
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(asdict(ask)) + "\n")
     return ask
+
+
+class _locked:
+    """Cross-process exclusive lock via O_EXCL on a sibling .lock file."""
+
+    def __init__(self, path: Path) -> None:
+        self.lock = path.with_suffix(path.suffix + ".lock")
+
+    def __enter__(self) -> None:
+        deadline = time.monotonic() + 10
+        while True:
+            try:
+                fd = os.open(self.lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.close(fd)
+                return
+            except (FileExistsError, PermissionError):
+                # PermissionError: Windows briefly denies access while another
+                # process holds or is unlinking the file. Same meaning: busy.
+                if time.monotonic() > deadline:
+                    # A dead writer left the lock; take it rather than hang forever.
+                    self.lock.unlink(missing_ok=True)
+                time.sleep(0.005)
+
+    def __exit__(self, *exc: object) -> None:
+        try:
+            self.lock.unlink(missing_ok=True)
+        except PermissionError:
+            time.sleep(0.005)
+            self.lock.unlink(missing_ok=True)
 
 
 def find_duplicate_question(
