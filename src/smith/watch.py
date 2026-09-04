@@ -1,6 +1,6 @@
 """Multi-source knowledge watching: detect upstream changes, never auto-merge.
 
-``awino update`` (in cli.py / knowledge.py) checks drift against exactly one
+``awino update`` (in cli/maintain.py / knowledge.py) checks drift against exactly one
 hardcoded repository — the book. That is honestly labelled version tracking, not
 research. This module extends the same *mechanism* (poll a git tree, diff
 against what is known) to every source declared in ``knowledge/SOURCES.yaml``,

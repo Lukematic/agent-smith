@@ -133,7 +133,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["ARG"]
 # typer declares CLI options via call-in-default; that is its documented API.
-"src/smith/cli.py" = ["B008"]
+"src/smith/cli/*.py" = ["B008"]
 
 [tool.ruff.format]
 quote-style = "double"

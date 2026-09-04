@@ -25,7 +25,7 @@ from smith.paths import SmithPaths
 
 REQUIRED_RUFF_RULES = frozenset({"E", "F", "I"})
 REQUIRED_JUST_RECIPES = frozenset({"install", "check", "lint", "test", "fmt", "tidy", "update"})
-MAX_DOC_ORPHAN_RATIO = 0.0
+MAX_MODULE_LINES = 800
 
 
 class Health(StrEnum):
@@ -380,6 +380,35 @@ def check_artifacts(paths: SmithPaths) -> Result:
     return _ok("artifacts", f"{len(files)} artifact(s) valid")
 
 
+def check_module_size(paths: SmithPaths) -> Result:
+    """Warn when any source module outgrows what one reader can hold in view.
+
+    A 4000-line module is not wrong, but every edit to it risks touching an
+    unrelated command, and a reviewer cannot see the whole surface at once.
+    The threshold is a warning, not a gate: the size itself is the symptom,
+    and the remedy is a judgement call about where the seams are.
+    """
+    package = paths.root / "src" / "smith"
+    if not package.is_dir():
+        return _ok("module_size", "no src/smith package to measure, skipping")
+    oversized: list[tuple[int, str]] = []
+    for module in sorted(package.rglob("*.py")):
+        if "__pycache__" in module.parts:
+            continue
+        count = len(module.read_text(encoding="utf-8", errors="replace").splitlines())
+        if count > MAX_MODULE_LINES:
+            oversized.append((count, module.relative_to(package).as_posix()))
+    if oversized:
+        oversized.sort(reverse=True)
+        names = ", ".join(f"{name} ({count})" for count, name in oversized)
+        return _warn(
+            "module_size",
+            f"{len(oversized)} module(s) over {MAX_MODULE_LINES} lines: {names}",
+            "split along command or responsibility seams; see src/smith/cli/ for the pattern",
+        )
+    return _ok("module_size", f"every module within {MAX_MODULE_LINES} lines")
+
+
 # ── context and memory ───────────────────────────────────────────────────────
 
 
@@ -560,6 +589,7 @@ FAST_CHECKS: tuple[Callable[[SmithPaths], Result], ...] = (
     check_folder_docs,
     check_capability_claims,
     check_artifacts,
+    check_module_size,
     check_seeds,
     check_memory,
     check_knowledge,

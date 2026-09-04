@@ -7,7 +7,7 @@ belong in a prompt, so it lives here instead.
 
 | Module | Responsibility |
 | --- | --- |
-| `cli.py` | Every command, via typer. The only module that prints. |
+| `cli/` | Every command, via typer, split by what it serves (see `cli/README.md`). The only package that prints. |
 | `paths.py` | A.W.I.N.O. home vs project resolution, plus the wheel-bundle fallback. |
 | `knowledge.py` | Fetch, cache, provenance, drift, routing, and the file budget. |
 | `enforce.py` | The gate ledger. Completion is computed from recorded exit codes. |
@@ -44,7 +44,7 @@ Python 3.12, fully typed, formatted and linted by ruff. Configuration lives in
 
 Three conventions worth knowing before editing:
 
-- **Only `cli.py` prints.** Library modules return data structures so they stay
+- **Only `cli/` prints.** Library modules return data structures so they stay
   testable. A module that prints cannot be asserted against.
 - **Every verdict carries its reasoning.** `Result`, `Repair`, `Tool`, and the
   model verdicts all pair an outcome with the reason that produced it, so a plan

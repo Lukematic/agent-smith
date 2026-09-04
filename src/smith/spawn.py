@@ -32,7 +32,6 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
-MAX_CONCURRENT = 6
 DEFAULT_TIMEOUT_SECONDS = 900
 SPAWN_DEPTH_ENV = "AWINO_SPAWN_DEPTH"
 LEGACY_SPAWN_DEPTH_ENV = "SMITH_SPAWN_DEPTH"
@@ -93,7 +92,6 @@ class Role(StrEnum):
     SCOUT = "scout"
     REVIEWER = "reviewer"
     BUILDER = "builder"
-    TESTER = "tester"
 
     @property
     def read_only(self) -> bool:

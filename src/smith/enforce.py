@@ -83,6 +83,9 @@ class ReviewVerdict(StrEnum):
 
     APPROVED = "approved"
     CHANGES_REQUESTED = "changes-requested"
+    # Documented reviewer vocabulary (gate review --verdict, doc_review rubric).
+    # Zero code references does not make it dead: it is a value humans and
+    # pluggable reviewers are told they may emit.
     BLOCKED = "blocked"
 
 
@@ -131,9 +134,6 @@ CONTRACTS: dict[TaskClass, tuple[Gate, ...]] = {
     ),
     TaskClass.AUTHORING: (Gate.PLANNED, Gate.VALIDATED, Gate.LESSON_RECORDED),
 }
-
-# A bugfix that never reproduced the bug did not diagnose it, it guessed.
-DIAGNOSTIC_GATES: frozenset[Gate] = frozenset({Gate.RESEARCHED})
 
 
 @dataclass(frozen=True)

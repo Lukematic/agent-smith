@@ -230,27 +230,6 @@ def _parse_just_recipes(text: str) -> list[_Recipe]:
     return recipes
 
 
-def _load_runner_recipes(root: Path) -> dict[str, tuple[Path, _Recipe]]:
-    """Combined recipe map. Later entries in this order do not overwrite earlier
-    ones; duplicate detection is handled by the caller, which needs both."""
-    found: dict[str, list[tuple[Path, _Recipe]]] = {}
-    for name, parser in (("Makefile", _parse_make_targets), ("makefile", _parse_make_targets)):
-        path = root / name
-        if path.is_file():
-            for recipe in parser(path.read_text(encoding="utf-8")):
-                found.setdefault(recipe.name, []).append((path, recipe))
-            break
-    for name in ("justfile", "Justfile", ".justfile"):
-        path = root / name
-        if path.is_file():
-            for recipe in _parse_just_recipes(path.read_text(encoding="utf-8")):
-                found.setdefault(recipe.name, []).append((path, recipe))
-            break
-    # Keep only the first occurrence per file for the plain lookup used by other
-    # checks; conflict detection below inspects the full list separately.
-    return {name: entries[0] for name, entries in found.items()}, found  # type: ignore[return-value]
-
-
 def check_task_runners(root: Path) -> list[Finding]:
     """Duplicate recipe names within one file, and cross-file name conflicts.
 

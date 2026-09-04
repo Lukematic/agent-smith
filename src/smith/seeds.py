@@ -31,7 +31,6 @@ from pathlib import Path
 
 # Labels A.W.I.N.O. understands. Seeds itself treats labels as opaque strings.
 VERIFY_LABEL = "verify"
-BLOCKED_LABEL = "blocked-on-verification"
 
 # Priority scale is seeds', not ours. Documented so callers do not invent one.
 PRIORITY_LABELS = {0: "critical", 1: "high", 2: "medium", 3: "low", 4: "backlog"}

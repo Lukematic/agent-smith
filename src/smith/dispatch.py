@@ -2,7 +2,8 @@
 skill, deterministically, or state why it cannot.
 
 This is step 1 of the elevator operator's trip (match), kept strictly separate
-from steps 3-7 (dispatch, wait, verify, route, record) in ``smith.dispatch_loop``.
+from steps 3-7 (dispatch, wait, verify, route, record) in ``run_dispatch`` and
+the portable ``open_floor`` / ``close_floor`` pair further down this module.
 Routing must be safe to call speculatively - with no filesystem write and no
 subprocess - so a caller can ask "what would this route to?" before spending any
 budget.
@@ -17,6 +18,7 @@ project's own doctrine warns against.
 from __future__ import annotations
 
 import subprocess
+import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -326,12 +328,21 @@ def _terminal(
     reason: str,
     budget: int,
     decision: DispatchDecision | None = None,
+    *,
+    floors_used: int | None = None,
 ) -> DispatchResult:
+    """Record the trip's end. ``floors_used`` defaults to the floors seen in this
+    process; the portable floor path passes it explicitly because earlier floors
+    live only in the ledger."""
     ledger.append_artifact(
         run_id,
         "dispatch-terminal",
         "dispatch-engine",
-        {"budget": budget, "floors_used": len(floors), "outcome": outcome.value},
+        {
+            "budget": budget,
+            "floors_used": len(floors) if floors_used is None else floors_used,
+            "outcome": outcome.value,
+        },
     )
     return DispatchResult(outcome, tuple(floors), reason, decision)
 
@@ -529,16 +540,7 @@ def _write_floor_prompt(
     feedback: str | None,
 ) -> FloorState:
     invocation_id = f"dispatch-f{floor}-{skill}-{uuid.uuid4().hex[:10]}"
-    objective = f"Dispatched to {skill} for: {request}"
-    if feedback:
-        objective += f"\n\nThe previous floor's independent verification failed with:\n{feedback}"
-    assignment = Assignment(
-        agent_id=f"dispatch-f{floor}-{skill}",
-        role=Role.BUILDER,
-        objective=objective,
-        file_scope=file_scope,
-        verification=verification,
-    )
+    assignment = _build_assignment(request, skill, floor, feedback, file_scope, verification)
     prompt = (
         f"<!-- invocation: {invocation_id} -->\n"
         + assignment.render(smith_home)
@@ -639,6 +641,7 @@ def close_floor(ledger: Ledger, run_id: str, project: Path) -> FloorResult:
     invocation_id = str(payload["invocation_id"])
     skill = str(payload["skill"])
 
+    started = time.monotonic()
     try:
         completed = subprocess.run(
             verification,
@@ -650,34 +653,38 @@ def close_floor(ledger: Ledger, run_id: str, project: Path) -> FloorResult:
             cwd=str(project),
             check=False,
         )
-        verified = completed.returncode == 0
+        exit_code = completed.returncode
         tail = "\n".join(
             ((completed.stdout or "") + (completed.stderr or "")).strip().splitlines()[-8:]
         )
     except OSError as exc:
-        verified = False
+        exit_code = 127
         tail = str(exc)
+    verified = exit_code == 0
 
-    ledger.append_artifact(
-        run_id,
-        "dispatch-floor",
-        invocation_id,
-        {
-            "budget": max_floors,
-            "floor": floor,
-            "invocation_id": invocation_id,
-            "outcome": "VERIFIED" if verified else "FAILED_VERIFICATION",
-            "skill": skill,
-            "verified": verified,
-        },
+    # The same DispatchFloor shape run_dispatch persists, so the ledger holds
+    # one record format whether the worker was a subprocess or the harness.
+    result = SpawnResult(
+        agent_id=f"dispatch-f{floor}-{skill}",
+        outcome="VERIFIED" if verified else "FAILED_VERIFICATION",
+        exit_code=exit_code,
+        duration_ms=int((time.monotonic() - started) * 1000),
+        output_tail=tail,
+        claimed_complete=verified,
+        verified=verified,
+        invocation_id=invocation_id,
     )
+    _persist_floor(ledger, run_id, DispatchFloor(floor, skill, result, verified), max_floors)
 
     if verified:
-        ledger.append_artifact(
+        _terminal(
+            ledger,
             run_id,
-            "dispatch-terminal",
-            "dispatch-engine",
-            {"budget": max_floors, "floors_used": floor, "outcome": "complete"},
+            DispatchOutcome.COMPLETE,
+            [],
+            "",
+            max_floors,
+            floors_used=floor,
         )
         ledger.checkpoint(
             run_id,
@@ -688,11 +695,14 @@ def close_floor(ledger: Ledger, run_id: str, project: Path) -> FloorResult:
         return FloorResult(DispatchOutcome.COMPLETE, f"verified on floor {floor}")
 
     if floor >= max_floors:
-        ledger.append_artifact(
+        _terminal(
+            ledger,
             run_id,
-            "dispatch-terminal",
-            "dispatch-engine",
-            {"budget": max_floors, "floors_used": floor, "outcome": "max-iterations"},
+            DispatchOutcome.MAX_ITERATIONS,
+            [],
+            "",
+            max_floors,
+            floors_used=floor,
         )
         ledger.checkpoint(
             run_id,
