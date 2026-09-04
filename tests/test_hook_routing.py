@@ -76,3 +76,68 @@ class TestDocsBoundaryStatementSurvives:
     def test_agent_guide_still_states_the_kilo_roo_persona_dependency(self) -> None:
         text = " ".join(AGENT_GUIDE.read_text(encoding="utf-8").split())
         assert "Kilo and Roo do not load that hook" in text
+
+
+class TestSessionStartSurvivesCompaction:
+    """95fd: unresolved state must be re-injected automatically after a fresh
+    process starts with the same session id - not merely available on disk."""
+
+    def _hook(self, event: str, payload: dict, cwd: Path) -> str:
+        r = subprocess.run(
+            [sys.executable, "-m", "smith.cli", "hook", event],
+            input=json.dumps(payload),
+            cwd=cwd,
+            env={**dict(os.environ), "PYTHONPATH": str(SMITH_ROOT / "src")},
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+            timeout=60,
+        )
+        return r.stdout + r.stderr
+
+    def test_fresh_process_same_session_reinjects_unresolved_and_intent(
+        self, tmp_path: Path
+    ) -> None:
+        project = _project(tmp_path)
+        sid = "sess-compact-1"
+        # session opens, a user turn asks something, elevator routes an intent
+        self._hook("session-start", {"session_id": sid}, project)
+        self._hook(
+            "prompt",
+            {
+                "session_id": sid,
+                "prompt": "should we keep the ledger append-only or allow rewrites?",
+            },
+            project,
+        )
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "smith.cli",
+                "best",
+                "pytest is failing with a ValueError in the loader",
+            ],
+            cwd=project,
+            env={**dict(os.environ), "PYTHONPATH": str(SMITH_ROOT / "src")},
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=60,
+        )
+        # "compaction": brand new process, same session id
+        out = self._hook("session-start", {"session_id": sid}, project)
+        assert "RESUME" in out
+        assert "append-only" in out  # the unresolved question came back
+        assert "awino-debug" in out  # the carried intent came back
+
+    def test_precompact_event_is_accepted_and_dumps_state(self, tmp_path: Path) -> None:
+        project = _project(tmp_path)
+        sid = "sess-compact-2"
+        self._hook(
+            "prompt", {"session_id": sid, "prompt": "never delete the lessons file"}, project
+        )
+        out = self._hook("pre-compact", {"session_id": sid}, project)
+        assert "PRECOMPACT" in out
+        assert "never delete the lessons file" in out

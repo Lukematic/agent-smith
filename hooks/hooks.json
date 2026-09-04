@@ -20,7 +20,14 @@
         ]
       }
     ],
-    "PreToolUse": [
+    "PreCompact": [
+      {
+        "hooks": [
+          { "type": "command", "command": "awino hook pre-compact" }
+        ]
+      }
+    ],
+  "PreToolUse": [
       {
         "matcher": "Bash|Edit|Write|MultiEdit",
         "hooks": [

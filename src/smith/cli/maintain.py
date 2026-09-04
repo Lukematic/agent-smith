@@ -517,11 +517,23 @@ def hook(event: str = typer.Argument("session-start", help="Hook event adapter")
     workspace = _workspace()
     project = workspace.project.root
     intent = onboarding.load(project)
+    session_id = str(payload.get("session_id") or "unknown")
     if event == "session-start":
         if intent and intent.source == "confirmed":
-            session_state.start(workspace.state_root, str(payload.get("session_id") or "unknown"))
+            session_state.start(workspace.state_root, session_id)
             _echo(project_guard.project_context(intent))
         _hook_freshness()
+        block = _resume_block(workspace, session_id)
+        if block:
+            _echo(project_guard.emit(project_guard.prompt_context("RESUME\n" + block)))
+        return
+    if event == "pre-compact":
+        block = _resume_block(workspace, session_id) or "(nothing unresolved)"
+        _echo(
+            project_guard.emit(
+                project_guard.prompt_context("PRECOMPACT - preserve verbatim:\n" + block)
+            )
+        )
         return
     if event == "prompt":
         if intent and intent.source == "confirmed":
@@ -548,8 +560,9 @@ def hook(event: str = typer.Argument("session-start", help="Hook event adapter")
                 lines.append(f"[awino] STANCE -> {detected.name} ({detected.trigger_description})")
             if lines:
                 _echo(project_guard.emit(project_guard.prompt_context("\n".join(lines))))
-            session = session_state.load(workspace.state_root)
-            session_id = session.session_id if session else "unknown"
+            if session_id == "unknown":
+                session = session_state.load(workspace.state_root)
+                session_id = session.session_id if session else "unknown"
             # UserPromptSubmit only sees what the human typed, never what the
             # agent asked - so this cannot detect "the agent repeated its own
             # question." What it can detect, directly and mechanically, is
@@ -1074,3 +1087,33 @@ def push_command(
         raise typer.Exit(completed.returncode)
     marker = guard.record_canonical_root(home)
     _echo(f"CANONICAL  {marker}")
+
+
+def _resume_block(workspace, session_id: str) -> str:
+    """Everything a fresh context must not lose: unresolved agent questions,
+    user corrections, the last few user turns, and the carried intent.
+
+    Data on disk that nobody re-reads is not memory. This is echoed into
+    context automatically at session-start (which is also what fires after a
+    compaction) so recovery does not depend on the model remembering to look.
+    """
+    from smith import playbook
+
+    lines: list[str] = []
+    state = workspace.state_root
+    try:
+        for ask in session_log.unresolved_questions(state, session_id)[-5:]:
+            lines.append(f"UNRESOLVED  turn {ask.turn}: {ask.text[:160]}")
+        for ask in session_log.corrections(state, session_id)[-5:]:
+            lines.append(f"CORRECTION  turn {ask.turn}: {ask.text[:160]}")
+        path = session_log.log_path(state, session_id)
+        if path.is_file():
+            turns = [a for a in session_log._read_all(path) if a.kind == "user_turn"][-3:]
+            for ask in turns:
+                lines.append(f"USER  turn {ask.turn}: {ask.text[:160]}")
+    except Exception as exc:  # resume must never crash startup
+        lines.append(f"NOTE  could not read session log: {exc}")
+    carried = playbook.load_intent(state)
+    if carried:
+        lines.append(f"CARRYING  floor={carried['floor']}  request={carried['request'][:120]}")
+    return "\n".join(lines)
