@@ -1347,7 +1347,6 @@ def exam_command(
     for line in exam.render(results):
         _echo(line)
     if record:
-        workspace = _workspace()
         ledger = _ledger()
         current = ledger.inspect_current()
         if current.status == "active" and current.run_id:
