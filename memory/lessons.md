@@ -67,3 +67,4 @@ Format:
 - [2026-09-03] `DOCUMENTED_API_IS_NOT_DEAD` - ReviewVerdict.BLOCKED had 0 code refs and was deleted; it was advertised in --verdict help and the doc_review rubric, so a reviewer emitting it would fail. Dead-code greps must include docs, help strings, and prompts before a delete.
 - [2026-09-04] `ELEVATOR_AMNESIA` - awino best routed a request and forgot it on exit; every routing decision a human will act on must persist (state/intent.json) and be carried at the next session-start until work lands.
 - [2026-09-04] `FRESH_REPO_AMNESIA` - the elevator recalled only project lessons, so every new repo lost all 40 home lessons; the exam caught it. Recall must read home lessons as well as project lessons.
+- [2026-09-04] `COMMIT_BEFORE_CLOSE` - committed and pushed before gate close had returned COMPLETE; a chained script ran git after a REFUSED lint gate. Commit only after gate close prints COMPLETE, never in the same chain.
