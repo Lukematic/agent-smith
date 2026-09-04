@@ -35,6 +35,7 @@ from smith import (
     session_log,
     session_state,
     stance,
+    stepper,
 )
 from smith.cli import (
     _echo,
@@ -1361,3 +1362,51 @@ def exam_command(
             _echo("NOTE  no active run; exam not recorded")
     if not all(r.fired for r in results):
         raise typer.Exit(1)
+
+
+def _step_context(
+    confirm_budget: bool, answer: str | None, verify: str | None, scope: list[str] | None
+) -> stepper.StepContext:
+    workspace = _workspace()
+    return stepper.StepContext(
+        state_root=workspace.state_root,
+        project=workspace.project.root,
+        home=workspace.home.root,
+        paths=_paths(),
+        ledger=Ledger(workspace.state_root),
+        catalog=_skill_catalog(),
+        confirmed_budget=confirm_budget,
+        answer=answer,
+        verify=verify,
+        scope=scope,
+    )
+
+
+@app.command("step")
+def step_command(
+    request: str = typer.Argument(
+        None, help="Start a new trip from these words; omit to advance the current one"
+    ),
+    confirm_budget: bool = typer.Option(False, "--confirm-budget"),
+    answer: str = typer.Option(None, "--answer", help="Answer the pending QUESTION or STOP"),
+    verify: str = typer.Option(None, "--verify"),
+    scope: list[str] = typer.Option(None, "--scope"),
+    reset: bool = typer.Option(False, "--reset", help="Forget the current trip"),
+) -> None:
+    """Advance the machine by exactly one node.
+
+    Reads the persisted node, performs that node's single action, records the
+    observation, follows the one edge, stops. Nothing is remembered between
+    calls except what is on disk, so a fresh context resumes exactly here.
+    Repeat until it prints DONE or WAITING.
+    """
+    ctx = _step_context(confirm_budget, answer, verify, scope)
+    if reset:
+        from smith import machine as _m
+
+        _m.reset(ctx.state_root)
+        _echo("RESET  machine idle")
+        return
+    _machine, lines = stepper.step(ctx, request)
+    for line in lines:
+        _echo(line)
