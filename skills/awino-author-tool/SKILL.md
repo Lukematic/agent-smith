@@ -63,6 +63,13 @@ Search and report, in order:
 3. Built-in skills and extensions exposed by the active harness
 4. Installed harness plugins or extension inventory
 5. Registry `reference_configs` — the book ships real examples
+6. Public skill registries, last and read-only:
+   `https://mcpmarket.com/tools/skills/leaderboard` (top 100 agent skills) and
+   `https://mcpmarket.com/tools/skills/categories`. Treat as a **discovery**
+   source, never an authority: rank is install count, the top entries are
+   one publisher, and near-duplicates appear under several names. A hit here
+   means "read its SKILL.md for the shape", not "install it". Anything
+   adopted still goes through Step 5's spec and `awino validate`.
 
 Existing capability at ≥70% → adapt it. A near-duplicate is `DUPLICATE_TOOL`.
 
