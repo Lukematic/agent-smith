@@ -295,8 +295,67 @@ def elevator(
     if task_class == "question":
         out.append(f"NEXT  load skill {skill} and answer directly; no run needed for a question")
         return out
-    out.append(f'NEXT  awino gate open {task_class} "<objective in your words>" --scope <files>')
+    next_cmd = f'awino gate open {task_class} "<objective in your words>" --scope <files>'
+    save_intent(state_root, request, skill, next_cmd)
+    out.append(f"NEXT  {next_cmd}")
     out.append(f'      awino floor open "{request[:80]}" --scope <files>   # routes to {skill}')
     out.append("      (execute the printed prompt here, then) awino floor close")
     out.append("      awino gate close   # walks you through it and grills you")
     return out
+
+
+# ── Intent memory: what the elevator last routed, carried across sittings ──
+#
+# Without this, `awino best "<request>"` names a floor and forgets it the moment
+# the process exits; the next `awino best` starts from zero and the human
+# re-explains. The intent is one small JSON file in the state root, written on a
+# successful route, shown at session-start, and cleared when work lands.
+
+_INTENT_FILE = "intent.json"
+
+
+def save_intent(state_root: Path, request: str, floor: str, next_command: str) -> None:
+    payload = {"request": request, "floor": floor, "next": next_command}
+    state_root.mkdir(parents=True, exist_ok=True)
+    (state_root / _INTENT_FILE).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def load_intent(state_root: Path) -> dict[str, str] | None:
+    path = state_root / _INTENT_FILE
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) and data.get("floor") else None
+
+
+def clear_intent(state_root: Path) -> None:
+    path = state_root / _INTENT_FILE
+    if path.exists():
+        path.unlink()
+
+
+def _step_carry_intent(ctx: Context) -> list[str]:
+    intent = load_intent(ctx.state_root)
+    if intent is None:
+        return ['no open intent - say what you want: awino best "<request>"']
+    return [
+        f"CARRYING  floor={intent['floor']}  request={intent['request'][:90]}",
+        f"NEXT  {intent['next']}",
+    ]
+
+
+def _step_clear_intent(ctx: Context) -> list[str]:
+    had = load_intent(ctx.state_root) is not None
+    clear_intent(ctx.state_root)
+    return ["intent cleared: work landed" if had else "no intent to clear"]
+
+
+STEPS["carry-intent"] = _step_carry_intent
+STEPS["clear-intent"] = _step_clear_intent
+STEP_SKILLS["carry-intent"] = "direct"
+STEP_SKILLS["clear-intent"] = "direct"
+DEFAULT_PLAYBOOK["session-start"].insert(1, "carry-intent")
+DEFAULT_PLAYBOOK["task-close"].append("clear-intent")

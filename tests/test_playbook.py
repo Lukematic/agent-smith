@@ -176,3 +176,61 @@ class TestElevator:
             catalog=catalog,
         )
         assert any("STANCE  -> steel-man" in ln for ln in lines)
+
+
+class TestElevatorRemembers:
+    def _catalog(self):
+        from smith.skill_catalog import SkillCatalog
+
+        return SkillCatalog(Path("/n"), Path("/n"), Path(__file__).resolve().parents[1] / "skills")
+
+    def test_a_routed_request_is_persisted_as_intent(self, tmp_path: Path) -> None:
+        from smith.playbook import elevator, load_intent
+
+        s = _state(tmp_path)
+        elevator(
+            "pytest is failing with a ValueError in the loader",
+            s,
+            tmp_path,
+            ledger=Ledger(s),
+            catalog=self._catalog(),
+        )
+        intent = load_intent(s)
+        assert intent is not None
+        assert intent["floor"] == "awino-debug"
+        assert "ValueError" in intent["request"]
+
+    def test_session_start_carries_the_open_intent(self, tmp_path: Path) -> None:
+        from smith.playbook import elevator
+
+        s = _state(tmp_path)
+        elevator(
+            "pytest is failing with a ValueError in the loader",
+            s,
+            tmp_path,
+            ledger=Ledger(s),
+            catalog=self._catalog(),
+        )
+        lines = run_event("session-start", s, tmp_path, ledger=Ledger(s), open_seeds=[])
+        assert any("CARRYING" in ln and "awino-debug" in ln for ln in lines)
+
+    def test_an_ambiguous_request_persists_nothing(self, tmp_path: Path) -> None:
+        from smith.playbook import elevator, load_intent
+
+        s = _state(tmp_path)
+        elevator("xyzzy plugh wibble", s, tmp_path, ledger=Ledger(s), catalog=self._catalog())
+        assert load_intent(s) is None
+
+    def test_task_close_clears_the_intent(self, tmp_path: Path) -> None:
+        from smith.playbook import elevator, load_intent
+
+        s = _state(tmp_path)
+        elevator(
+            "pytest is failing with a ValueError in the loader",
+            s,
+            tmp_path,
+            ledger=Ledger(s),
+            catalog=self._catalog(),
+        )
+        run_event("task-close", s, tmp_path, ledger=Ledger(s), open_seeds=[])
+        assert load_intent(s) is None
