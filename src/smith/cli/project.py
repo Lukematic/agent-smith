@@ -19,6 +19,7 @@ from smith import (
     capability,
     cli,
     completion_review,
+    exam,
     fix,
     health,
     heilmeier,
@@ -1299,6 +1300,9 @@ def start_command(
         if inspected.status == "active" and inspected.run is not None
         else ""
     )
+    if not objective_for_recall:
+        carried = playbook.load_intent(workspace.state_root)
+        objective_for_recall = carried["request"] if carried else ""
     if objective_for_recall:
         seen: set[str] = set()
         for lessons_file in (
@@ -1323,4 +1327,38 @@ def start_command(
         _echo(
             f"REFUSED  {len(failing)} health gate(s) failing: {', '.join(r.name for r in failing)}"
         )
+        raise typer.Exit(1)
+
+
+@app.command("exam")
+def exam_command(
+    keep: bool = typer.Option(
+        False, "--keep", help="Keep the disposable fixture repo for inspection"
+    ),
+    record: bool = typer.Option(
+        False, "--record", help="Record the exam as an artifact on the current run"
+    ),
+) -> None:
+    """Put A.W.I.N.O. through every capability it claims, live, in a disposable
+    repo, and print FIRES/SILENT per capability. A SILENT line is a regression,
+    not an opinion. With --record the result lands in the active run's ledger.
+    """
+    results = exam.run_exam(keep=keep)
+    for line in exam.render(results):
+        _echo(line)
+    if record:
+        workspace = _workspace()
+        ledger = _ledger()
+        current = ledger.inspect_current()
+        if current.status == "active" and current.run_id:
+            ledger.append_artifact(
+                current.run_id,
+                "exam",
+                "awino-exam",
+                {r.name: r.fired for r in results},
+            )
+            _echo(f"RECORDED  exam artifact on {current.run_id}")
+        else:
+            _echo("NOTE  no active run; exam not recorded")
+    if not all(r.fired for r in results):
         raise typer.Exit(1)

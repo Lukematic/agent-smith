@@ -282,9 +282,13 @@ def elevator(
     out.append(f"FLOOR  {skill}  ({decision.rationale})")
 
     seen: set[str] = set()
+    from smith.paths import SmithPaths
+
+    home_lessons = SmithPaths.discover().root / "memory" / "lessons.md"
     for lessons in (
         state_root / "memory" / "lessons.md",
         project / ".smith" / "memory" / "lessons.md",
+        home_lessons,
     ):
         for hit in recall.recall_lessons(lessons, request):
             if hit not in seen:

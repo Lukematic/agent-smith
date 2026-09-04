@@ -21,7 +21,7 @@ SRC = Path(__file__).parents[1] / "src" / "smith"
 CLI_PACKAGE = SRC / "cli"
 
 # Every registered command, with sub-app prefixes, as it stood in the 4141-line
-# cli.py before the package split. 86 names.
+# cli.py before the package split. 87 names.
 PRE_SPLIT_COMMANDS = frozenset(
     {
         "ask",
@@ -40,6 +40,7 @@ PRE_SPLIT_COMMANDS = frozenset(
         "dispatch",
         "doctor",
         "drift",
+        "exam",
         "env",
         "fetch",
         "fix",
@@ -199,8 +200,8 @@ class TestCommandSurfaceIsUnchanged:
         )
 
     def test_eighty_six_commands(self) -> None:
-        assert len(PRE_SPLIT_COMMANDS) == 86
-        assert len(_registered(cli.app)) == 86
+        assert len(PRE_SPLIT_COMMANDS) == 87
+        assert len(_registered(cli.app)) == 87
 
     def test_public_entry_points_survive(self) -> None:
         assert isinstance(cli.app, typer.Typer)

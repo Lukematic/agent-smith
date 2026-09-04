@@ -178,5 +178,6 @@ def render(state_root: Path, cat: Catechism, *, open_seeds: list[str]) -> Path:
     if cmds:
         lines += ["", "## Exam commands (gate-ready)", ""] + [f"- `{c}`" for c in cmds]
     path = state_root / "MISSION.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
