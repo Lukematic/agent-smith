@@ -34,4 +34,4 @@ Give one person a working partner for building software with AI agents: it sets 
 
 ## Derived insights
 
-- 39 open seed(s) not tied to any exam - work that no exam would notice finishing.
+- 32 open seed(s) not tied to any exam - work that no exam would notice finishing.

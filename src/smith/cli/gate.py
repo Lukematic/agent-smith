@@ -17,6 +17,7 @@ import typer
 from smith import (
     completion_review,
     debugging,
+    drift,
     onboarding,
     playbook,
     seeds,
@@ -488,7 +489,7 @@ def gate_check(
         run = ledger.load(resolved)
     except LedgerError as exc:
         _ledger_error(exc)
-    root = _workspace().project.root
+    root = _git_root_for(_workspace())
     problems = 0
 
     if diff_base:
@@ -538,7 +539,38 @@ def gate_check(
                 )
                 _echo("TESTS_NOT_WEAKENED  ok")
 
-            violations = detect_scope_violations(names, run.file_scope)
+            drifted = drift.symbol_drift(diff, root)
+            if drifted:
+                problems += 1
+                symbols = sorted({f.symbol for f in drifted})
+                _echo(
+                    f"SYMBOL_DRIFT  {len(drifted)} surviving reference(s) to removed: {', '.join(symbols)}"
+                )
+                for finding in drifted[:12]:
+                    rel = (
+                        finding.path.relative_to(root)
+                        if finding.path.is_relative_to(root)
+                        else finding.path
+                    )
+                    _echo(f"  ! {rel}:{finding.line}  {finding.text}")
+                _echo(
+                    "  A name removed from code but still in prose, help, or a skill is documented API, not dead code."
+                )
+            else:
+                _echo("SYMBOL_DRIFT  none")
+
+            # Scope was declared relative to the *project* root; the diff is
+            # relative to the *git* root. In a nested layout those differ by the
+            # home dir name, so strip it before comparing. Files the engine
+            # itself regenerates on every close are not the agent's writes.
+            home_prefix = root.name + "/"
+            scope = [
+                s.replace("\\", "/").removeprefix("./").removeprefix(home_prefix)
+                for s in run.file_scope
+            ]
+            engine_owned = ("state/MISSION.md", "state/WALKTHROUGH.md", "state/intent.json")
+            names = [n for n in names if n.replace("\\", "/") not in engine_owned]
+            violations = detect_scope_violations(names, scope)
             if violations:
                 problems += 1
                 _echo(f"SCOPE_VIOLATION  {len(violations)} file(s) outside declared scope:")
@@ -909,3 +941,18 @@ def gate_contracts() -> None:
             _echo(f"  - {gate}")
         if not gates:
             _echo("  (none)")
+
+
+def _git_root_for(workspace) -> Path:
+    """The repository to diff. In a nested layout the project root is not a git
+    checkout but A.W.I.N.O.'s home is; diffing the wrong one silently reports
+    'no weakening' for a diff that never ran."""
+    project = workspace.project.root
+    if (project / ".git").exists():
+        return project
+    home = workspace.home.root
+    # Only when the project genuinely contains the home (nested dev layout). An
+    # unrelated project with no git must fail loudly, not borrow another repo.
+    if home.parent == project and (home / ".git").exists():
+        return home
+    return project
