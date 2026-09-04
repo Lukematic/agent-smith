@@ -1,0 +1,8 @@
+{
+  "answers": {
+    "objective": "Give one person a working partner for building software with AI agents: it sets up the repo, tracks the work, runs the checks, and refuses to say done until a real test says so."
+  },
+  "source": {
+    "objective": "human"
+  }
+}
