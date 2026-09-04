@@ -20,6 +20,7 @@ from smith import (
     dispatch,
     doc_review,
     fix,
+    guard,
     harness,
     health,
     models,
@@ -1035,3 +1036,41 @@ def review_doc_command(
 def registry_json() -> None:
     """Dump the registry index as JSON for programmatic routing."""
     _echo(json.dumps(cli.KnowledgeStore(_paths()).registry(), indent=2))
+
+
+@app.command("push")
+def push_command(
+    remote: str = typer.Option("origin", "--remote"),
+    branch: str = typer.Option("main", "--branch"),
+) -> None:
+    """Push A.W.I.N.O.'s own clone, refusing when this checkout is not the
+    canonical root or its origin is not the canonical remote.
+
+    The stale-duplicate-clone incident happened twice: a lesson committed in a
+    checkout nobody reads. `git push` cannot tell; this can, and it refuses
+    before the network is touched.
+    """
+    workspace = _workspace()
+    home = workspace.home.root
+    verdict = guard.check_push_identity(home, canonical_root=guard.canonical_root_for(home))
+    if not verdict.ok:
+        _echo(f"REFUSED  {verdict.reason}")
+        raise typer.Exit(1)
+    _echo(f"IDENTITY  {verdict.reason}")
+    completed = subprocess.run(
+        ["git", "push", remote, branch],
+        cwd=home,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    _echo(
+        (completed.stdout + completed.stderr).strip().splitlines()[-1]
+        if (completed.stdout + completed.stderr).strip()
+        else "pushed"
+    )
+    if completed.returncode != 0:
+        raise typer.Exit(completed.returncode)
+    marker = guard.record_canonical_root(home)
+    _echo(f"CANONICAL  {marker}")
