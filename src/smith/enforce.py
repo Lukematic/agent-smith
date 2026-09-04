@@ -31,7 +31,10 @@ MAX_ATTEMPTS = 3
 
 # The four loops the constitution names. A run declares one at open so the
 # header's [loop: ...] is read from the ledger, not typed from memory.
-LOOPS: tuple[str, ...] = ("direct", "rpi", "ralph", "delegate")
+# The five loops the ladder can choose (one-operator-spec S2). "rpi" and
+# "delegate" remain as declared intents for work the machine does not yet run
+# node-by-node; "floor", "ralph", "graph" are the machine's own loop kinds.
+LOOPS: tuple[str, ...] = ("direct", "floor", "ralph", "graph", "rpi", "delegate")
 OUTPUT_KEEP_CHARS = 4000
 
 # Vocabulary an agent has used to make skipped work sound principled instead

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from smith import dispatch, health, machine, playbook, provision, recall
-from smith.enforce import CONTRACTS, MAX_ATTEMPTS, Gate, Ledger, TaskClass  # noqa: F401
+from smith.enforce import CONTRACTS, MAX_ATTEMPTS, Gate, Ledger, TaskClass
 from smith.machine import Machine, Node
 from smith.paths import SmithPaths
 from smith.skill_catalog import SkillCatalog
@@ -161,9 +161,42 @@ def _verify(m: Machine, ctx: StepContext) -> str:
     return "max-iterations"
 
 
-def _review(_m: Machine, ctx: StepContext) -> str:
-    ctx.say("REVIEW  reviewer floor not yet wired (S3); treating as SHIP")
-    return "ship"
+def _review(m: Machine, ctx: StepContext) -> str:
+    """The graph's real value with no login: a reviewer floor is a floor whose
+    role is mechanically read-only, run by whatever harness is present.
+
+    First tick opens it and waits for the harness to write the verdict; the
+    next tick closes it (independent re-check: SHIP/REVISE/BLOCKED)."""
+    pending = ctx.ledger.latest_artifact(m.run_id or "", "dispatch-pending")
+    if pending is not None and pending.payload.get("role") == "reviewer":
+        result = dispatch.close_floor(ctx.ledger, m.run_id or "", ctx.project)
+        ctx.say(f"{result.outcome.value.upper()}  {result.detail[:160]}")
+        if result.outcome is dispatch.DispatchOutcome.COMPLETE:
+            return "ship"
+        if result.outcome is dispatch.DispatchOutcome.REVISE:
+            if result.next_state:
+                ctx.say(f"PROMPT  {result.next_state.prompt_path}")
+            return "revise"
+        return "blocked"
+
+    verify = ctx.verify or 'echo "reviewer verdict pending"'
+    state = dispatch.open_floor(
+        ctx.ledger,
+        m.run_id or "",
+        m.request,
+        ctx.catalog,
+        ctx.home,
+        verify,
+        file_scope=ctx.scope or [],
+        max_floors=MAX_ATTEMPTS,
+        role="reviewer",
+        project=ctx.project,
+    )
+    ctx.say(f"REVIEW_OPEN  floor={state.floor}/{state.max_floors}")
+    ctx.say(f"PROMPT  {state.prompt_path}")
+    ctx.say(f"VERDICT_FILE  {state.verdict_path}")
+    ctx.say("EXECUTE  the reviewer prompt in this or any agent environment, then: awino step")
+    return "waiting"
 
 
 def _gates(m: Machine, ctx: StepContext) -> str:

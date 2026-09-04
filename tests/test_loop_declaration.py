@@ -29,8 +29,8 @@ def test_unknown_loop_is_refused(tmp_path: Path) -> None:
         ledger.open(TaskClass.QUESTION, "x", loop="yolo")
 
 
-def test_the_four_loops_are_the_constitution_ones() -> None:
-    assert LOOPS == ("direct", "rpi", "ralph", "delegate")
+def test_the_five_loops_are_the_ladders_ones() -> None:
+    assert LOOPS == ("direct", "floor", "ralph", "graph", "rpi", "delegate")
 
 
 def test_rung_verdict_is_recorded_as_artifact_not_a_block(tmp_path: Path) -> None:

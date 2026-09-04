@@ -17,6 +17,7 @@ project's own doctrine warns against.
 
 from __future__ import annotations
 
+import json
 import subprocess
 import time
 import uuid
@@ -511,6 +512,8 @@ class FloorState:
     prompt_path: str
     verification: str
     max_floors: int
+    role: str = "worker"
+    verdict_path: str = ""
 
 
 @dataclass(frozen=True)
@@ -580,6 +583,117 @@ def _write_floor_prompt(
     return state
 
 
+def _changed_files(project: Path, file_scope: list[str]) -> list[str]:
+    """What the reviewer should read: the real diff if this is a git checkout,
+    the run's declared scope otherwise."""
+    try:
+        completed = subprocess.run(
+            ["git", "diff", "--name-only"],
+            cwd=project,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=15,
+        )
+        names = [n.strip() for n in completed.stdout.splitlines() if n.strip()]
+        if completed.returncode == 0 and names:
+            return names
+    except OSError:
+        pass
+    return list(file_scope)
+
+
+def _write_review_prompt(
+    ledger: Ledger,
+    run_id: str,
+    request: str,
+    smith_home: Path,
+    project: Path,
+    file_scope: list[str],
+    worker_verification: str,
+    floor: int,
+    max_floors: int,
+) -> FloorState:
+    """A reviewer floor: role=Role.REVIEWER (mechanically read-only, no scope),
+    context is the worker's real diff, and the deliverable is one verdict line
+    written under the ledger, never inside the project - a read-only role
+    writing into the thing it is reviewing would defeat the whole point."""
+    invocation_id = f"dispatch-review-{floor}-{uuid.uuid4().hex[:10]}"
+    changed = _changed_files(project, file_scope)
+    reviews = ledger.state_root / "reviews"
+    reviews.mkdir(parents=True, exist_ok=True)
+    verdict_path = reviews / f"{invocation_id}.json"
+
+    assignment = Assignment(
+        agent_id=f"dispatch-review-f{floor}",
+        role=Role.REVIEWER,
+        objective=(
+            f"Independently review the change made for: {request}\n\n"
+            "Do not edit anything. Read the changed files listed below and judge "
+            "whether the change is correct and complete.\n\n"
+            f"Write exactly one line of JSON to {verdict_path} "
+            "(not anywhere inside the project): "
+            '{"verdict": "SHIP" | "REVISE" | "BLOCKED", "feedback": "<why>"}. '
+            "SHIP only if you would accept this as-is. REVISE if it is close but "
+            "wrong in a way you can name; put the exact fix needed in feedback. "
+            "BLOCKED if you cannot review it at all; say why."
+        ),
+        file_scope=[],
+        context_paths=changed,
+        verification=f"python -c \"import json,sys; d=json.load(open(r{str(verdict_path)!r})); sys.exit(0 if d.get('verdict') in ('SHIP','REVISE','BLOCKED') else 1)\"",
+    )
+    problems = assignment.problems()
+    if problems:
+        raise ValueError(f"reviewer assignment invalid: {'; '.join(problems)}")
+
+    prompt = (
+        f"<!-- invocation: {invocation_id} -->\n"
+        + assignment.render(smith_home)
+        + "\n\n## The change you were asked to review was verified against\n\n"
+        + f"`{worker_verification}`\n"
+        + "\n\n## Reviewer procedure\n\n"
+        + _skill_text(smith_home, "awino-consult")
+    )
+    scratch = ledger.state_root / "assignments"
+    scratch.mkdir(parents=True, exist_ok=True)
+    prompt_path = scratch / f"{invocation_id}.md"
+    prompt_path.write_text(prompt, encoding="utf-8", newline="")
+
+    state = FloorState(
+        run_id=run_id,
+        floor=floor,
+        skill="awino-consult",
+        invocation_id=invocation_id,
+        prompt_path=str(prompt_path),
+        verification=assignment.verification,
+        max_floors=max_floors,
+        role="reviewer",
+        verdict_path=str(verdict_path),
+    )
+    ledger.append_artifact(
+        run_id,
+        "dispatch-pending",
+        invocation_id,
+        {
+            "floor": floor,
+            "invocation_id": invocation_id,
+            "max_floors": max_floors,
+            "prompt_path": str(prompt_path),
+            "request": request,
+            "skill": "awino-consult",
+            "smith_home": str(smith_home),
+            "verification": assignment.verification,
+            "file_scope": list(file_scope),
+            "role": "reviewer",
+            "verdict_path": str(verdict_path),
+            "worker_verification": worker_verification,
+        },
+    )
+    return state
+
+
 def open_floor(
     ledger: Ledger,
     run_id: str,
@@ -590,10 +704,19 @@ def open_floor(
     *,
     file_scope: list[str],
     max_floors: int = MAX_ATTEMPTS,
+    role: str = "worker",
+    project: Path | None = None,
 ) -> FloorState:
     """Route the request and write the floor-1 prompt for whatever harness is
     present to execute. Raises rather than guessing when routing is not
-    unambiguous, and refuses a second concurrent trip on the same run."""
+    unambiguous, and refuses a second concurrent trip on the same run.
+
+    role="reviewer" skips routing entirely: the reviewer's job is fixed
+    (independently judge the worker's diff), not chosen from the catalog.
+    `project` is required for role="reviewer" so it can read the real diff.
+    Floor numbers are shared across worker and reviewer floors on one run -
+    close_floor's "already closed" guard counts total closed floors - so a
+    reviewer opened after N worker floors starts at N+1, not 1."""
     if not 1 <= max_floors <= MAX_ATTEMPTS:
         raise ValueError(f"max_floors must be between 1 and {MAX_ATTEMPTS}")
     if not verification.strip():
@@ -603,6 +726,42 @@ def open_floor(
     closed = ledger.artifacts(run_id, "dispatch-floor")
     if pending is not None and len(closed) < int(pending.payload["floor"]):
         raise ValueError(f"floor {pending.payload['floor']} is already open; close it first")
+    next_floor = len(closed) + 1
+
+    if role == "reviewer":
+        if project is None:
+            raise ValueError("project is required to open a reviewer floor")
+        return _write_review_prompt(
+            ledger,
+            run_id,
+            request,
+            smith_home,
+            project,
+            file_scope,
+            verification,
+            next_floor,
+            max_floors,
+        )
+
+    decision = decide(request, catalog)
+    if decision.confidence != "high" or decision.skill is None:
+        raise ValueError(
+            f"routing confidence is {decision.confidence}, not high: "
+            f"{decision.question or decision.rationale}"
+        )
+
+    return _write_floor_prompt(
+        ledger,
+        run_id,
+        request,
+        decision.skill.name,
+        smith_home,
+        verification,
+        file_scope,
+        next_floor,
+        max_floors,
+        None,
+    )
 
     decision = decide(request, catalog)
     if decision.confidence != "high" or decision.skill is None:
@@ -625,16 +784,108 @@ def open_floor(
     )
 
 
+def _close_review_floor(ledger: Ledger, run_id: str, payload: dict) -> FloorResult:
+    floor = int(payload["floor"])
+    max_floors = int(payload["max_floors"])
+    invocation_id = str(payload["invocation_id"])
+    verdict_path = Path(str(payload["verdict_path"]))
+
+    verdict: str | None = None
+    feedback = ""
+    if verdict_path.is_file():
+        try:
+            data = json.loads(verdict_path.read_text(encoding="utf-8"))
+            candidate = data.get("verdict")
+            if candidate in ("SHIP", "REVISE", "BLOCKED"):
+                verdict = candidate
+                feedback = str(data.get("feedback", ""))
+        except (OSError, json.JSONDecodeError):
+            verdict = None
+
+    result = SpawnResult(
+        agent_id=f"dispatch-review-f{floor}",
+        outcome=verdict or "MALFORMED_VERDICT",
+        exit_code=0 if verdict else 1,
+        duration_ms=0,
+        output_tail=feedback,
+        claimed_complete=verdict == "SHIP",
+        verified=verdict is not None,
+        invocation_id=invocation_id,
+    )
+    _persist_floor(
+        ledger,
+        run_id,
+        DispatchFloor(floor, "awino-consult", result, verdict is not None),
+        max_floors,
+    )
+    ledger.append_artifact(
+        run_id,
+        "dispatch-review",
+        invocation_id,
+        {"verdict": verdict or "MALFORMED", "feedback": feedback, "invocation_id": invocation_id},
+    )
+
+    if verdict == "SHIP":
+        _terminal(ledger, run_id, DispatchOutcome.COMPLETE, [], "", max_floors, floors_used=floor)
+        ledger.checkpoint(
+            run_id,
+            phase=f"dispatch-review-{floor}",
+            summary=f"SHIP: {feedback[:100]}",
+            next_action="finish dispatch",
+        )
+        return FloorResult(DispatchOutcome.COMPLETE, f"reviewer SHIP: {feedback}")
+
+    if verdict == "REVISE" and floor < max_floors:
+        next_state = _write_floor_prompt(
+            ledger,
+            run_id,
+            str(payload["request"]),
+            REMEDIATION_SKILL,
+            Path(str(payload["smith_home"])),
+            str(payload["worker_verification"]),
+            list(payload.get("file_scope", [])),
+            floor + 1,
+            max_floors,
+            feedback,
+        )
+        ledger.checkpoint(
+            run_id,
+            phase=f"dispatch-review-{floor}",
+            summary=f"revise: {feedback[:100]}",
+            next_action=f"execute floor {floor + 1} prompt",
+        )
+        return FloorResult(DispatchOutcome.REVISE, feedback, next_state)
+
+    outcome = DispatchOutcome.MAX_ITERATIONS if verdict == "REVISE" else DispatchOutcome.BLOCKED
+    detail = feedback if verdict else f"no valid verdict at {verdict_path}"
+    _terminal(ledger, run_id, outcome, [], detail, max_floors, floors_used=floor)
+    ledger.checkpoint(
+        run_id,
+        phase=f"dispatch-review-{floor}",
+        summary=f"{outcome.value}: {detail[:100]}",
+        next_action="human decides whether to continue",
+    )
+    return FloorResult(outcome, detail)
+
+
 def close_floor(ledger: Ledger, run_id: str, project: Path) -> FloorResult:
     """Verify the pending floor's work by re-running its verification command
     ourselves, then route: complete, open the next floor with the failure text
-    carried forward, or stop at the budget."""
+    carried forward, or stop at the budget.
+
+    A reviewer floor closes differently: there is no shell command to trust,
+    only a verdict file the reviewer was told to write. SHIP completes; REVISE
+    opens a fresh worker floor carrying the reviewer's exact feedback; BLOCKED
+    or a missing/malformed verdict stops rather than guessing."""
     pending = ledger.latest_artifact(run_id, "dispatch-pending")
     closed = ledger.artifacts(run_id, "dispatch-floor")
     if pending is None or len(closed) >= int(pending.payload["floor"]):
         raise ValueError("no pending floor to close on this run")
 
     payload = pending.payload
+    if payload.get("role") == "reviewer":
+        return _close_review_floor(ledger, run_id, payload)
+
     floor = int(payload["floor"])
     max_floors = int(payload["max_floors"])
     verification = str(payload["verification"])

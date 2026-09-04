@@ -14,6 +14,7 @@ actual SKILL.md text, not just its name.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -257,3 +258,151 @@ class TestFloorStateRoundTrip:
         assert state.prompt_path
         assert state.invocation_id
         assert state.skill == "awino-debug"
+
+
+class TestReviewerFloor:
+    """S3: the graph's real value (independent reviewer) with no login - a
+    reviewer floor is just a floor whose role is mechanically read-only."""
+
+    def _catalog(self):
+        return SkillCatalog(Path("/n"), Path("/n"), SMITH_ROOT / "skills")
+
+    def test_open_floor_reviewer_role_is_read_only_and_writes_no_scope(
+        self, ledger: Ledger, run_id: str, tmp_path: Path
+    ) -> None:
+        from smith.dispatch import open_floor
+
+        _marker, verify = _passing_verify(tmp_path)
+        state = open_floor(
+            ledger,
+            run_id,
+            "review the change",
+            self._catalog(),
+            SMITH_ROOT,
+            verify,
+            file_scope=[],
+            role="reviewer",
+            max_floors=1,
+            project=tmp_path,
+        )
+        prompt = Path(state.prompt_path).read_text(encoding="utf-8")
+        assert "Files you may WRITE" not in prompt or "none" in prompt.lower()
+        pending = ledger.latest_artifact(run_id, "dispatch-pending")
+        assert pending.payload["role"] == "reviewer"
+
+    def test_reviewer_verdict_file_lives_under_state_root_not_project(
+        self, ledger: Ledger, run_id: str, tmp_path: Path
+    ) -> None:
+        from smith.dispatch import open_floor
+
+        _marker, verify = _passing_verify(tmp_path)
+        state = open_floor(
+            ledger,
+            run_id,
+            "review",
+            self._catalog(),
+            SMITH_ROOT,
+            verify,
+            file_scope=[],
+            role="reviewer",
+            max_floors=1,
+            project=tmp_path,
+        )
+        assert str(ledger.state_root) in state.verdict_path
+        assert str(tmp_path) not in state.verdict_path or "reviews" in state.verdict_path
+
+    def test_ship_verdict_completes(self, ledger: Ledger, run_id: str, tmp_path: Path) -> None:
+        from smith.dispatch import close_floor, open_floor
+
+        _marker, verify = _passing_verify(tmp_path)
+        state = open_floor(
+            ledger,
+            run_id,
+            "review",
+            self._catalog(),
+            SMITH_ROOT,
+            verify,
+            file_scope=[],
+            role="reviewer",
+            max_floors=1,
+            project=tmp_path,
+        )
+        Path(state.verdict_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(state.verdict_path).write_text(
+            json.dumps({"verdict": "SHIP", "feedback": "looks right"}), encoding="utf-8"
+        )
+        result = close_floor(ledger, run_id, tmp_path)
+        assert result.outcome.value == "complete"
+        review = ledger.latest_artifact(run_id, "dispatch-review")
+        assert review.payload["verdict"] == "SHIP"
+
+    def test_revise_verdict_opens_a_worker_floor_with_feedback(
+        self, ledger: Ledger, run_id: str, tmp_path: Path
+    ) -> None:
+        from smith.dispatch import close_floor, open_floor
+
+        _marker, verify = _passing_verify(tmp_path)
+        state = open_floor(
+            ledger,
+            run_id,
+            "review",
+            self._catalog(),
+            SMITH_ROOT,
+            verify,
+            file_scope=[],
+            role="reviewer",
+            max_floors=2,
+            project=tmp_path,
+        )
+        Path(state.verdict_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(state.verdict_path).write_text(
+            json.dumps({"verdict": "REVISE", "feedback": "off-by-one in the loop bound"}),
+            encoding="utf-8",
+        )
+        result = close_floor(ledger, run_id, tmp_path)
+        assert result.outcome.value == "revise"
+        assert result.next_state is not None
+        next_prompt = Path(result.next_state.prompt_path).read_text(encoding="utf-8")
+        assert "off-by-one in the loop bound" in next_prompt
+        assert result.next_state.role != "reviewer"
+
+    def test_missing_verdict_file_blocks(self, ledger: Ledger, run_id: str, tmp_path: Path) -> None:
+        from smith.dispatch import close_floor, open_floor
+
+        _marker, verify = _passing_verify(tmp_path)
+        open_floor(
+            ledger,
+            run_id,
+            "review",
+            self._catalog(),
+            SMITH_ROOT,
+            verify,
+            file_scope=[],
+            role="reviewer",
+            max_floors=1,
+            project=tmp_path,
+        )
+        # deliberately do not write the verdict; force close via a verify that fails
+        result = close_floor(ledger, run_id, tmp_path)
+        assert result.outcome.value in ("max-iterations", "blocked")
+
+    def test_malformed_verdict_blocks(self, ledger: Ledger, run_id: str, tmp_path: Path) -> None:
+        from smith.dispatch import close_floor, open_floor
+
+        _marker, verify = _passing_verify(tmp_path)
+        state = open_floor(
+            ledger,
+            run_id,
+            "review",
+            self._catalog(),
+            SMITH_ROOT,
+            verify,
+            file_scope=[],
+            role="reviewer",
+            max_floors=1,
+            project=tmp_path,
+        )
+        Path(state.verdict_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(state.verdict_path).write_text("not json", encoding="utf-8")
+        result = close_floor(ledger, run_id, tmp_path)
+        assert result.outcome.value in ("max-iterations", "blocked")
