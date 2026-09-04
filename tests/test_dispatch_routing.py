@@ -126,3 +126,30 @@ class TestRoutingIsPure:
 
         after = {p: p.stat().st_mtime_ns for p in marker_root.rglob("*") if p.is_file()}
         assert before == after
+
+
+class TestStemmedRouting:
+    """a010: plural/verb-form differences must not make a routable request ambiguous."""
+
+    def test_refactor_into_a_package_routes_to_rpi(self, catalog: SkillCatalog) -> None:
+        d = decide(
+            "refactor cli.py into a package: split the commands into modules, behaviour preserving",
+            catalog,
+        )
+        assert d.confidence == "high" and d.skill is not None and d.skill.name == "awino-rpi"
+
+    def test_migrate_singular_matches_migrations_plural(self, catalog: SkillCatalog) -> None:
+        d = decide(
+            "plan a large migration of the storage layer across many files before writing code",
+            catalog,
+        )
+        assert d.skill is not None and d.skill.name == "awino-rpi"
+
+    def test_stemming_is_conservative(self) -> None:
+        from smith.skill_catalog import _stem
+
+        assert _stem("refactors") == "refactor"
+        assert _stem("migrations") == "migration"
+        assert _stem("failing") == "fail"
+        assert _stem("bus") == "bus"  # no s-stripping under 4 chars
+        assert _stem("class") == "class"  # ss is not a plural

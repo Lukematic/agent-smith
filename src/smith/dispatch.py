@@ -51,7 +51,7 @@ REMEDIATION_SKILL = "awino-debug"
 
 # Two recommendations within this many points are indistinguishable enough that
 # picking one would be a guess, not a match.
-_AMBIGUITY_MARGIN = 3
+_AMBIGUITY_MARGIN = 2
 
 
 @dataclass(frozen=True)

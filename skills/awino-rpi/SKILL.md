@@ -1,6 +1,6 @@
 ---
 name: awino-rpi
-description: Research then Plan then Implement for complex multi-file changes. Use for refactors, migrations, feature additions, large upgrades, and documentation overhauls where jumping to code would drift
+description: Research then Plan then Implement for complex multi-file changes. Use for refactors, restructures, splitting a module into a package, migrations, feature additions, large upgrades, and documentation overhauls where jumping to code would drift
 ---
 
 # A.W.I.N.O. RPI

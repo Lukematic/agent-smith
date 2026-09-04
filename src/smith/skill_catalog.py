@@ -11,6 +11,10 @@ import yaml
 _WORDS = re.compile(r"[a-z0-9]+")
 _STOP_WORDS = {
     "a",
+    "into",
+    "onto",
+    "my",
+    "its",
     "an",
     "and",
     "for",
@@ -128,13 +132,47 @@ class SkillCatalog:
         return discovered
 
 
+def _stem(word: str) -> str:
+    """Conservative English stemming: plurals and common verb endings only.
+
+    Routing compares a human's words against skill descriptions written by
+    someone else; "refactor" must meet "refactors" and "migration" must meet
+    "migrations" or ordinary phrasing goes ambiguous. Deliberately shallow - a
+    Porter stemmer would merge words that should stay apart.
+    """
+    if len(word) <= 3:
+        return word
+    for suffix, replacement in (
+        ("ations", "ation"),
+        ("ations", "ate"),
+        ("ings", ""),
+        ("ing", ""),
+        ("ies", "y"),
+        ("es", "e"),
+        ("ss", "ss"),
+        ("s", ""),
+    ):
+        if suffix == "ss":
+            if word.endswith("ss"):
+                return word
+            continue
+        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+            stem = word[: -len(suffix)] + replacement
+            # "splitting" -> "splitt" -> "split": undo consonant doubling.
+            if len(stem) >= 4 and stem[-1] == stem[-2] and stem[-1] not in "aeiouls":
+                stem = stem[:-1]
+            return stem
+    return word
+
+
 def _tokens(value: str) -> set[str]:
-    return {word for word in _WORDS.findall(value.lower()) if word not in _STOP_WORDS}
+    return {_stem(word) for word in _WORDS.findall(value.lower()) if word not in _STOP_WORDS}
 
 
 def _intent_skill(words: set[str]) -> str | None:
-    concrete_failure = {"bug", "error", "errors", "exception", "failing", "failure", "pytest"}
-    vague_agent = {"agent", "misbehaving", "behaving", "badly", "keeps"}
+    # Compared against stemmed tokens, so listed in stemmed form.
+    concrete_failure = {"bug", "error", "exception", "fail", "failure", "pytest"}
+    vague_agent = {"agent", "misbehav", "behav", "badly", "keep", "ignor", "wrong"}
     if words & concrete_failure:
         return "awino-debug"
     if "agent" in words and len(words & vague_agent) >= 2:

@@ -70,3 +70,4 @@ Format:
 - [2026-09-04] `COMMIT_BEFORE_CLOSE` - committed and pushed before gate close had returned COMPLETE; a chained script ran git after a REFUSED lint gate. Commit only after gate close prints COMPLETE, never in the same chain.
 - [2026-09-04] `SELF_AUDIT_BLIND_SPOT` - config-review resolved the parent project from a nested home and reported CLEAN while the home had 31 findings; any auditor needs a --path so it can be pointed at itself.
 - [2026-09-04] `GATE_CHECK_NEVER_RAN_NESTED` - gate check --diff-base diffed the outer project (not a git repo) so it had never actually run in this layout; every prior tests_not_weakened/scope_respected here was a manually recorded command, never the independent check. Nested layouts diff the home.
+- [2026-09-04] `UNSTEMMED_ROUTING` - 'refactor' never met 'refactors' and 'into' scored as a token, so ordinary requests went ambiguous. Routing tokens are stemmed conservatively; intent vocabularies must be written in stemmed form.
