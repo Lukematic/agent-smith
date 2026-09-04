@@ -64,7 +64,7 @@ jobs:
           path: test-results-${{ matrix.os }}-py${{ matrix.python }}.xml
 
       - name: Validate authored artifacts
-        run: uv run awino validate skills agents
+        run: uv run awino validate skills agents emitted
 
       - name: Validator selftest
         run: uv run awino validate --selftest
@@ -107,6 +107,6 @@ jobs:
         run: |
           uv run awino context
           uv run awino route "what is a harness"
-          test "$(uv run awino skills --paths | wc -l)" -ge 10
+          test "$(uv run awino skills --paths | wc -l)" -eq 16
           uv run awino limits --claims
 

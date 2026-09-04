@@ -24,12 +24,16 @@ for the knowledge-registry curation described below.
 
 ### Step 1: Diff
 
-```powershell
-& .smith\scripts\registry_build.ps1
+```bash
+awino drift
 ```
 
-Read `.smith/knowledge/DRIFT.md`. It reports upstream chapter count,
-registry chapter count, `ADDED`, `REMOVED`, and the appendix example corpora.
+`awino drift` is the diff (the former `.smith\scripts\registry_build.ps1` no
+longer exists — this replaced it). It writes `knowledge/DRIFT.md` under the
+resolved A.W.I.N.O. home (`SmithPaths.discover()`, not the current project's
+`.smith/`) and prints `UPSTREAM=`, `REGISTRY=`, `ADDED=`, `REMOVED=` on stdout.
+Read that report. It shows upstream chapter count, registry chapter count,
+`ADDED`, `REMOVED`, and the appendix example corpora.
 
 Appendices are intentionally indexed at *directory* granularity — the example
 configs under `appendices/examples/<project>/` are a browse-on-demand corpus
@@ -40,7 +44,8 @@ entered via `_index.md`, not registry entries. Do not add them individually.
 For each newly added chapter path — **not in bulk**:
 
 
-1. Fetch it: `& .smith\scripts\fetch.ps1 -Path <path>`
+1. Fetch it: `awino fetch <path>` (the former `.smith\scripts\fetch.ps1` no
+   longer exists — this replaced it)
 2. Read only the frontmatter plus the first section.
 3. Write a registry entry:
 

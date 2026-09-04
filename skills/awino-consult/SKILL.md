@@ -37,8 +37,8 @@ Budget:  2/3
 
 ### Step 3: Fetch
 
-```powershell
-& .smith\scripts\fetch.ps1 -Path <registry path>
+```bash
+awino fetch <registry path>
 ```
 
 Then `Read` the cache file. Prefer `Grep` on the cache file when the question is

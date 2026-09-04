@@ -68,6 +68,8 @@ selftest:
 # Everything the doctor checks plus the slow quality gates
 verify:
     uv run awino doctor
+    uv run awino tidy --dry-run
+    uv run awino validate skills agents emitted
 
 # ── knowledge harness ────────────────────────────────────────────────────────
 

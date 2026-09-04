@@ -33,8 +33,14 @@ your project folders.
   templates/{agent.md.tmpl, skill.md.tmpl, spec.md.tmpl}
   specs/                    # spec-as-contract output
   emitted/                  # staged agents/skills awaiting human promotion
-  scripts/{fetch.ps1, registry_build.ps1}
 ```
+
+Knowledge operations (`registry diff`, `fetch`) are native `awino` subcommands
+(`awino drift`, `awino fetch <path>`, `awino knowledge-update`) resolved via
+`SmithPaths.discover()` against this scaffold — there is no `scripts/` folder
+and no `.ps1` files to create. An earlier revision of this skill described
+`scripts/{fetch.ps1, registry_build.ps1}`; those were replaced by the CLI and
+never existed in either the Claude-plugin install or the standalone clone.
 
 Write `knowledge/cache/.gitignore` containing `*` — the cache is disposable.
 
@@ -42,11 +48,12 @@ Seed `memory/lessons.md` with a header and zero rules. Do not invent lessons.
 
 ### Step 3: Verify the registry
 
-```powershell
-& .smith\scripts\registry_build.ps1
+```bash
+awino drift
 ```
 
-Read `knowledge/DRIFT.md`. Report:
+Read `knowledge/DRIFT.md` (written under the resolved home, not necessarily
+this project's `.smith/`). Report:
 
 | Metric | Value |
 | --- | --- |
@@ -61,8 +68,8 @@ which fetches each new file and writes a curated entry with tags and `use_when`.
 
 Fetch exactly one file as a smoke test:
 
-```powershell
-& .smith\scripts\fetch.ps1 -Path chapters/6-harnesses/1-what-is-a-harness.md
+```bash
+awino fetch chapters/6-harnesses/1-what-is-a-harness.md
 ```
 
 Expect `OK <cachefile> sha=... bytes=...` on first run and `CACHE_HIT` on a
