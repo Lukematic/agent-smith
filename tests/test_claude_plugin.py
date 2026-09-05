@@ -164,8 +164,17 @@ def test_plugin_registers_project_memory_and_guard_hooks() -> None:
 def test_missing_uv_launcher_is_truthfully_degraded(tmp_path: Path) -> None:
     env = os.environ.copy()
     env["PATH"] = str(tmp_path)
+    if os.name == "nt":
+        command = [
+            "C:\\Windows\\System32\\cmd.exe",
+            "/d",
+            "/c",
+            str(ROOT / "bin" / "awino.cmd"),
+        ]
+    else:
+        command = ["sh", str(ROOT / "bin" / "awino")]
     result = subprocess.run(
-        ["C:\\Windows\\System32\\cmd.exe", "/d", "/c", str(ROOT / "bin" / "awino.cmd")],
+        command,
         cwd=ROOT,
         env=env,
         capture_output=True,
