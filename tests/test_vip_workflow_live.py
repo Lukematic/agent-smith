@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -36,7 +37,7 @@ def quoted_python(script: Path) -> str:
 
 
 def make_project(project: Path) -> str:
-    if subprocess.run(["sd", "--version"], capture_output=True, check=False).returncode != 0:
+    if shutil.which("sd") is None:
         pytest.skip("live VIP workflow requires the optional sd executable")
     project.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=project, check=True)

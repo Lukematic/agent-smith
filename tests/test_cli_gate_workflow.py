@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -338,9 +339,7 @@ def test_gate_close_refuses_open_seed_then_succeeds_after_work_close(tmp_path: P
     close is refused with the Seed still open -> work-close closes the Seed
     -> gate close now succeeds with terminal_state=complete.
     """
-    if (
-        subprocess.run(["sd", "--version"], capture_output=True, check=False).returncode != 0
-    ):  # pragma: no cover - environment without the optional tool
+    if shutil.which("sd") is None:
         pytest.skip("live Seed-linkage workflow requires the optional sd executable")
 
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)

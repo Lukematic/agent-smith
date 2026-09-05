@@ -7,12 +7,14 @@ from smith.toolchain import Manager, Runner, Toolchain
 
 
 def test_black_box_fixture_matrix(tmp_path: Path, monkeypatch) -> None:
+    import os
+
     from smith import toolchain
 
     monkeypatch.setattr(toolchain, "_have", lambda name: name in {"uv", "make", "python"})
 
     existing = tmp_path / "existing"
-    (existing / ".venv" / "Scripts").mkdir(parents=True)
+    (existing / ".venv" / ("Scripts" if os.name == "nt" else "bin")).mkdir(parents=True)
     (existing / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
     assert Toolchain(existing).manager[0] is Manager.VENV
 
