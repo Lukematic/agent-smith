@@ -115,6 +115,7 @@ def test_exact_four_phase_lifecycle_is_persisted_as_run_artifacts(tmp_path: Path
 def run_cli(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["SMITH_PROJECT"] = str(project)
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
     return subprocess.run(
         [sys.executable, "-m", "smith.cli", *args],
         cwd=project,

@@ -30,6 +30,7 @@ def _run_smith(
     env = os.environ.copy()
     env["SMITH_PROJECT"] = str(project_root)
     env.pop("VIRTUAL_ENV", None)
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
     return subprocess.run(
         [sys.executable, "-m", "smith.cli", *args],
         cwd=str(project_root),

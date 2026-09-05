@@ -11,6 +11,7 @@ def run_cli(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["AWINO_PROJECT"] = str(project)
     env.pop("VIRTUAL_ENV", None)
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
     return subprocess.run(
         [sys.executable, "-m", "smith.cli", *args],
         cwd=project,
@@ -112,6 +113,7 @@ def test_inspection_surfaces_the_missing_binary_and_why_it_matters(tmp_path: Pat
     env["AWINO_PROJECT"] = str(tmp_path)
     env["PATH"] = str(empty_path_dir)
     env.pop("VIRTUAL_ENV", None)
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
     result = subprocess.run(
         [sys.executable, "-m", "smith.cli", "project-bootstrap"],
         cwd=tmp_path,

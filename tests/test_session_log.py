@@ -134,6 +134,7 @@ def _run_hook(project: Path, event: str, payload: dict) -> subprocess.CompletedP
     env = os.environ.copy()
     env["AWINO_PROJECT"] = str(project)
     env.pop("VIRTUAL_ENV", None)
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
     return subprocess.run(
         [sys.executable, "-m", "smith.cli", "hook", event],
         cwd=project,
@@ -151,6 +152,7 @@ def _onboard(project: Path, **fields: str) -> None:
     env = os.environ.copy()
     env["AWINO_PROJECT"] = str(project)
     env.pop("VIRTUAL_ENV", None)
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
     args = [sys.executable, "-m", "smith.cli", "onboard"]
     for key, value in fields.items():
         args += ["--set", f"{key}={value}"]
@@ -203,6 +205,7 @@ class TestLiveIncidentReplay:
         env = os.environ.copy()
         env["AWINO_PROJECT"] = str(tmp_path)
         env.pop("VIRTUAL_ENV", None)
+        env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
         noted = subprocess.run(
             [
                 sys.executable,

@@ -19,6 +19,7 @@ def run_cli(
     env = os.environ.copy()
     env["SMITH_PROJECT"] = str(project)
     env.pop("VIRTUAL_ENV", None)
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
     if path_prefix is not None:
         env["PATH"] = f"{path_prefix}{os.pathsep}{env['PATH']}"
     return subprocess.run(

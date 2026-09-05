@@ -27,6 +27,7 @@ def run_cli(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["SMITH_PROJECT"] = str(project)
     env.pop("VIRTUAL_ENV", None)
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
     return subprocess.run(
         [sys.executable, "-m", "smith.cli", *args],
         cwd=project,
