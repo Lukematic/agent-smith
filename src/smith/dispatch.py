@@ -874,6 +874,9 @@ def close_floor(ledger: Ledger, run_id: str, project: Path) -> FloorResult:
 
     started = time.monotonic()
     try:
+        from smith.provision import ensure_project_venv, project_env
+
+        ensure_project_venv(project)
         completed = subprocess.run(
             verification,
             shell=True,
@@ -882,6 +885,7 @@ def close_floor(ledger: Ledger, run_id: str, project: Path) -> FloorResult:
             encoding="utf-8",
             errors="replace",
             cwd=str(project),
+            env=project_env(project),
             check=False,
         )
         exit_code = completed.returncode

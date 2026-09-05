@@ -8,6 +8,7 @@ ledger, and apart from cli/ so the actions can be driven by tests directly.
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -262,7 +263,34 @@ def _gates(m: Machine, ctx: StepContext) -> str:
     commands = _gate_commands(ctx)
     for gate in run.required:
         have = {e.gate for e in ctx.ledger.evidence(run.run_id) if e.passed}
-        if gate in have or gate not in commands:
+        if gate in have:
+            continue
+        if gate == "tests_not_weakened":
+            try:
+                from smith.enforce import detect_test_weakening
+
+                diff = subprocess.run(
+                    ["git", "diff", "HEAD", "--"],
+                    cwd=ctx.project,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    check=False,
+                ).stdout
+                findings = detect_test_weakening(diff)
+                if not findings:
+                    ctx.ledger.attest(
+                        run.run_id, Gate.TESTS_NOT_WEAKENED, "no deleted assertions or added skips"
+                    )
+                    ctx.say("PASS  tests_not_weakened  (diff analysed)")
+                else:
+                    ctx.say(f"FAIL  tests_not_weakened  {'; '.join(findings)}")
+            except Exception as exc:
+                ctx.say(f"GATE_ERROR  tests_not_weakened  {exc}")
+            continue
+
+        if gate not in commands:
             continue
         try:
             ev = ctx.ledger.record(run.run_id, Gate(gate), commands[gate], cwd=ctx.project)
@@ -284,12 +312,7 @@ def _gates(m: Machine, ctx: StepContext) -> str:
 
 
 def _gate_commands(ctx: StepContext) -> dict[str, str]:
-    """The project's own commands for the gates that have one.
-
-    tests_not_weakened is NOT "no diff under tests/": a worker fixing a test is
-    the normal case. It is enforce.detect_test_weakening - deleted assertions,
-    added skips - run over the real diff, as `gate check` does. Expressed as a
-    command so the ledger records a real exit code, not our opinion."""
+    """The project's own commands for the gates that have one."""
     out: dict[str, str] = {}
     found = provision.discover_verification(ctx.project)
     if found:
@@ -297,12 +320,6 @@ def _gate_commands(ctx: StepContext) -> dict[str, str]:
         out["researched"] = found[0]
     if (ctx.project / "pyproject.toml").is_file():
         out["linted"] = f'"{sys.executable}" -m ruff check . || ruff check .'
-    out["tests_not_weakened"] = (
-        f'"{sys.executable}" -c "import subprocess,sys; from smith.enforce import '
-        "detect_test_weakening as d; diff=subprocess.run(['git','diff','HEAD','--'],"
-        "capture_output=True,text=True,encoding='utf-8',errors='replace').stdout; "
-        'f=d(diff); print(chr(10).join(f)); sys.exit(1 if f else 0)"'
-    )
     return out
 
 
