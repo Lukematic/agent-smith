@@ -202,3 +202,40 @@ class TestRecipeMustExist:
         project = _with_pyproject(tmp_path)
         (project / "Makefile").write_text("lint:\n\truff check .\n", encoding="utf-8")
         assert discover_verification(project) is None
+
+
+class TestProjectEnv:
+    """gate commands must run in the target project's environment, not the one
+    awino itself was launched from via `uv run --project <other>`."""
+
+    def test_env_prefers_the_project_venv_and_drops_the_inherited_one(self, tmp_path: Path) -> None:
+        import os
+
+        from smith.provision import project_env
+
+        project = _with_pyproject(tmp_path)
+        scripts = project / ".venv" / ("Scripts" if os.name == "nt" else "bin")
+        scripts.mkdir(parents=True)
+        inherited = {
+            "PATH": r"C:\other\.venv\Scripts;C:\Windows",
+            "VIRTUAL_ENV": r"C:\other\.venv",
+            "HOME": "x",
+        }
+        env = project_env(project, base=inherited)
+        assert env["VIRTUAL_ENV"] == str(project / ".venv")
+        assert env["PATH"].split(os.pathsep)[0] == str(scripts)
+        assert r"C:\other\.venv\Scripts" not in env["PATH"]
+        assert env["HOME"] == "x"
+
+    def test_env_without_a_project_venv_still_scrubs_the_inherited_one(
+        self, tmp_path: Path
+    ) -> None:
+
+        from smith.provision import project_env
+
+        project = _bare(tmp_path)
+        inherited = {"PATH": r"C:\other\.venv\Scripts;C:\Windows", "VIRTUAL_ENV": r"C:\other\.venv"}
+        env = project_env(project, base=inherited)
+        assert "VIRTUAL_ENV" not in env
+        assert r"C:\other\.venv\Scripts" not in env["PATH"]
+        assert "C:\\Windows" in env["PATH"]

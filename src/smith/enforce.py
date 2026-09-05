@@ -682,6 +682,17 @@ class Ledger:
             )
         attempt = len(prior) + 1
 
+        # Run in the target project's environment, never the one awino was
+        # launched from. `uv run --project <awino> awino gate record` inherits
+        # awino's venv; without this, labthing's lint gate ran awino's ruff
+        # against labthing's code and failed three times for the wrong reason.
+        env = None
+        if cwd is not None:
+            from smith.provision import ensure_project_venv, project_env
+
+            ensure_project_venv(Path(cwd))
+            env = project_env(Path(cwd))
+
         started = time.monotonic()
         completed = subprocess.run(
             command,
@@ -691,6 +702,7 @@ class Ledger:
             encoding="utf-8",
             errors="replace",
             cwd=str(cwd) if cwd else None,
+            env=env,
         )
         duration_ms = int((time.monotonic() - started) * 1000)
         output = (completed.stdout or "") + (completed.stderr or "")

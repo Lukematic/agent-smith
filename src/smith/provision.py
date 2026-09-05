@@ -217,3 +217,44 @@ def apply_steps(
         else:
             actions.append(Action(step.kind, "RAN", step.command))
     return actions
+
+
+def project_env(project: Path, *, base: dict[str, str] | None = None) -> dict[str, str]:
+    """The environment a gate command must run in: the target project's own.
+
+    `uv run --project <awino> awino gate record ...` launches awino inside
+    awino's venv, and a child process inherits that - so `ruff`/`pytest`/`python`
+    resolve to A.W.I.N.O.'s interpreter while cwd is someone else's project. Three
+    strikes were the ledger faithfully recording the wrong interpreter three times.
+
+    This scrubs every inherited venv from PATH and VIRTUAL_ENV, then puts the
+    project's `.venv` first when it exists. Pure: reads the filesystem, never
+    creates anything (provision.plan/apply own creation, with consent).
+    """
+    import os
+
+    env = dict(os.environ if base is None else base)
+    inherited = env.pop("VIRTUAL_ENV", None)
+    parts = [p for p in env.get("PATH", "").split(os.pathsep) if p]
+    if inherited:
+        parts = [p for p in parts if not p.lower().startswith(inherited.lower())]
+    parts = [p for p in parts if ".venv" not in p.lower()]
+    venv = project / ".venv"
+    scripts = venv / ("Scripts" if os.name == "nt" else "bin")
+    if scripts.is_dir():
+        env["VIRTUAL_ENV"] = str(venv)
+        parts.insert(0, str(scripts))
+    env["PATH"] = os.pathsep.join(parts)
+    return env
+
+
+def ensure_project_venv(project: Path, *, run: Run = _default_run) -> str | None:
+    """Create the project's `.venv` when its pyproject declares one and none
+    exists. This is A.W.I.N.O.'s call, not a human's (same rule as plan()):
+    a declared environment that is missing is repaired, and the repair is
+    printed by the caller. Returns the action taken, or None when nothing was
+    needed. Never touches a project with no pyproject - that is a question."""
+    if (project / ".venv").is_dir() or not (project / "pyproject.toml").is_file():
+        return None
+    code, output = run("uv sync", project)
+    return "CREATED  .venv (uv sync)" if code == 0 else f"FAILED  uv sync: {output}"

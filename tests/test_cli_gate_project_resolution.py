@@ -66,6 +66,9 @@ def toy_project(tmp_path: Path) -> Path:
     project.mkdir()
     (project / "pyproject.toml").write_text(
         '[project]\nname = "toy"\nversion = "0.1.0"\nrequires-python = ">=3.12"\n'
+        # A project that runs its tests with pytest declares pytest. Gate commands
+        # now run in the toy project's own venv, not awino's, so this is required.
+        'dependencies = ["pytest"]\n'
         "[tool.pytest.ini_options]\n[tool.ruff]\n",
         encoding="utf-8",
     )
@@ -105,6 +108,7 @@ class TestGateRecordUsesTargetProject:
         project.mkdir()
         (project / "pyproject.toml").write_text(
             '[project]\nname = "broken"\nversion = "0.1.0"\nrequires-python = ">=3.12"\n'
+            'dependencies = ["pytest"]\n'
             "[tool.pytest.ini_options]\n",
             encoding="utf-8",
         )
