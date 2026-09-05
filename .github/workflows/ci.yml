@@ -77,8 +77,12 @@ jobs:
               tree = ET.parse(f)
               for tc in tree.findall('.//testcase'):
                   for fail in tc.findall('failure') + tc.findall('error'):
-                      print('=== FAILED:', tc.get('classname'), tc.get('name'), '===')
-                      print(fail.text)
+                      cname = tc.get('classname', '')
+                      mname = tc.get('name', '')
+                      text = (fail.text or '').strip()
+                      first_line = text.splitlines()[0] if text else 'test failed'
+                      print(f'::error title={cname}.{mname}::{first_line}')
+                      print(f'=== FAILED: {cname}.{mname} ===\n{text}\n')
           "
 
       - name: Validate authored artifacts
