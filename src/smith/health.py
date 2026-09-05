@@ -628,3 +628,49 @@ def as_json(results: list[Result]) -> str:
         },
         indent=2,
     )
+
+
+MAX_COMMITS_PAST_TAG = 15
+
+
+def check_release_drift(paths: SmithPaths) -> Result:
+    """Warn when HEAD is far past the last release tag.
+
+    The plugin path installs what the marketplace published, not what is on
+    main. A week of the biggest changes shipped under an unchanged 0.6.5 and
+    every `awino update` truthfully said "already latest". Version strings do
+    not drift visibly; commit distance from the last tag does.
+    """
+    import subprocess
+
+    def _git(*args: str) -> str | None:
+        completed = subprocess.run(
+            ["git", *args],
+            cwd=paths.root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+        return completed.stdout.strip() if completed.returncode == 0 else None
+
+    tag = _git("describe", "--tags", "--abbrev=0")
+    if tag is None:
+        return _warn(
+            "release_drift",
+            "no release tag exists; nothing marks a release boundary",
+            remedy="git tag v<version> && git push --tags",
+        )
+    count = _git("rev-list", "--count", f"{tag}..HEAD")
+    if count is None:
+        return _ok("release_drift", f"last tag {tag}")
+    if int(count) > MAX_COMMITS_PAST_TAG:
+        return _warn(
+            "release_drift",
+            f"{count} commits past {tag}; plugin users are running {tag}",
+            remedy="bump version, tag, push --tags",
+        )
+    return _ok("release_drift", f"{count} commit(s) past {tag}")
+
+
+FAST_CHECKS = (*FAST_CHECKS, check_release_drift)

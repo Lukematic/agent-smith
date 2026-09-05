@@ -1,6 +1,6 @@
 [project]
 name = "awino-harness"
-version = "0.6.5"
+version = "0.7.0"
 description = "A.W.I.N.O. agentic workflow orchestrator with a just-in-time knowledge registry and gate ledger"
 readme = "README.md"
 requires-python = ">=3.12"
