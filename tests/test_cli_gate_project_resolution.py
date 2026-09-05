@@ -69,7 +69,7 @@ def toy_project(tmp_path: Path) -> Path:
         '[project]\nname = "toy"\nversion = "0.1.0"\nrequires-python = ">=3.12"\n'
         # A project that runs its tests with pytest declares pytest. Gate commands
         # now run in the toy project's own venv, not awino's, so this is required.
-        'dependencies = ["pytest"]\n'
+        'dependencies = ["pytest", "ruff"]\n'
         "[tool.pytest.ini_options]\n[tool.ruff]\n",
         encoding="utf-8",
     )
