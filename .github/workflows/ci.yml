@@ -68,6 +68,19 @@ jobs:
           name: test-results-${{ matrix.os }}-py${{ matrix.python }}
           path: test-results-${{ matrix.os }}-py${{ matrix.python }}.xml
 
+      - name: Print test failures
+        if: always()
+        run: |
+          uv run python -c "
+          import glob, xml.etree.ElementTree as ET
+          for f in glob.glob('test-results-*.xml'):
+              tree = ET.parse(f)
+              for tc in tree.findall('.//testcase'):
+                  for fail in tc.findall('failure') + tc.findall('error'):
+                      print('=== FAILED:', tc.get('classname'), tc.get('name'), '===')
+                      print(fail.text)
+          "
+
       - name: Validate authored artifacts
         run: uv run awino validate skills agents emitted
 
