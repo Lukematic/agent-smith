@@ -42,7 +42,7 @@ class ProbeResult:
 def _fixture(root: Path) -> None:
     (root / ".git").mkdir(parents=True)
     (root / "pyproject.toml").write_text(
-        "[project]\nname='examfixture'\nversion='0.1'\n"
+        "[project]\nname='examfixture'\nversion='0.1'\ndependencies=['pytest']\n"
         "[tool.pytest.ini_options]\ntestpaths=['tests']\n",
         encoding="utf-8",
     )

@@ -26,7 +26,7 @@ def ctx(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> stepper.StepContext:
     project = tmp_path / "proj"
     (project / ".git").mkdir(parents=True)
     (project / "pyproject.toml").write_text(
-        "[project]\nname='p'\nversion='0.1'\n[tool.pytest.ini_options]\ntestpaths=['tests']\n",
+        "[project]\nname='p'\nversion='0.1'\ndependencies=['pytest']\n[tool.pytest.ini_options]\ntestpaths=['tests']\n",
         encoding="utf-8",
     )
     state = project / ".smith"

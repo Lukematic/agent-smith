@@ -74,6 +74,7 @@ def _toy_project(tmp_path: Path, name: str = "toy-project") -> Path:
     project.mkdir()
     (project / "pyproject.toml").write_text(
         '[project]\nname = "toy"\nversion = "0.1.0"\nrequires-python = ">=3.12"\n'
+        'dependencies = ["pytest"]\n'
         "[tool.pytest.ini_options]\n[tool.ruff]\n",
         encoding="utf-8",
     )
