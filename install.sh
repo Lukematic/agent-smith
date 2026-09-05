@@ -177,7 +177,7 @@ uv run awino doctor --fast 2>&1 | sed 's/^/  /' || DOCTOR_FAILED=1
 
 step "Running the test suite"
 TESTS_FAILED=0
-uv run pytest -q 2>&1 | tail -2 | sed 's/^/  /' || TESTS_FAILED=1
+uv run pytest -q || TESTS_FAILED=1
 
 echo
 if [ "$DOCTOR_FAILED" -ne 0 ] || [ "$TESTS_FAILED" -ne 0 ]; then

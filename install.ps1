@@ -213,7 +213,7 @@ $doctor | ForEach-Object { Write-Host "  $_" }
 $doctorFailed = $LASTEXITCODE -ne 0
 
 Write-Step "Running the test suite"
-uv run pytest -q 2>&1 | Select-Object -Last 2 | ForEach-Object { Write-Host "  $_" }
+uv run pytest -q
 $testsFailed = $LASTEXITCODE -ne 0
 
 Pop-Location

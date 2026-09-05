@@ -59,7 +59,7 @@ jobs:
         # Keep the complete output as an artifact. Public check annotations only
         # say "exit code 1"; without the report, a failure cannot be diagnosed
         # from the GitHub UI when job logs require authentication.
-        run: uv run pytest -q --junitxml=test-results-${{ matrix.os }}-py${{ matrix.python }}.xml
+        run: uv run pytest -ra --tb=short --junitxml=test-results-${{ matrix.os }}-py${{ matrix.python }}.xml
 
       - name: Upload test evidence
         if: always()
