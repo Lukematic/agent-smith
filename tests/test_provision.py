@@ -216,26 +216,34 @@ class TestProjectEnv:
         project = _with_pyproject(tmp_path)
         scripts = project / ".venv" / ("Scripts" if os.name == "nt" else "bin")
         scripts.mkdir(parents=True)
+        system_dir = r"C:\Windows" if os.name == "nt" else "/usr/bin"
+        other_venv = r"C:\other\.venv\Scripts" if os.name == "nt" else "/other/.venv/bin"
         inherited = {
-            "PATH": r"C:\other\.venv\Scripts;C:\Windows",
-            "VIRTUAL_ENV": r"C:\other\.venv",
+            "PATH": os.pathsep.join([other_venv, system_dir]),
+            "VIRTUAL_ENV": r"C:\other\.venv" if os.name == "nt" else "/other/.venv",
             "HOME": "x",
         }
         env = project_env(project, base=inherited)
         assert env["VIRTUAL_ENV"] == str(project / ".venv")
         assert env["PATH"].split(os.pathsep)[0] == str(scripts)
-        assert r"C:\other\.venv\Scripts" not in env["PATH"]
+        assert other_venv not in env["PATH"]
         assert env["HOME"] == "x"
 
     def test_env_without_a_project_venv_still_scrubs_the_inherited_one(
         self, tmp_path: Path
     ) -> None:
+        import os
 
         from smith.provision import project_env
 
         project = _bare(tmp_path)
-        inherited = {"PATH": r"C:\other\.venv\Scripts;C:\Windows", "VIRTUAL_ENV": r"C:\other\.venv"}
+        system_dir = r"C:\Windows" if os.name == "nt" else "/usr/bin"
+        other_venv = r"C:\other\.venv\Scripts" if os.name == "nt" else "/other/.venv/bin"
+        inherited = {
+            "PATH": os.pathsep.join([other_venv, system_dir]),
+            "VIRTUAL_ENV": r"C:\other\.venv" if os.name == "nt" else "/other/.venv",
+        }
         env = project_env(project, base=inherited)
         assert "VIRTUAL_ENV" not in env
-        assert r"C:\other\.venv\Scripts" not in env["PATH"]
-        assert "C:\\Windows" in env["PATH"]
+        assert other_venv not in env["PATH"]
+        assert system_dir in env["PATH"]
