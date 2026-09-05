@@ -6,6 +6,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).parents[1]
 CANONICAL_SKILLS = {
     "awino-author-agent",
@@ -103,8 +105,8 @@ def test_awino_agent_inherits_the_users_selected_model() -> None:
 
 def test_plugin_default_agent_keeps_ask_user_question() -> None:
     """The scoped plugin agent must not resolve to a shadowing user agent."""
-    # Claude prints the init event before authentication, so this remains a
-    # deterministic tool-resolution test in CI without credentials.
+    if shutil.which("claude") is None:
+        pytest.skip("claude CLI not installed")
     settings = json.dumps(load_json("settings.json"), separators=(",", ":"))
     result = subprocess.run(
         [
@@ -163,7 +165,16 @@ def test_plugin_registers_project_memory_and_guard_hooks() -> None:
 
 def test_missing_uv_launcher_is_truthfully_degraded(tmp_path: Path) -> None:
     env = os.environ.copy()
-    env["PATH"] = str(tmp_path)
+    uv_bin = shutil.which("uv")
+    if uv_bin:
+        uv_dir = str(Path(uv_bin).parent)
+        env["PATH"] = os.pathsep.join(
+            p
+            for p in env.get("PATH", "").split(os.pathsep)
+            if p != uv_dir and ".local" not in p and "cargo" not in p
+        )
+    else:
+        env["PATH"] = str(tmp_path)
     if os.name == "nt":
         command = [
             "C:\\Windows\\System32\\cmd.exe",
@@ -326,6 +337,8 @@ def test_launcher_isolates_backend_environment_and_keeps_target_project(tmp_path
 
 
 def test_claude_cli_strictly_validates_plugin_and_marketplace() -> None:
+    if shutil.which("claude") is None:
+        pytest.skip("claude CLI not installed")
     result = subprocess.run(
         ["claude", "plugin", "validate", ".", "--strict"],
         cwd=ROOT,

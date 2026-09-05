@@ -67,7 +67,12 @@ def backup(path: Path) -> Path:
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
     destination = path.parent / ".awino-backups" / timestamp / path.name
     destination.parent.mkdir(parents=True, exist_ok=True)
-    if path.is_dir() and not path.is_symlink():
+    if path.is_symlink():
+        try:
+            destination.symlink_to(path.readlink())
+        except OSError:
+            shutil.copy2(path, destination, follow_symlinks=False)
+    elif path.is_dir():
         shutil.copytree(path, destination)
     else:
         shutil.copy2(path, destination)
