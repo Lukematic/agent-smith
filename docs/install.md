@@ -83,14 +83,39 @@ Which does:
 | --- | --- | --- |
 | 1 | install `uv` if absent | `uv --version` |
 | 2 | build `.venv` from the lockfile | `uv sync --frozen` |
-| 3 | regenerate derived files | `awino fix` |
-| 4 | install persona and skills per harness | `awino install-status` |
-| 5 | run every project gate | `awino doctor` |
-| 6 | run the test suite | `pytest` |
+| 3 | install the `awino` command wrapper (`~/.local/bin/awino.ps1` on Windows) | `awino start` from any directory |
+| 4 | regenerate derived files | `awino fix` |
+| 5 | install persona and skills per harness | `awino install-status` |
+| 6 | run every project gate | `awino doctor` |
+| 7 | run the test suite | `pytest` |
 
-If step 5 or 6 fails, installation reports `INSTALL INCOMPLETE` and tells you the
+If step 6 or 7 fails, installation reports `INSTALL INCOMPLETE` and tells you the
 remedy. That is intentional: a green install claim with a red gate underneath is
 the exact failure this whole tool exists to prevent.
+
+### The installed `awino` command
+
+On Windows, the installer writes a small wrapper at `~/.local/bin/awino.ps1` that
+forwards to this clone's `bin/awino.ps1` launcher. It captures the caller's
+directory as the target project and runs commands inside the clone's own locked
+`.venv`; it never creates a Python environment inside the project you are working
+on. If `~/.local/bin` is not yet on `PATH`, the installer reports the exact path and
+you can call the wrapper directly (`~/.local/bin/awino.ps1 start`) until you add it,
+or open a new terminal after adding it. POSIX shells use `bin/awino` the same way;
+Claude Code uses the same launchers directly from the plugin's `bin/` directory.
+
+After installation, the only commands to remember are:
+
+```bash
+awino start          # version, cached freshness vs origin/main, health, project, run, stance
+awino start --fix    # also repair installer-owned harness integration (e.g. Kilo's default agent)
+awino best           # start, then resume the persisted workflow to its next human boundary
+awino update         # the only command that fetches/pulls, then re-syncs and repairs integrations
+```
+
+`awino start` never fetches or pulls; it only reports cached upstream divergence
+(`ahead=N behind=M`) so an update decision stays a human's, not a side effect of
+starting a session.
 
 ---
 
@@ -130,7 +155,7 @@ In short: Python executes code; `venv` isolates packages; `pip` installs package
 ~/.claude/skills/awino-*/        skills, junctioned to the clone
 ~/.agents/agents/awino.md  persona, if Goose is present
 ~/.agents/plugins/awino/   the whole plugin, linked
-~/.config/kilo/agents/awino.md  Kilo primary persona
+~/.config/kilo/agent/awino.md  Kilo primary persona
 ~/.config/kilo/skills/awino-*/        Kilo skills, linked
 <VS Code prompts>/awino.chatmode.md  GitHub Copilot chat mode
 ~/.roo/skills/awino-*/                 Roo skills, linked (agent selection via .roomodes / install-mode, not a persona file here)

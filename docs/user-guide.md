@@ -113,6 +113,13 @@ cd awino
 On Windows, run `./install.ps1` in PowerShell. To skip optional tooling, use
 `./install.sh --no-tools` or `./install.ps1 -NoTools`.
 
+The installer also writes `~/.local/bin/awino.ps1` (POSIX: `~/.local/bin/awino`
+or your existing shell `PATH` entry from `bin/awino`), a small wrapper that
+forwards to this clone's own launcher. After this, run `awino start`, `awino
+best`, and `awino update` from **any** project directory - the wrapper always
+uses this clone's locked `.venv` and treats your current directory as the
+target project. It never creates a Python environment in that project.
+
 Verify the persona, skills, modes, and project health:
 
 ```bash
@@ -131,6 +138,10 @@ awino install-mode --editor kilo
 Reload the editor window after installing modes.
 
 ## Safe updates and rollback
+
+`awino start` reports cached freshness against the upstream branch
+(`ahead=N behind=M`) using only local Git metadata; it never fetches or pulls on
+its own, so starting a session cannot change the code underneath an active run.
 
 To update A.W.I.N.O. itself, say "update A.W.I.N.O." or run:
 
