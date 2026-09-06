@@ -136,6 +136,10 @@ def install_command(
     if failed:
         raise typer.Exit(1)
 
+    if scope_wanted == "project" and (which is None or which == "kilo"):
+        for action in harness.repair_kilo_project(smith_home, workspace.project.root):
+            _echo(f"  {action.outcome:<10} {action.path.name}  {action.detail}")
+
     _echo("")
     _echo("Verify with:  awino install-status")
     _echo("Then ask your agent:  what is a harness?")

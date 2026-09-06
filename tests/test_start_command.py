@@ -98,3 +98,11 @@ class TestFixPerformsOnlyMechanicalRepairs:
         assert result.returncode in (0, 1)
         for label in _CONTRACT_LABELS:
             assert label in result.stdout
+
+    def test_start_fix_does_not_offer_to_initialize_outer_python_project(
+        self, tmp_path: Path
+    ) -> None:
+        project = _init_project(tmp_path)
+        result = _run_cli(["start", "--fix"], cwd=project)
+        assert "uv init" not in result.stdout
+        assert not (project / "pyproject.toml").exists()

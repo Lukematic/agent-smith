@@ -29,6 +29,7 @@ changes mid-session.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 from dataclasses import dataclass
@@ -89,7 +90,11 @@ class Harness(StrEnum):
         return {
             Harness.CLAUDE: "agents",
             Harness.AGENTS: "agents",
-            Harness.KILO: "agents",
+            # Kilo scans both `agent/` and the legacy plural directory, but
+            # `agent/` is the documented canonical project location. Keeping
+            # install/status on this same path prevents a repaired project
+            # default from being reported as absent on the next startup.
+            Harness.KILO: "agent",
             Harness.CURSOR: "rules",
             Harness.COPILOT: "",
             Harness.ROO: "",
@@ -176,6 +181,74 @@ class Action:
     @property
     def failed(self) -> bool:
         return self.outcome == "FAILED"
+
+
+def kilo_project_drift(smith_home: Path, project: Path) -> list[str]:
+    """Return project-Kilo integration gaps without modifying user config."""
+    root = Harness.KILO.project_root(project)
+    config = root / "kilo.json"
+    persona = root / "agent" / "awino.md"
+    problems: list[str] = []
+    if not config.is_file():
+        problems.append("missing .kilo/kilo.json")
+    else:
+        try:
+            payload = json.loads(config.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            problems.append("invalid .kilo/kilo.json")
+        else:
+            if payload.get("default_agent") != "awino":
+                problems.append(".kilo/kilo.json default_agent is not awino")
+    expected = _persona_for(Harness.KILO, smith_home / "agents" / "awino.md")
+    if not persona.is_file():
+        problems.append("missing .kilo/agent/awino.md")
+    elif persona.read_text(encoding="utf-8") != expected:
+        problems.append("stale .kilo/agent/awino.md")
+    return problems
+
+
+def repair_kilo_project(smith_home: Path, project: Path) -> list[Action]:
+    """Repair only A.W.I.N.O.'s Kilo defaults, preserving unrelated settings."""
+    root = Harness.KILO.project_root(project)
+    source = smith_home / "agents" / "awino.md"
+    if not source.is_file():
+        return [
+            Action(
+                "kilo/project",
+                source,
+                "SKIPPED",
+                "A.W.I.N.O. source persona is unavailable in this installation",
+            )
+        ]
+    config = root / "kilo.json"
+    payload: dict[str, object] = {}
+    if config.is_file():
+        try:
+            loaded = json.loads(config.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            loaded = None
+        if isinstance(loaded, dict):
+            payload = loaded
+    payload.setdefault("$schema", "https://app.kilo.ai/config.json")
+    payload["default_agent"] = "awino"
+    config_text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    config_result = ownership.safe_write(root, config, config_text, "kilo-config", overwrite=True)
+    persona = root / "agent" / "awino.md"
+    persona_text = _persona_for(Harness.KILO, source)
+    persona_result = ownership.safe_write(root, persona, persona_text, "persona", overwrite=True)
+    actions = [
+        Action("kilo/project", config, *config_result),
+        Action("kilo/project", persona, *persona_result),
+    ]
+    legacy_persona = root / "agents" / "awino.md"
+    if legacy_persona.exists() and ownership.unchanged(root, legacy_persona):
+        legacy_persona.unlink()
+        actions.append(Action("kilo/project", legacy_persona, "REMOVED", "legacy managed persona"))
+    elif legacy_persona.exists():
+        actions.append(
+            Action("kilo/project", legacy_persona, "SKIPPED", "legacy persona is human-modified")
+        )
+    return actions
 
 
 def discover(project: Path) -> list[Target]:
@@ -366,7 +439,27 @@ def _persona_for(harness: Harness, source: Path) -> str:
         if model:
             header.append(f"model: {model}")
         header.append("---")
-        return "\n".join(header) + "\n\n" + body
+        kilo_startup = """## Kilo startup contract
+
+At the first turn of every new chat, run the installed A.W.I.N.O. command in
+this order:
+
+```powershell
+awino start
+awino best
+```
+
+If health refuses, report and repair the refusal before substantive work. `best`
+resumes persisted A.W.I.N.O. state until the next genuine human boundary. The
+installer's command wrapper locates the installed source clone and treats the
+current workspace as the target project, so do not require a source clone in
+every project. If `awino` is unavailable, say the installation is missing and
+give the explicit install command; do not create project state without approval.
+Kilo configuration can select this agent for new chats but cannot switch an
+already open, human-selected session.
+
+"""
+        return "\n".join(header) + "\n\n" + kilo_startup + body
 
     if harness is Harness.CLAUDE:
         # Claude Code agents declare a tool list. A.W.I.N.O. needs to read, search,

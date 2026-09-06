@@ -187,6 +187,8 @@ def update_command() -> None:
         _echo(
             f"HARNESS  refreshed {refreshed_total} skill copy(ies) across {len(detected_targets)} detected target(s)"
         )
+    for action in harness.repair_kilo_project(workspace.home.root, workspace.project.root):
+        _echo(f"KILO  {action.outcome:<10} {action.path}  {action.detail}")
 
     health_results = health.run_all(_paths(), fast=True)
     failing_health = [r for r in health_results if r.blocking]

@@ -2,11 +2,24 @@
 
 ## Contents
 
-Cross-platform `awino` launchers for native plugin sessions.
+Cross-platform `awino` launchers for native plugin sessions and standalone clones.
 
 ## Usage
 
 Claude Code adds this directory to the Bash tool `PATH` while the plugin is enabled.
+
+For a standalone Windows clone, `install.ps1` creates the small user command
+wrapper `~/.local/bin/awino.ps1`, which forwards to this directory. After that:
+
+```powershell
+awino start
+awino best
+awino update
+```
+
+all use the clone's locked environment while treating the current directory as
+the target project. The wrapper does not copy the installation or create a
+target-project Python environment.
 
 ## Format
 

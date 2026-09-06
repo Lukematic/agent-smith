@@ -82,6 +82,26 @@ def update_preflight(source: Path, project: Path, harness_paths: list[Path]) -> 
     return backup
 
 
+def cached_freshness(source: Path) -> str:
+    """Describe source freshness using only already-local Git metadata.
+
+    Startup must never change the running code or incur a network dependency. This
+    intentionally does not call ``git fetch``; ``awino update`` is the explicit
+    operation that refreshes remote metadata and may fast-forward the clone.
+    """
+    inside = _git(source, "rev-parse", "--is-inside-work-tree")
+    if inside.returncode != 0 or inside.stdout.strip() != "true":
+        return "not a Git checkout; run the installed-package update procedure"
+    upstream = _git(source, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+    if upstream.returncode != 0:
+        return "no upstream configured; run awino update only after configuring one"
+    counts = _git(source, "rev-list", "--left-right", "--count", "HEAD...@{u}")
+    if counts.returncode != 0:
+        return "cached upstream comparison unavailable; run awino update --check"
+    ahead, behind = counts.stdout.split()
+    return f"cached upstream {upstream.stdout.strip()}: ahead={ahead} behind={behind}"
+
+
 def restore(backup: Path, project: Path, harness_paths: list[Path]) -> list[Path]:
     """Restore user-owned project and harness files from a preflight snapshot."""
     if not backup.is_dir():

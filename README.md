@@ -5,6 +5,51 @@ controller for agentic work. It establishes project intent, routes work to focus
 capabilities, records executed evidence, and refuses completion when required gates
 remain unsatisfied.
 
+## For agents: install from this URL
+
+If a human gives you `https://github.com/Lukematic/agent-smith`, run exactly this
+and nothing else first. It is idempotent and safe to re-run after a `git pull`.
+
+Windows (PowerShell):
+
+```powershell
+git clone https://github.com/Lukematic/agent-smith.git awino
+cd awino
+.\install.ps1
+```
+
+macOS / Linux:
+
+```bash
+git clone https://github.com/Lukematic/agent-smith.git awino
+cd awino
+./install.sh
+```
+
+The installer installs `uv` if missing, syncs this clone's locked `.venv`, installs
+the `awino` command (`~/.local/bin/awino.ps1` on Windows), installs the persona and
+skills into every detected harness (Claude Code, Kilo, Roo, Goose, Cursor,
+Copilot), and verifies with `awino doctor --fast` and the test suite. It creates no
+Python environment in the project you are working on.
+
+Then, from the human's project directory, the only commands to know are:
+
+```powershell
+awino start          # version, freshness vs origin/main, health, project, run, stance
+awino start --fix    # also repair installer-owned harness integration (e.g. .kilo/kilo.json)
+awino best           # start, then resume the persisted workflow to its next human boundary
+awino update         # the only command that pulls a newer version, then re-syncs and repairs
+```
+
+`awino start` prints `A.W.I.N.O. freshness: cached upstream origin/main: ahead=N behind=M`.
+If `behind` is not `0`, run `awino update`. `start` never pulls on its own.
+
+In Kilo, `awino start --fix` writes `.kilo/kilo.json` with `default_agent: awino` and
+`.kilo/agent/awino.md`, so every **new** chat in that project opens as A.W.I.N.O.,
+runs `awino start` then `awino best` itself, and replies with the header
+`[A.W.I.N.O. | mode | loop | run | knowledge | stance]`. An already-open chat keeps
+the agent it was opened with; open a new one.
+
 ## Start here
 
 - **One thing to remember (`awino best`):** [Quickstart](docs/quickstart.md)

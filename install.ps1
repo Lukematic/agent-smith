@@ -90,6 +90,25 @@ try {
     exit 1
 } 
 
+# ── 2b. stable PowerShell command ────────────────────────────────────────────
+# A clone-local `uv run awino` disappears the moment the user changes folders.
+# Install a tiny, explicit wrapper that always calls this clone's shipped
+# bin/awino.ps1. It is not another Python installation and never creates a venv
+# outside this clone.
+Write-Step "Installing the PowerShell awino command"
+$commandDir = Join-Path $HOME '.local\bin'
+$commandPath = Join-Path $commandDir 'awino.ps1'
+New-Item -ItemType Directory -Force -Path $commandDir | Out-Null
+$escapedLauncher = (Join-Path $awinoRoot 'bin\awino.ps1').Replace("'", "''")
+$wrapper = "& '$escapedLauncher' @args`nexit `$LASTEXITCODE`n"
+[System.IO.File]::WriteAllText($commandPath, $wrapper, [System.Text.UTF8Encoding]::new($false))
+Write-Ok "installed $commandPath"
+if (($env:PATH -split [IO.Path]::PathSeparator) -notcontains $commandDir) {
+    Write-Warn2 "$commandDir is not on PATH in this shell. Run '$commandPath start' now, then add it to PATH or open a new terminal."
+} else {
+    Write-Ok "run 'awino start' from any PowerShell directory"
+}
+
 # ── 3. just, installed automatically when a package manager is available ─────
 # `just` is convenience rather than a requirement, so a failed install is a warning
 # and never blocks. Every recipe also runs as `uv run awino ...`.

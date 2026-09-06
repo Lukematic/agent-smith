@@ -1213,6 +1213,19 @@ def start_command(
     workspace = _workspace()
     paths = _paths()
 
+    from smith import harness, updater
+
+    # The repository that A.W.I.N.O. serves need not be a Python project. Its
+    # installation at `<project>/.smith` already owns a declared, locked Python
+    # environment. Offering `uv init` for the outer project makes `start --fix`
+    # create the duplicate environment this command is specifically meant to
+    # avoid.
+    provision_steps = [
+        step
+        for step in provision.plan(workspace.project.root, workspace.state_root)
+        if step.kind is not provision.StepKind.INIT_PROJECT
+    ]
+
     project_line = str(workspace.project.root)
 
     try:
@@ -1284,13 +1297,17 @@ def start_command(
 
         for action in provision.apply_steps(
             workspace.project.root,
-            provision.plan(workspace.project.root, workspace.state_root),
+            provision_steps,
             ask=_ask,
         ):
             _echo(f"{action.outcome:<9} {action.kind.value}  {action.detail}")
+        for action in harness.repair_kilo_project(workspace.home.root, workspace.project.root):
+            _echo(f"{action.outcome:<9} {action.path}  {action.detail}")
     else:
-        for step in provision.plan(workspace.project.root, workspace.state_root):
+        for step in provision_steps:
             _echo(f"MISSING  {step.kind.value}: {step.reason} (run 'awino start --fix')")
+        for problem in harness.kilo_project_drift(workspace.home.root, workspace.project.root):
+            _echo(f"KILO_DRIFT  {problem} (run 'awino start --fix')")
 
     route_skill = "direct"
     try:
@@ -1311,6 +1328,7 @@ def start_command(
     _echo(f"Pending human decision: {pending_decision}")
     _echo(f"Next recommended action: {next_action}")
     _echo(f"Route skill: {route_skill}")
+    _echo(f"A.W.I.N.O. freshness: {updater.cached_freshness(workspace.home.root)}")
     objective_for_recall = (
         inspected.run.objective
         if inspected.status == "active" and inspected.run is not None
