@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "awino hook session-start"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/awino\" hook session-start"
           }
         ]
       }
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "awino hook prompt"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/awino\" hook prompt"
           }
         ]
       }
@@ -23,17 +23,20 @@
     "PreCompact": [
       {
         "hooks": [
-          { "type": "command", "command": "awino hook pre-compact" }
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/awino\" hook pre-compact"
+          }
         ]
       }
     ],
-  "PreToolUse": [
+    "PreToolUse": [
       {
         "matcher": "Bash|Edit|Write|MultiEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "awino hook pre-tool"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/awino\" hook pre-tool"
           }
         ]
       }

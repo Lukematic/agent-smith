@@ -163,6 +163,19 @@ def test_plugin_registers_project_memory_and_guard_hooks() -> None:
     assert hooks["PreToolUse"][0]["matcher"] == "Bash|Edit|Write|MultiEdit"
 
 
+def test_every_hook_uses_the_plugin_relative_launcher() -> None:
+    hooks = load_json("hooks/hooks.json")["hooks"]
+    commands = [
+        hook["command"] for groups in hooks.values() for group in groups for hook in group["hooks"]
+    ]
+
+    assert commands
+    assert all(
+        command.startswith('"${CLAUDE_PLUGIN_ROOT}/bin/awino" hook ') for command in commands
+    )
+    assert all(not command.startswith("awino ") for command in commands)
+
+
 def test_missing_uv_launcher_is_truthfully_degraded(tmp_path: Path) -> None:
     env = os.environ.copy()
     uv_bin = shutil.which("uv")
