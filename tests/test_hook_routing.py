@@ -17,6 +17,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from smith import onboarding
+
 SMITH_ROOT = Path(__file__).resolve().parents[1]
 AGENT_GUIDE = SMITH_ROOT / "docs" / "agent-guide.md"
 
@@ -76,6 +78,53 @@ class TestDocsBoundaryStatementSurvives:
     def test_agent_guide_still_states_the_kilo_roo_persona_dependency(self) -> None:
         text = " ".join(AGENT_GUIDE.read_text(encoding="utf-8").split())
         assert "Kilo and Roo do not load that hook" in text
+
+
+class TestSessionStartRequiresConfirmedProjectIntent:
+    def _session_start(self, project: Path) -> str:
+        result = subprocess.run(
+            [sys.executable, "-m", "smith.cli", "hook", "session-start"],
+            input=json.dumps({"session_id": "setup-test"}),
+            cwd=project,
+            env={**dict(os.environ), "PYTHONPATH": str(SMITH_ROOT / "src")},
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+            timeout=60,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        return result.stdout
+
+    def test_missing_project_yaml_injects_the_exact_next_onboarding_question(
+        self, tmp_path: Path
+    ) -> None:
+        out = self._session_start(_project(tmp_path))
+
+        assert "PROJECT_SETUP_REQUIRED" in out
+        assert "What outcome should this project create" in out
+        assert "awino onboard --set mission" in out
+        assert "Do not invent or silently confirm project goals" in out
+
+    def test_confirmed_project_yaml_injects_memory_not_setup_request(self, tmp_path: Path) -> None:
+        project = _project(tmp_path)
+        intent = onboarding.ProjectIntent(
+            mission="protect biosurveillance data",
+            primary_user="wildlife epidemiologists",
+            goals=["find PII before release"],
+            tenets=["never write to production"],
+            expectations=["trace every finding"],
+            success_metric="all flagged rows are reviewable",
+            source="confirmed",
+            confirmed_at="2026-09-09T00:00:00+00:00",
+        )
+        onboarding.save(project, intent)
+
+        out = self._session_start(project)
+
+        assert "A.W.I.N.O. project memory (human-confirmed)" in out
+        assert "protect biosurveillance data" in out
+        assert "PROJECT_SETUP_REQUIRED" not in out
 
 
 class TestSessionStartSurvivesCompaction:

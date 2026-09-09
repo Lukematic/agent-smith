@@ -23,6 +23,7 @@ from smith import (
     guard,
     harness,
     health,
+    mission,
     models,
     modes,
     onboarding,
@@ -524,6 +525,29 @@ def hook(event: str = typer.Argument("session-start", help="Hook event adapter")
         if intent and intent.source == "confirmed":
             session_state.start(workspace.state_root, session_id)
             _echo(project_guard.project_context(intent))
+        else:
+            found = mission.discover(project, tracker=seeds.Seeds(project))
+            draft = intent or onboarding.seed_from_mission(found)
+            questions = onboarding.frontier(draft)
+            lines = [
+                "PROJECT_SETUP_REQUIRED",
+                "This project has no human-confirmed .smith/project.yaml.",
+                "Before substantive work, run 'awino onboard', ask the human its next question,",
+                "and persist each answer with the exact 'awino onboard --set key=value' command.",
+                "Do not invent or silently confirm project goals.",
+            ]
+            if questions:
+                question = questions[0]
+                lines.extend(
+                    [
+                        f"NEXT QUESTION: {question.prompt}",
+                        f"WHY: {question.why}",
+                        f'RECORD WITH: awino onboard --set {question.key}="<human answer>"',
+                    ]
+                )
+            else:
+                lines.append("READY TO CONFIRM: awino onboard --confirm")
+            _echo(project_guard.emit(project_guard.prompt_context("\n".join(lines))))
         _hook_freshness()
         block = _resume_block(workspace, session_id)
         if block:
