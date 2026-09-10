@@ -5,50 +5,71 @@ controller for agentic work. It establishes project intent, routes work to focus
 capabilities, records executed evidence, and refuses completion when required gates
 remain unsatisfied.
 
-## For agents: install from this URL
+## For agents: when given this repository URL in a new project or session
 
-If a human gives you `https://github.com/Lukematic/agent-smith`, run exactly this
-and nothing else first. It is idempotent and safe to re-run after a `git pull`.
+If a human pastes `https://github.com/Lukematic/agent-smith` into your chat or project, follow this 4-step checklist:
 
-Windows (PowerShell):
+### Step 1: Check and update the global A.W.I.N.O. engine
+
+Run `awino --version` (or check if `~/.local/bin/awino.ps1` exists on Windows).
+
+- **If already installed:** Check if the installation is stale or behind upstream:
+  ```powershell
+  awino start          # reports 'A.W.I.N.O. freshness: ahead=N behind=M'
+  ```
+  If `behind > 0`, run `awino update`. **Safe rebase contract:** `awino update` snapshots and preserves your target project's `.smith/project.yaml`, `.smith/memory/`, `.seeds`, and ledger history—it updates the engine and knowledge base without overwriting project intent.
+- **If NOT installed on this machine:** Clone it once into a central directory (e.g. `~/.local/share/awino` or user tools directory, **never** inside the human's target project directory), and run the installer:
+
+  Windows (PowerShell):
+  ```powershell
+  git clone https://github.com/Lukematic/agent-smith.git "$HOME\.local\share\awino"
+  cd "$HOME\.local\share\awino"
+  .\install.ps1
+  ```
+
+  macOS / Linux:
+  ```bash
+  git clone https://github.com/Lukematic/agent-smith.git "$HOME/.local/share/awino"
+  cd "$HOME/.local/share/awino"
+  ./install.sh
+  ```
+
+The installer installs `uv` if missing, builds the locked `.venv` in the clone, installs the global `awino` command (`~/.local/bin/awino.ps1` on Windows / `bin/awino` on POSIX), installs the persona and skills into every detected harness (Claude Code, Kilo, Roo, Goose, Cursor, Copilot), and verifies with `awino doctor --fast`. It creates no Python environment in the target project.
+
+### Step 2: Set up or repair harness integration in the project
+
+In the **human's target project directory**:
 
 ```powershell
-git clone https://github.com/Lukematic/agent-smith.git awino
-cd awino
-.\install.ps1
+awino start --fix    # verifies health, checks upstream freshness, writes .kilo/kilo.json and .kilo/agent/awino.md
 ```
 
-macOS / Linux:
+In Kilo, `awino start --fix` writes `.kilo/kilo.json` with `default_agent: awino` and `.kilo/agent/awino.md`, so every **new** chat in that project opens as A.W.I.N.O., runs `awino start` then `awino best` itself, and replies with the header `[A.W.I.N.O. | mode | loop | run | knowledge | stance]`. An already-open chat keeps the agent it was opened with; open a new one.
 
-```bash
-git clone https://github.com/Lukematic/agent-smith.git awino
-cd awino
-./install.sh
-```
+### Step 3: Scaffold environment & confirm project intent
 
-The installer installs `uv` if missing, syncs this clone's locked `.venv`, installs
-the `awino` command (`~/.local/bin/awino.ps1` on Windows), installs the persona and
-skills into every detected harness (Claude Code, Kilo, Roo, Goose, Cursor,
-Copilot), and verifies with `awino doctor --fast` and the test suite. It creates no
-Python environment in the project you are working on.
+Inspect and configure what the project needs (environment, virtual environment, toolchain runner, tracker, and mission):
 
-Then, from the human's project directory, the only commands to know are:
+1. **Environment & Toolchain Setup:**
+   ```powershell
+   awino project-bootstrap    # inspects pyproject.toml, .venv, uv/poetry, justfile/Makefile, and tracker state
+   ```
+   If dependencies, virtualenv, or task runners are missing, confirm setup with `awino project-bootstrap --environment <choice> --tracker <choice> --runner <choice> --confirm`.
+
+2. **Mission & Goals Onboarding:**
+   If the project does not yet have a confirmed `.smith/project.yaml`, run:
+   ```powershell
+   awino onboard
+   ```
+   Answer the frontier questions (primary user, mission, goals, binding tenets) with `awino onboard --set key=value`, then confirm with `awino onboard --confirm`. Do not manually improvise a private scaffold.
+
+### Step 4: Execute or resume work
 
 ```powershell
-awino start          # version, freshness vs origin/main, health, project, run, stance
-awino start --fix    # also repair installer-owned harness integration (e.g. .kilo/kilo.json)
-awino best           # start, then resume the persisted workflow to its next human boundary
-awino update         # the only command that pulls a newer version, then re-syncs and repairs
+awino best "<the user's task request in their own words>"
 ```
 
-`awino start` prints `A.W.I.N.O. freshness: cached upstream origin/main: ahead=N behind=M`.
-If `behind` is not `0`, run `awino update`. `start` never pulls on its own.
-
-In Kilo, `awino start --fix` writes `.kilo/kilo.json` with `default_agent: awino` and
-`.kilo/agent/awino.md`, so every **new** chat in that project opens as A.W.I.N.O.,
-runs `awino start` then `awino best` itself, and replies with the header
-`[A.W.I.N.O. | mode | loop | run | knowledge | stance]`. An already-open chat keeps
-the agent it was opened with; open a new one.
+`awino best` routes to the right skill, checks health, tracks the run in the ledger, and refuses completion until all required verification gates pass.
 
 ## Start here
 
