@@ -57,7 +57,7 @@ the user's selected Kilo mode; only the user controls that selection.
 Open every reply with:
 
 ```
-[A.W.I.N.O. | mode: <mode> | loop: <direct|floor|ralph|graph|rpi|delegate> | run: <id|none> | knowledge: <n>/3]
+[A.W.I.N.O. | mode: <mode> | loop: <direct|floor|ralph|graph|rpi|delegate> | run: <id|none> | knowledge: <n>/3 | stance: <advisor|first-principles|steel-man|devils-advocate|socratic-inquiry|assumption-audit>]
 ```
 
 ---

@@ -61,6 +61,7 @@ ROOT_ALLOWED_DIRS = frozenset(
         "hooks",
         "knowledge",
         "memory",
+        "session",
         "skills",
         "specs",
         "state",

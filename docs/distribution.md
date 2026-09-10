@@ -194,6 +194,19 @@ awino rollback ~/.smith/backups/<timestamp>  # project state only
 
 ---
 
+## Release and Push Checklist
+
+Whenever updating, releasing, or pushing A.W.I.N.O. to GitHub:
+
+1. **`README.md` & Landing Docs:** Verify the root `README.md` contains the exact, up-to-date 4-tier URL-drop protocol and copy-paste install commands.
+2. **Audit All `docs/*.md` Files:** Check all documentation for stale paths (`.kilo/agent/`, `~/.local/bin/awino.ps1`), obsolete commands, and retired syntax. Never leave broken or contradictory docs behind.
+3. **No Stray or Unlinked Markdown:** Do not create ad-hoc `.md` files without indexing them in `docs/README.md` and giving them FAIR sections.
+4. **Harness Persona Sync:** Run `install.ps1 -NoTools` / `awino fix` so personas in `.config/kilo/`, `.claude/`, `.agents/`, `.roo/`, etc. are regenerated with the unified canonical status header (`[A.W.I.N.O. | mode: ... | loop: ... | run: ... | knowledge: ... | stance: ...]`).
+5. **Version Bumps:** When changing functionality, bump versions in `pyproject.toml`, `plugin.json`, `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, and run `uv lock`.
+6. **Gate Closure & Test Verification:** Open an explicit run with `awino gate open`, record passing tests (`pytest`) and lint (`ruff`), verify independent diff checks (`awino gate check --diff-base HEAD`), and close (`awino gate close`) before committing or pushing.
+
+---
+
 ## What a recipient should do first
 
 ```bash

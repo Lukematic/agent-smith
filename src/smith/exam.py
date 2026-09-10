@@ -41,11 +41,13 @@ class ProbeResult:
 
 def _fixture(root: Path) -> None:
     (root / ".git").mkdir(parents=True)
+    (root / "README.md").write_text("# Exam Fixture\n", encoding="utf-8")
     (root / "pyproject.toml").write_text(
         "[project]\nname='examfixture'\nversion='0.1'\ndependencies=['pytest']\n"
         "[tool.pytest.ini_options]\ntestpaths=['tests']\n",
         encoding="utf-8",
     )
+    (root / "src").mkdir()
     (root / "tests").mkdir()
     (root / "tests" / "test_a.py").write_text(
         "def test_a():\n    assert 1 == 2\n", encoding="utf-8"

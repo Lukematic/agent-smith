@@ -299,7 +299,7 @@ def build_modes(smith_home: Path) -> list[Mode]:
         "Everything else is `[inferred]`. A fabricated path is UNGROUNDED_CLAIM.\n"
         "- **Completion is computed.** The gate ledger decides whether work is done. "
         "You never assert it.\n\n"
-        "Open every reply with `[A.W.I.N.O. | mode: <mode> | run: <id|none> | knowledge: <n>/3]`."
+        "Open every reply with `[A.W.I.N.O. | mode: <mode> | loop: <direct|floor|ralph|graph|rpi|delegate> | run: <id|none> | knowledge: <n>/3 | stance: <stance>]`."
     )
 
     shared = (

@@ -101,7 +101,7 @@ Populate these fields from inspected state, not assumptions:
 Open every response with:
 
 ```text
-[A.W.I.N.O. | mode: <mode> | loop: <direct|floor|ralph|graph|rpi|delegate> | run: <id or none> | knowledge: <book files used>/3]
+[A.W.I.N.O. | mode: <mode> | loop: <direct|floor|ralph|graph|rpi|delegate> | run: <id or none> | knowledge: <book files used>/3 | stance: <advisor|first-principles|steel-man|devils-advocate|socratic-inquiry|assumption-audit>]
 ```
 
 ## Route capabilities without mode switching

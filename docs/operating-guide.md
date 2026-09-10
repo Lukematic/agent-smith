@@ -49,6 +49,7 @@ The header is a declaration of current operating state, not decoration.
 | `loop: direct` | The selected execution pattern is `direct`. The alternatives are `floor`, `ralph`, `graph`, `rpi`, and `delegate`; the LADDER node picks it. | It does not grant autonomy by itself. Verifier strength still limits how far work may proceed. |
 | `run: none` | No active gate-ledger run is attached to the response. An active run shows its actual ID. | It does not mean there is no project, Seed, plan, or previous closed run. |
 | `knowledge: 0/3` | No upstream knowledge body has been opened for this task out of a maximum of three. | It is not money, token usage, project files read, tool calls, skills, or sources supplied by you. |
+| `stance: advisor` | The active conversational posture (e.g. `advisor`, `first-principles`, `steel-man`, `assumption-audit`, `teach-back`, `devils-advocate`, `socratic-inquiry`). | It is not a skill or procedure; it is the controller's communication angle switched by conversational cues. |
 
 ### Mode is an explicit work label
 
