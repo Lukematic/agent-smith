@@ -340,6 +340,17 @@ event naming the reason and a decisions.md entry keyed
 `<loop-id>:thinking-waiver`. A waiver with no reason is not a conscious
 decision: approval still demands thinking.
 
+**The challenge gate.** Ralph and Delegate have no plan-approval step, so
+the thinking gate moves to loop creation: `awino loop run ralph` and
+`awino loop run delegate` refuse to start until a *challenge-mode* think
+(devil, blindspot, premortem, uncomfortable, assumption-destroyer) is
+recorded in the project's working memory (`awino think <mode> --record
+<file>`). A non-challenge mode (feynman, simplify, recommend, ...) does
+not satisfy it: explaining the plan is not challenging it. The conscious
+skip (`--skip-challenge --skip-reason "..."`) mirrors the RPI waiver — a
+skip without a reason is refused. A plan that was never challenged is a
+guess with a checklist.
+
 Base loop kinds (Ralph, Delegate) inherit the universal and terminal steps
 — mission, capture, work, verdict — and declare their own middle steps;
 RPI declares all ten.

@@ -123,6 +123,11 @@ The opposing case for the strangler approach: a big-bang rewrite is
 simpler to reason about, has one cutover instead of months of dual
 running, and the team is small enough to coordinate it.
 
+## The falsifier
+If the strangler's dual-running phase produces more than three
+cross-path auth incidents in the first month, the opposing case is
+right: the operational burden outweighs the safety, and we cut over.
+
 ## What to take seriously
 The dual-running cost is real: take seriously the operational burden of
 two auth paths, and time-box the strangler phases. My own view -- strangler
@@ -141,6 +146,12 @@ PREMORTEM_OK = """# Premortem: the launch
 3. Support was not told the error messages changed.
    Warning signs: the support macros still quote the old wording; no
    comms ticket exists.
+
+## The tripwire
+Failure reason 1 is the most likely. The metric: p99 migration lock
+wait from the dry-run rehearsal, threshold 60 seconds, checked before
+every production migration. If a rehearsal exceeds it, the migration
+does not ship.
 """
 
 UNCOMFORTABLE_OK = """# Uncomfortable: the deadline
@@ -247,7 +258,7 @@ Using only these variables: cut steps to pay to one.
 # ── registry ─────────────────────────────────────────────────────────────
 
 class TestModeRegistry:
-    def test_nine_modes(self) -> None:
+    def test_ten_modes(self) -> None:
         assert think.MODE_NAMES == (
             "feynman",
             "blindspot",
@@ -258,6 +269,7 @@ class TestModeRegistry:
             "first-principles",
             "assumption-destroyer",
             "simplify",
+            "recommend",
         )
 
     def test_stance_mappings(self) -> None:
@@ -272,6 +284,7 @@ class TestModeRegistry:
             "thought-experiment",
             "assumption-destroyer",
             "simplify",
+            "recommend",
         ):
             assert think.by_name(new).stance is None, new
 
@@ -283,6 +296,7 @@ class TestModeRegistry:
             "premortem",
             "uncomfortable",
             "thought-experiment",
+            "recommend",
         ):
             assert think.by_name(name).memory == "decisions", name
         for name in ("feynman", "first-principles", "assumption-destroyer", "simplify"):
@@ -468,3 +482,137 @@ class TestThinkCli:
         result = CliRunner().invoke(app, ["think", "nope"])
         assert result.exit_code == 2
         assert "unknown thinking mode" in result.output
+
+
+# ── sharpened modes: falsifiers, tripwires, and the recommend contract ────
+
+RECOMMEND_NO_EDGE_OK = """# Recommend: the MA crossover
+
+## The recommendation
+NO EDGE -- hold the index. No action on SPY.
+
+## The evidence
+Backtested 1681 daily bars, 2020-01-02 to 2026-09-10. Strategy CAGR
+12.0% vs buy-and-hold 15.1%; max drawdown -18.8% vs -33.7%; 3 trades.
+
+## The edge
+Full-sample edge -3.1% CAGR; second-half edge -12.9% CAGR. Required
+margin: +1.0% in both windows. Cleared in neither.
+
+## No-action default
+Action would require the edge to clear +1.0% in both windows. It does
+not, so the call is no-action.
+"""
+
+RECOMMEND_BUY_OK = """# Recommend: dual momentum
+
+## The recommendation
+Buy SPY this month: momentum favors equities over T-bills.
+
+## The evidence
+12-month momentum: SPY +18.2%, T-bills +4.1%, measured month-end over
+72 months. Strategy CAGR 11.4% vs buy-and-hold 9.8%.
+
+## The edge
+Full-sample edge +1.6% CAGR; second-half edge +1.2% CAGR. Required
+margin: +1.0% in both windows. Cleared in both.
+
+## No-action default
+Action required the edge to clear +1.0% in both windows; it does, so
+the no-action default is overridden with evidence.
+"""
+
+
+class TestSharpenedModes:
+    def test_devil_requires_falsifier(self) -> None:
+        missing = think.validate(
+            "devil",
+            "# D\n\n## The opposing case\nBig-bang is simpler.\n\n"
+            "## What to take seriously\nThe cutover risk.\n",
+        )
+        assert any("falsifier" in item for item in missing)
+
+    def test_devil_rejects_vacuous_falsifier(self) -> None:
+        missing = think.validate(
+            "devil",
+            "# D\n\n## The opposing case\nBig-bang is simpler.\n\n"
+            "## The falsifier\nWe would see bad things.\n\n"
+            "## What to take seriously\nThe cutover risk.\n",
+        )
+        assert any("falsifier" in item for item in missing)
+
+    def test_premortem_requires_tripwire(self) -> None:
+        missing = think.validate(
+            "premortem",
+            "# P\n\n## Failure reasons\n1. It broke.\n   Warning signs: smoke.\n"
+            "2. It broke again.\n   Warning signs: more smoke.\n"
+            "3. It broke a third time.\n   Warning signs: fire.\n",
+        )
+        assert any("tripwire" in item for item in missing)
+
+    def test_recommend_no_edge_passes(self) -> None:
+        assert think.validate("recommend", RECOMMEND_NO_EDGE_OK) == []
+
+    def test_recommend_buy_with_edge_passes(self) -> None:
+        assert think.validate("recommend", RECOMMEND_BUY_OK) == []
+
+    def test_recommend_evidence_without_numbers_fails(self) -> None:
+        text = (
+            "# Recommend: the MA crossover\n\n## The recommendation\n"
+            "NO EDGE -- hold the index. No action on SPY.\n\n## The evidence\n"
+            "The strategy looked worse than holding over the years we "
+            "checked, trust me, the charts were not pretty at all.\n\n"
+            "## The edge\n"
+            "Full-sample edge -3.1% CAGR; second-half edge -12.9% CAGR. "
+            "Required margin: +1.0% in both windows. Cleared in neither.\n\n"
+            "## No-action default\n"
+            "Action would require the edge to clear +1.0% in both windows. "
+            "It does not, so the call is no-action.\n"
+        )
+        missing = think.validate("recommend", text)
+        assert any("no numbers means no evidence" in item for item in missing)
+
+    def test_recommend_action_without_quantified_edge_fails(self) -> None:
+        text = RECOMMEND_BUY_OK.replace(
+            "Full-sample edge +1.6% CAGR; second-half edge +1.2% CAGR. Required\n"
+            "margin: +1.0% in both windows. Cleared in both.",
+            "the edge is clearly tremendous, everyone agrees",
+        )
+        missing = think.validate("recommend", text)
+        assert any("quantified edge" in item for item in missing)
+
+    def test_recommend_no_action_needs_no_edge_numbers(self) -> None:
+        # A no-action call must still show evidence, but the edge section
+        # may report negative numbers -- the gate is on action calls.
+        assert think.validate("recommend", RECOMMEND_NO_EDGE_OK) == []
+
+
+class TestChallengeGate:
+    def _record(self, tmp_path, mode: str, text: str) -> None:
+        think.record_insight(mode, text, tmp_path, source="test")
+
+    def test_no_thinking_no_challenge(self, tmp_path) -> None:
+        assert think.challenge_recorded(tmp_path) is None
+
+    def test_challenge_mode_satisfies_gate(self, tmp_path) -> None:
+        self._record(tmp_path, "devil", DEVIL_OK)
+        assert think.challenge_recorded(tmp_path) == "devil"
+
+    def test_non_challenge_mode_does_not_satisfy(self, tmp_path) -> None:
+        self._record(tmp_path, "feynman", FEYNMAN_OK)
+        assert think.challenge_recorded(tmp_path) is None
+
+    def test_recommend_does_not_satisfy_challenge_gate(self, tmp_path) -> None:
+        # recommend is a decision mode, not a challenge mode: it governs
+        # the call, it does not attack the plan.
+        self._record(tmp_path, "recommend", RECOMMEND_NO_EDGE_OK)
+        assert think.challenge_recorded(tmp_path) is None
+
+    def test_challenge_modes_constant(self) -> None:
+        assert set(think.CHALLENGE_MODES) == {
+            "devil",
+            "blindspot",
+            "premortem",
+            "uncomfortable",
+            "assumption-destroyer",
+        }

@@ -35,6 +35,39 @@ loop_app.add_typer(loop_run_app, name="run")
 _LOOP_KINDS = ("rpi", "ralph", "delegate")
 
 
+def _challenge_gate_or_refuse(skip_challenge: bool, skip_reason: str) -> None:
+    """The challenge gate: no loop starts on an unchallenged plan.
+
+    Ralph and Delegate have no plan-approval step, so the gate lives here,
+    at loop creation: at least one challenge-mode think
+    (devil/blindspot/premortem/uncomfortable/assumption-destroyer) must be
+    recorded in the project's working memory, or the human explicitly skips
+    with a reason. Mirrors RPI's --waive-thinking/--waive-reason: the skip
+    is a conscious, stated decision, never a silent default.
+    """
+    if skip_challenge and not skip_reason.strip():
+        _echo(
+            "REFUSED  --skip-challenge requires --skip-reason <text>: "
+            "a skip without a reason is not a conscious decision"
+        )
+        raise typer.Exit(2)
+    if skip_challenge:
+        _echo(f"CHALLENGE_SKIPPED  reason: {skip_reason.strip()}")
+        return
+    mode = think.challenge_recorded(_workspace().state_root)
+    if mode is None:
+        _echo(
+            "REFUSED  no challenge-mode thinking recorded in this project: "
+            "a plan that was never challenged is a guess with a checklist. "
+            "Run one first, e.g. `awino think devil --record <file>` "
+            "(devil, blindspot, premortem, uncomfortable, or "
+            "assumption-destroyer), or skip consciously with "
+            "`--skip-challenge --skip-reason \"...\"`."
+        )
+        raise typer.Exit(1)
+    _echo(f"CHALLENGE  satisfied by recorded thinking: {mode}")
+
+
 def _loops_dir() -> Path:
     return _workspace().state_root / "loops"
 
@@ -246,8 +279,26 @@ def loop_run_ralph(
     topic: str = typer.Option(None, "--topic", help="Slug for the artifact filenames"),
     seed: str = typer.Option(None, "--seed", help="Seed ID to link; closed only on verified success"),
     check: str = typer.Option(..., "--check", help="Verification command; exit 0 means done"),
+    skip_challenge: bool = typer.Option(
+        False,
+        "--skip-challenge",
+        help="Skip the challenge-mode thinking gate; recorded as a conscious "
+        "decision with --skip-reason.",
+    ),
+    skip_reason: str = typer.Option(
+        "",
+        "--skip-reason",
+        help="Why the challenge gate is skipped; required with --skip-challenge.",
+    ),
 ) -> None:
-    """Start a Ralph loop and print the attempt prompt block."""
+    """Start a Ralph loop and print the attempt prompt block.
+
+    The challenge gate applies: at least one challenge-mode think
+    (devil/blindspot/premortem/uncomfortable/assumption-destroyer) must be
+    recorded in the project first -- `awino think <mode> --record <file>` --
+    or skip consciously with --skip-challenge --skip-reason "...".
+    """
+    _challenge_gate_or_refuse(skip_challenge, skip_reason)
     driver = _driver_for_kind("ralph")
     try:
         state = driver.new(task, topic=topic, seed_id=seed, check=check)
@@ -262,8 +313,26 @@ def loop_run_delegate(
     task: str = typer.Option(..., "--task", help="One sentence describing the work to split"),
     topic: str = typer.Option(None, "--topic", help="Slug for the artifact filenames"),
     seed: str = typer.Option(None, "--seed", help="Seed ID to link; closed only on verified success"),
+    skip_challenge: bool = typer.Option(
+        False,
+        "--skip-challenge",
+        help="Skip the challenge-mode thinking gate; recorded as a conscious "
+        "decision with --skip-reason.",
+    ),
+    skip_reason: str = typer.Option(
+        "",
+        "--skip-reason",
+        help="Why the challenge gate is skipped; required with --skip-challenge.",
+    ),
 ) -> None:
-    """Start a Delegate loop and print the decompose prompt block."""
+    """Start a Delegate loop and print the decompose prompt block.
+
+    The challenge gate applies: at least one challenge-mode think
+    (devil/blindspot/premortem/uncomfortable/assumption-destroyer) must be
+    recorded in the project first -- `awino think <mode> --record <file>` --
+    or skip consciously with --skip-challenge --skip-reason "...".
+    """
+    _challenge_gate_or_refuse(skip_challenge, skip_reason)
     driver = _driver_for_kind("delegate")
     try:
         state = driver.new(task, topic=topic, seed_id=seed)

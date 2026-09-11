@@ -68,8 +68,8 @@ from live `--help` output. Curated prose lives in `user-guide.md`.
 | `awino loop close` | Record the outcome verdict for a loop: did... |
 | `awino loop default` | Declare a default for a pair-planning... |
 | `awino loop next` | Validate the current phase artifact;... |
-| `awino loop run delegate` | Start a Delegate loop and print the... |
-| `awino loop run ralph` | Start a Ralph loop and print the attempt... |
+| `awino loop run delegate` | Start a Delegate loop (challenge gate: recorded challenge-mode think or `--skip-challenge --skip-reason`). |
+| `awino loop run ralph` | Start a Ralph loop (challenge gate: recorded challenge-mode think or `--skip-challenge --skip-reason`). |
 | `awino loop run rpi` | Start an RPI loop and print the phase-1... |
 | `awino loop status` | Show loop id, kind, phase, attempts, human... |
 | `awino mission` | Read what the project is for, from its own... |

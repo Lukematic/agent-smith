@@ -454,14 +454,14 @@ class TestDelegateCli:
 
     def test_run_delegate_prints_decompose_prompt(self, cli_env: Path) -> None:
         runner = CliRunner()
-        result = runner.invoke(loop_app, ["run", "delegate", "--task", "split it"])
+        result = runner.invoke(loop_app, ["run", "delegate", "--task", "split it", "--skip-challenge", "--skip-reason", "test fixture"])
         assert result.exit_code == 0, result.output
         assert "LOOP  delegate-" in result.output
         assert "phase: decompose" in result.output
 
     def test_full_delegate_flow_end_to_end(self, cli_env: Path) -> None:
         runner = CliRunner()
-        created = runner.invoke(loop_app, ["run", "delegate", "--task", "split it"])
+        created = runner.invoke(loop_app, ["run", "delegate", "--task", "split it", "--skip-challenge", "--skip-reason", "test fixture"])
         assert created.exit_code == 0, created.output
         decompose = cli_env / self._artifact_path(created.output)
         decompose.parent.mkdir(parents=True, exist_ok=True)
@@ -489,7 +489,7 @@ class TestDelegateCli:
 
     def test_assign_overlap_refused_at_cli(self, cli_env: Path) -> None:
         runner = CliRunner()
-        created = runner.invoke(loop_app, ["run", "delegate", "--task", "split it"])
+        created = runner.invoke(loop_app, ["run", "delegate", "--task", "split it", "--skip-challenge", "--skip-reason", "test fixture"])
         decompose = cli_env / self._artifact_path(created.output)
         decompose.parent.mkdir(parents=True, exist_ok=True)
         decompose.write_text(
@@ -506,7 +506,7 @@ class TestDelegateCli:
 
     def test_status_shows_delegate_kind_and_next(self, cli_env: Path) -> None:
         runner = CliRunner()
-        created = runner.invoke(loop_app, ["run", "delegate", "--task", "split it"])
+        created = runner.invoke(loop_app, ["run", "delegate", "--task", "split it", "--skip-challenge", "--skip-reason", "test fixture"])
         assert created.exit_code == 0, created.output
         status = runner.invoke(loop_app, ["status"])
         assert status.exit_code == 0, status.output

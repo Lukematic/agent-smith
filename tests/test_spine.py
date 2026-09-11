@@ -164,6 +164,12 @@ PREMORTEM_OK = """# Premortem: rpi loop driver
 3. The handoff to the gate ledger names the wrong run.
    Warning signs: the run ledger has no entry for the loop id; the gate
    receipt names a different task.
+
+## The tripwire
+Failure reason 1 is the most likely. The metric: count of phases where
+the validator list and the phase list disagree in the weekly
+`buddy check` run, threshold zero, checked every Monday. Any nonzero
+count blocks the release.
 """
 
 

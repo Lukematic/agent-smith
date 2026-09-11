@@ -1,10 +1,17 @@
 """Critical thinking modes: the executable form of "challenge assumptions".
 
-Nine named ways of thinking, each with a prompt template (the structure of
+Ten named ways of thinking, each with a prompt template (the structure of
 the thinking), a structural validator (the required output sections), and a
 working-memory destination. Thinking that doesn't land in memory didn't
 happen: recording a mode's output writes its insights to facts.md or
 decisions.md.
+
+The challenge modes -- devil, blindspot, premortem, uncomfortable,
+assumption-destroyer -- are the ones that attack the plan rather than
+explain it. They are not advisory: `awino loop run ralph` and
+`awino loop run delegate` refuse to start until one of them has been
+recorded in the project (or the human explicitly skips with a reason),
+because a plan that was never challenged is a guess with a checklist.
 
 Modes map onto stances where they overlap, reusing the stance machinery
 instead of duplicating it:
@@ -18,10 +25,14 @@ instead of duplicating it:
 
 The rest are genuinely new -- no stance covers them:
 
-- premortem:      assume the plan failed; name why, with warning signs
+- premortem:      assume the plan failed; name why, with warning signs,
+                then pick the tripwire you will watch
 - uncomfortable:  ask the avoided question, then answer it straight
 - thought-experiment: push one variable to the extreme, read what it reveals
 - simplify:       strip to the minimal variables, solve using only those
+- recommend:      the edge-detector contract -- a recommendation is a call
+                plus evidence plus a quantified edge, with no-action as the
+                default; an action call without a measured edge is refused
 
 The validators are structural, not semantic: they check that the required
 sections exist and that counted parts (failure reasons, assumptions,
@@ -127,6 +138,13 @@ MODES: tuple[Mode, ...] = (
             "The strongest evidence-backed case AGAINST the position.\n"
             "Steel-man it: argue it better than its believers would.\n"
             "\n"
+            "## The falsifier\n"
+            "One concrete, observable thing that would prove the opposing\n"
+            "case right and kill the plan. Name the observation, not a\n"
+            "vibe -- what you would actually see. If you cannot name one,\n"
+            "the opposing case is not evidence-backed: say so, and say\n"
+            "what that implies about your confidence.\n"
+            "\n"
             "## What to take seriously\n"
             "Which part of the opposing case is the real threat -- the part\n"
             "that should change the plan.\n"
@@ -137,6 +155,7 @@ MODES: tuple[Mode, ...] = (
         ),
         (
             ("the opposing case", ("opposing case", "case against", "the case against")),
+            ("the falsifier", ("falsifier", "would prove", "kill the plan", "falsify")),
             ("what to take seriously", ("take seriously", "take most seriously", "what to take")),
         ),
     ),
@@ -156,10 +175,17 @@ MODES: tuple[Mode, ...] = (
             "For EACH failure reason: the warning signs that would have been\n"
             "visible early -- what you would have noticed in time to change\n"
             "course, had you been watching. Write them with each reason\n"
-            '(e.g. a "Warning signs:" line under it).'
+            '(e.g. a "Warning signs:" line under it).\n'
+            "\n"
+            "## The tripwire\n"
+            "The single most likely failure reason, and the ONE metric you\n"
+            "will actually watch -- with its threshold and how often you\n"
+            "check it. A premortem without a tripwire is a ghost story:\n"
+            "frightening, and useless."
         ),
         (
             ("failure reasons", ("failure reasons", "failure reason", "why it failed", "reasons it failed")),
+            ("the tripwire", ("tripwire", "metric you will watch", "watch", "threshold")),
         ),
     ),
     Mode(
@@ -282,7 +308,76 @@ MODES: tuple[Mode, ...] = (
             ("solution using only these", ("solution using only these", "solution")),
         ),
     ),
+    Mode(
+        "recommend",
+        "before recommending an action: the call, the evidence, the quantified edge -- no-action is the default",
+        None,
+        "decisions",
+        (
+            "A recommendation is a wager, not an opinion. The default is\n"
+            "no-action; an action call must earn its way out with measured\n"
+            "evidence.\n"
+            "\n"
+            "## The recommendation\n"
+            "The call, stated plainly: what action, on what, and when. If\n"
+            "the call is no-action, say so directly -- 'no edge' is a\n"
+            "complete recommendation.\n"
+            "\n"
+            "## The evidence\n"
+            "The observations behind the call, with NUMBERS: what was\n"
+            "measured, over what window, against what baseline. No numbers\n"
+            "means no evidence.\n"
+            "\n"
+            "## The edge\n"
+            "The quantified advantage over the default (do nothing /\n"
+            "buy-and-hold), in BOTH the full window and a second window\n"
+            "(out-of-sample or second half). State the margin required and\n"
+            "whether it cleared in both.\n"
+            "\n"
+            "## No-action default\n"
+            "What would have to be true for you to recommend action instead\n"
+            "-- and is it true? If the edge does not clear the margin in\n"
+            "both windows, the call above must be no-action."
+        ),
+        (
+            ("the recommendation", ("recommendation", "the call", "my call")),
+            ("the evidence", ("evidence", "observations", "measured")),
+            ("the edge", ("edge", "advantage", "margin")),
+            ("no-action default", ("no-action", "no action", "default")),
+        ),
+    ),
 )
+
+
+# The challenge modes: the ones that attack the plan instead of explaining
+# it. `awino loop run ralph|delegate` refuses to start until one of these
+# has been recorded in the project -- a plan that was never challenged is
+# a guess with a checklist.
+CHALLENGE_MODES: tuple[str, ...] = (
+    "devil",
+    "blindspot",
+    "premortem",
+    "uncomfortable",
+    "assumption-destroyer",
+)
+
+
+def challenge_recorded(state_root: Path) -> str | None:
+    """The challenge mode recorded in this project's decisions, if any.
+
+    Returns the mode name (e.g. "devil"), else None. Reads the
+    ``thinking:<mode>:<date>`` keys that ``record_insight`` writes, so only
+    validated, recorded thinking satisfies the gate -- a file on disk that
+    was never recorded does not count.
+    """
+    for entry in working_memory.Decisions(state_root).entries():
+        key = entry.key or ""
+        if not key.startswith("thinking:"):
+            continue
+        parts = key.split(":")
+        if len(parts) >= 2 and parts[1] in CHALLENGE_MODES:
+            return parts[1]
+    return None
 
 
 def by_name(name: str) -> Mode:
@@ -439,7 +534,7 @@ def _validate_blindspot(_mode: Mode, text: str) -> list[str]:
 
 
 def _validate_devil(_mode: Mode, text: str) -> list[str]:
-    missing, _ = _require_sections(_mode, text)
+    missing, bodies = _require_sections(_mode, text)
     lowered = text.casefold()
     opposing = min(
         (lowered.find(m) for m in _OPPOSING_MARKERS if lowered.find(m) >= 0),
@@ -453,6 +548,12 @@ def _validate_devil(_mode: Mode, text: str) -> list[str]:
     # opposing case first is the stance's core violation.
     if own is not None and (opposing is None or opposing > own):
         missing.append("the opposing case must come before your own view")
+    falsifier = bodies.get("the falsifier", "")
+    if falsifier and len(falsifier.strip()) < 40:
+        missing.append(
+            "the falsifier section is too short to name a concrete observation: "
+            "say what you would actually see"
+        )
     return missing
 
 
@@ -475,7 +576,7 @@ def _validate_premortem(_mode: Mode, text: str) -> list[str]:
     missing, bodies = _require_sections(_mode, text)
     body = bodies.get("failure reasons", "")
     entries = _entries(body)
-    if not missing and len(entries) < 3:
+    if len(entries) < 3:
         missing.append(
             f"premortem names {len(entries)} failure reasons; at least 3 required"
         )
@@ -503,6 +604,38 @@ def _validate_premortem(_mode: Mode, text: str) -> list[str]:
                 "warning signs: 'none' is not a warning sign -- say what you "
                 "would actually see going wrong"
             )
+    tripwire = bodies.get("the tripwire", "")
+    if tripwire and len(tripwire.strip()) < 40:
+        missing.append(
+            "the tripwire section is too short: name the ONE metric, its "
+            "threshold, and how often you check it"
+        )
+    return missing
+
+
+_ACTION_WORDS_RE = re.compile(
+    r"(?i)\b(buy|sell|go ahead|ship|launch|approve|invest|trade)\b"
+)
+_DIGIT_RE = re.compile(r"\d")
+
+
+def _validate_recommend(_mode: Mode, text: str) -> list[str]:
+    """The edge-detector contract, structurally: a recommendation is a call
+    plus evidence plus a quantified edge. No numbers means no evidence; an
+    action call without a quantified edge is refused."""
+    missing, bodies = _require_sections(_mode, text)
+    evidence = bodies.get("the evidence", "")
+    if evidence and not _DIGIT_RE.search(evidence):
+        missing.append(
+            "the evidence section names no numbers: no numbers means no evidence"
+        )
+    call = bodies.get("the recommendation", "")
+    edge = bodies.get("the edge", "")
+    if call and _ACTION_WORDS_RE.search(call) and not _DIGIT_RE.search(edge):
+        missing.append(
+            "an action call needs a quantified edge: the edge section names "
+            "no numbers -- without a measured edge the call must be no-action"
+        )
     return missing
 
 
@@ -572,6 +705,7 @@ _VALIDATORS = {
     "first-principles": _validate_first_principles,
     "assumption-destroyer": _validate_assumption_destroyer,
     "simplify": _validate_simplify,
+    "recommend": _validate_recommend,
 }
 
 

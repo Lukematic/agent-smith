@@ -826,7 +826,11 @@ def _premortem_text(first_reason: str) -> str:
         "# Premortem\n\n## Failure reasons\n\n"
         f"{first_reason}\n\n"
         "2. The deploy fails. Warning signs: error rate spikes past 5%.\n\n"
-        "3. Data loss on failover. Watch for: replication lag climbing.\n"
+        "3. Data loss on failover. Watch for: replication lag climbing.\n\n"
+        "## The tripwire\n"
+        "Reason 2 is the most likely. The metric: error rate in the first "
+        "ten minutes after deploy, threshold 5%, checked on every single "
+        "deploy. Breach rolls the deploy back automatically.\n"
     )
 
 

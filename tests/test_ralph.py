@@ -435,7 +435,7 @@ class TestRalphCli:
     def test_run_ralph_prints_attempt_prompt(self, cli_env: Path) -> None:
         runner = CliRunner()
         result = runner.invoke(
-            loop_app, ["run", "ralph", "--task", "fix it", "--check", "true"]
+            loop_app, ["run", "ralph", "--task", "fix it", "--check", "true", "--skip-challenge", "--skip-reason", "test fixture"]
         )
         assert result.exit_code == 0, result.output
         assert "LOOP  ralph-" in result.output
@@ -450,7 +450,7 @@ class TestRalphCli:
     def test_next_runs_check_and_completes(self, cli_env: Path) -> None:
         runner = CliRunner()
         created = runner.invoke(
-            loop_app, ["run", "ralph", "--task", "fix it", "--check", "true"]
+            loop_app, ["run", "ralph", "--task", "fix it", "--check", "true", "--skip-challenge", "--skip-reason", "test fixture"]
         )
         assert created.exit_code == 0, created.output
         artifact = cli_env / self._artifact_path(created.output)
@@ -469,7 +469,7 @@ class TestRalphCli:
     def test_next_routes_failed_verify_to_retry(self, cli_env: Path) -> None:
         runner = CliRunner()
         created = runner.invoke(
-            loop_app, ["run", "ralph", "--task", "fix it", "--check", "false"]
+            loop_app, ["run", "ralph", "--task", "fix it", "--check", "false", "--skip-challenge", "--skip-reason", "test fixture"]
         )
         assert created.exit_code == 0, created.output
         artifact = cli_env / self._artifact_path(created.output)
@@ -484,7 +484,7 @@ class TestRalphCli:
     def test_status_shows_ralph_kind_and_next(self, cli_env: Path) -> None:
         runner = CliRunner()
         created = runner.invoke(
-            loop_app, ["run", "ralph", "--task", "fix it", "--check", "true"]
+            loop_app, ["run", "ralph", "--task", "fix it", "--check", "true", "--skip-challenge", "--skip-reason", "test fixture"]
         )
         assert created.exit_code == 0, created.output
         status = runner.invoke(loop_app, ["status"])
@@ -492,3 +492,152 @@ class TestRalphCli:
         assert "kind: ralph" in status.output
         assert "phase: attempt" in status.output
         assert "next:" in status.output
+
+
+DEVIL_CHALLENGE_OK = """# Devil: the ralph task
+
+## The opposing case
+The task as stated may already be done, or may be impossible: running a
+check command against code that was never the problem burns cycles and
+teaches nothing.
+
+## The falsifier
+If the check passes on the very first run without any change to the
+code, the opposing case is right: there was nothing to fix and this
+loop should never have started.
+
+## What to take seriously
+Take seriously the possibility that the task is mis-specified; restate
+it in one falsifiable sentence before the first attempt.
+"""
+
+
+class TestRalphChallengeGate:
+    """The challenge gate: `loop run ralph` refuses on an unchallenged
+    plan. A plan that was never challenged is a guess with a checklist."""
+
+    @pytest.fixture()
+    def cli_env(self, project: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+        monkeypatch.setenv("AWINO_PROJECT", str(project))
+        return project
+
+    def _run(self, *extra: str):
+        runner = CliRunner()
+        return runner.invoke(
+            loop_app,
+            ["run", "ralph", "--task", "fix it", "--check", "true", *extra],
+        )
+
+    def test_run_ralph_refused_without_challenge(self, cli_env: Path) -> None:
+        result = self._run()
+        assert result.exit_code == 1, result.output
+        assert "REFUSED" in result.output
+        assert "challenge" in result.output.lower()
+
+    def test_run_ralph_skip_challenge_needs_reason(self, cli_env: Path) -> None:
+        result = self._run("--skip-challenge")
+        assert result.exit_code == 2, result.output
+        assert "--skip-reason" in result.output
+
+    def test_run_ralph_skip_challenge_with_reason(self, cli_env: Path) -> None:
+        result = self._run("--skip-challenge", "--skip-reason", "trivial task")
+        assert result.exit_code == 0, result.output
+        assert "CHALLENGE_SKIPPED" in result.output
+        assert "LOOP  ralph-" in result.output
+
+    def test_run_ralph_passes_with_recorded_devil(self, cli_env: Path) -> None:
+        from awino import think
+
+        think.record_insight(
+            "devil", DEVIL_CHALLENGE_OK, cli_env / ".awino", source="test"
+        )
+        result = self._run()
+        assert result.exit_code == 0, result.output
+        assert "CHALLENGE" in result.output
+        assert "devil" in result.output
+        assert "LOOP  ralph-" in result.output
+
+    def test_run_ralph_non_challenge_mode_does_not_satisfy(
+        self, cli_env: Path
+    ) -> None:
+        from awino import think
+
+        # thought-experiment records to decisions, but it does not attack
+        # the plan -- so the gate stays shut.
+        think.record_insight(
+            "thought-experiment",
+            THOUGHT_EXPERIMENT_LIKE_OK,
+            cli_env / ".awino",
+            source="test",
+        )
+        result = self._run()
+        assert result.exit_code == 1, result.output
+        assert "REFUSED" in result.output
+
+    def test_run_delegate_refused_without_challenge(self, cli_env: Path) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            loop_app, ["run", "delegate", "--task", "split the work"]
+        )
+        assert result.exit_code == 1, result.output
+        assert "REFUSED" in result.output
+        assert "challenge" in result.output.lower()
+
+    def test_run_delegate_passes_with_recorded_premortem(
+        self, cli_env: Path
+    ) -> None:
+        from awino import think
+
+        think.record_insight(
+            "premortem", PREMORTEM_CHALLENGE_OK, cli_env / ".awino", source="test"
+        )
+        runner = CliRunner()
+        result = runner.invoke(
+            loop_app, ["run", "delegate", "--task", "split the work"]
+        )
+        assert result.exit_code == 0, result.output
+        assert "CHALLENGE" in result.output
+        assert "premortem" in result.output
+
+
+THOUGHT_EXPERIMENT_LIKE_OK = """# Thought experiment: the task
+
+## Scenario
+The check command passes on the first run with no changes.
+
+## Push to the extreme
+Push to zero: zero changes, zero attempts, the loop still "completes".
+The machinery cannot tell a real fix from a vacuous task.
+
+## What it reveals
+The loop's done-criterion is purely the check's exit code, so task
+quality lives entirely outside the loop -- in the challenge step that
+runs before it.
+"""
+
+SIMPLIFY_LIKE_OK = """# Simplify: the task
+
+## Minimal variables
+- the check command's exit code
+- the artifact describing the attempt
+
+## Solution using only these
+Run the check command; if exit 0, the attempt artifact explains the
+change. Using only these variables, done means exit 0.
+"""
+
+PREMORTEM_CHALLENGE_OK = """# Premortem: the delegation
+
+## Failure reasons
+1. The subtasks overlap and two workers edit the same file.
+   Warning signs: both assignments name src/worker.py in their scopes.
+2. A subtask's done-criteria are vague, so it never finishes.
+   Warning signs: the assignment has no check command after a week.
+3. The merge step was never assigned to anyone.
+   Warning signs: three subtasks closed, no integration branch exists.
+
+## The tripwire
+Failure reason 2 is the most likely. The metric: subtasks older than
+seven days with no check command, threshold zero, reviewed every
+Monday. Any hit reassigns the subtask with a concrete check.
+"""

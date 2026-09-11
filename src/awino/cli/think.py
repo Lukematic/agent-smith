@@ -4,7 +4,7 @@ Critical thinking modes: ``awino think <mode>`` prints a mode's prompt
 template (the structure of the thinking -- the model thinks inside it, like
 a phase prompt block); ``awino think <mode> --record <file>`` validates the
 output structurally and writes its insights to working memory. With no mode,
-lists all nine modes with one-line when-to-use descriptions, like
+lists all ten modes with one-line when-to-use descriptions, like
 ``awino skills``.
 """
 
@@ -23,7 +23,7 @@ def think_command(
     mode: str = typer.Argument(
         None, help="Thinking mode: feynman, blindspot, devil, premortem, "
         "uncomfortable, thought-experiment, first-principles, "
-        "assumption-destroyer, or simplify. Omit to list all nine."
+        "assumption-destroyer, simplify, or recommend. Omit to list all ten."
     ),
     record: str = typer.Option(
         None,
@@ -43,7 +43,7 @@ def think_command(
     ``awino stance --verify <mode> --response <file>``.
     """
     if mode is None:
-        _echo("THINK_MODES  nine ways to challenge assumptions (like `awino skills`)")
+        _echo("THINK_MODES  ten ways to think (five challenge modes gate loop starts)")
         for item in think.MODES:
             stance_note = (
                 f" [maps onto the {item.stance} stance]"
