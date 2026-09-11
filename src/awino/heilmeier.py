@@ -56,7 +56,7 @@ QUESTIONS: tuple[Question, ...] = (
     Question("duration", "How long will it take?", "advisor"),
     Question(
         "exams",
-        "What are the mid-term and final exams? One per line; 'claim -> command' wires a verify.",
+        "What are the mid-term and final exams? One per line; 'claim -> command' wires a verify, and the command must be a real executable (prose is rejected).",
         "advisor",
     ),
 )

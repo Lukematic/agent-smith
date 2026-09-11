@@ -32,10 +32,12 @@ awino mission --set "risks=workers ignore the skill\nlogin dependency"
 ```
 
 Eight questions, asked one gap at a time in the stance each calls for.
-Exams written as `claim -> command` become verification commands. The living
+Exams written as `claim -> command` become verification commands — the command
+must be a real executable (on PATH or a file path); prose after `->` is rejected
+and does not satisfy the gate. The living
 document is `<state>/MISSION.md`; it regenerates on every answer, on every
 `gate close`, and at `awino best --end`. Derived insights name risks with no
-exam, exams with no command, and jargon.
+exam, exams with no command, exams wired to prose, and jargon.
 
 ## 4. Do a piece of work
 
@@ -69,7 +71,9 @@ Never pushes.
 awino best --end
 ```
 
-Summary, lesson check, mission refresh.
+Summary, lesson check, mission refresh. Records a session-end marker
+(`SESSION_END_MARKED`); `awino buddy check` counts these markers as completed
+sittings and runs a catch-up session-end order when none exist.
 
 ## Talking to it
 
@@ -84,7 +88,10 @@ The agent's posture switches on your words - no command needed:
 | "research..." | intake: five sub-questions before any answer |
 
 `awino stance` shows and sets the default. Every switch prints one `STANCE ->`
-line; nothing switches silently.
+line; nothing switches silently. `awino stance --verify --response <file>`
+runs the layer-3 stance critic — a deterministic check of a response against
+the stance's rules, heuristic by design (it catches known violations, not
+violations in new vocabulary).
 
 ## Updating
 
