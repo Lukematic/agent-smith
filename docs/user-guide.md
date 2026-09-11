@@ -377,6 +377,43 @@ awino gate skill awino-delegate --state used --reason "assignments dispatched"
 
 A recommendation is not proof that a skill was loaded or used.
 
+## Proof packs and continuous hygiene
+
+Two mechanisms keep claims honest after the work is done.
+
+**Proof packs.** `awino proof export` bundles the mission, the hash-bound
+approved plan, the ledger trail, the test evidence, the outcome verdicts, and
+the stakeholder brief into one directory with a SHA-256 index of every file.
+`awino proof verify <pack-dir>` re-checks the whole bundle from the pack alone —
+no project access needed. It fails and names the file when a hash does not
+match, when the trail is out of order, when a verdict names a loop the trail
+never ran, or when the brief claims something the pack does not contain.
+
+```bash
+awino proof export --out ./proof-pack
+awino proof verify ./proof-pack   # PROOF OK, or PROOF INVALID naming the file
+```
+
+**Continuous hygiene.** `awino buddy` reports state health; it now also reports
+repo health on three lenses: dead code, docs coverage (every command and every
+skill documented), and docs drift (the generated command reference still
+matches live `--help`). Two tiers for dead code:
+
+- **Fast (default):** static. Ruff F401 over the project — unused imports are
+  the cheapest reliable dead-code signal. Seconds, no test run.
+- **Deep (`awino buddy health --deep`):** runs the full suite under coverage and
+  flags modules and functions the suite never executed. Minutes, and a
+  candidate is not a conviction: entry points, plugin hooks, and human
+  vocabulary can be intentionally unreferenced.
+
+`awino buddy --fix` regenerates `docs/commands.md` from live `--help` when the
+reference drifts — the content comes from the code, never invented; commands
+with no help text are marked `[DRAFT]` for a human to describe. It never
+deletes code and never invents prose: dead-code findings stay prompts for a
+human. Honest limit: the drift check compares the generated reference against
+live help, so it catches wording changes and missing rows, not behavioral
+changes the help text does not describe.
+
 ## Checkpoint and resume
 
 Persist a phase boundary before stopping or compacting a session:
@@ -442,7 +479,7 @@ Expect the controller to:
 | `awino install-status` | Show persona and skill installation status. |
 | `awino mode-status` | Show selectable mode installation status. |
 | `awino plan "<request>"` | Analyze approach, verifier strength, autonomy, and fan-out readiness. |
-| `awino skills [--route "<request>"]` | List or recommend canonical skills. |
+| `awino skills [--route "<request>"]` | List or recommend canonical skills, each with purpose and one-line when-to-use. |
 | `awino work` | List ready Seeds work when available. |
 | `awino gate open ...` | Open a run with class, objective, scope, plan, and optional issue. |
 | `awino gate plan ...` | Approve, hold, reject, or inspect an exact plan. |
@@ -452,6 +489,9 @@ Expect the controller to:
 | `awino resume` | Display durable continuation state. |
 | `awino gate status` | Show gate progress and blockers. |
 | `awino gate close` | Compute whether the run can close. |
+| `awino proof export [--out <dir>]` | Export a FAIR proof pack: mission, approved-plan hash, ledger trail, test evidence, verdicts, brief, SHA-256 index. |
+| `awino proof verify <pack-dir>` | Re-verify a proof pack from the pack alone; names the file on failure. |
+| `awino buddy health [--deep]` | Repo hygiene: dead code, docs coverage, docs drift. `--deep` runs the suite under coverage. |
 | `awino work-close` | Close a linked seed using gate evidence. |
 | `awino update-preflight` | Snapshot state and attempt a safe fast-forward update. |
 | `awino rollback <BACKUP>` | Restore project state from a preflight snapshot. |

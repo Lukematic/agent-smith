@@ -110,3 +110,64 @@ Detection names what happened and where; it does not stop the machine.
 Code enforces process and evidence; it cannot enforce good thinking. The
 machine says "no" at the gates above. Everywhere else it says "I saw that" —
 and leaves the judgment to a human.
+
+## 6. FAIR: a claim you can re-check beats a claim you must trust
+
+A result nobody can reproduce is a rumor. When the work matters, the proof
+travels with it: mission, approved plan (hash-bound), the ledger trail, the
+test evidence, the outcome verdicts, and the brief — one directory, one
+SHA-256 index. `awino proof export` builds the bundle; `awino proof verify`
+re-checks it from the bundle alone, with no access to the original project.
+A pack that fails verification says which file failed and why; a pack with
+no approved plan says so instead of faking one.
+
+**Enforced by:** the verifier (`awino/proof.py`), which rejects hash
+mismatches, out-of-order trails, verdicts for loops the trail never ran, and
+briefs whose claims are not in the pack.
+
+## 7. One clean: the repo stays greppable
+
+Dead code is a lie the codebase tells its readers — "this matters" about
+something nothing uses. Undocumented commands are the same lie in reverse:
+real behavior with no witness. Two tiers keep it honest without slowing the
+day down: the fast tier (`buddy health`) runs static checks — ruff F401 for
+dead imports, docs coverage for every command and skill, drift between the
+generated command reference and live `--help`. The deep tier
+(`buddy health --deep`) runs the suite under coverage and flags
+modules/functions the suite never executed — candidates, not convictions,
+because entry points and plugin hooks are intentionally unreferenced.
+`buddy --fix` regenerates what is derivable (the command reference, from the
+code itself) and marks the rest `[DRAFT]` for a human. It never deletes code
+and never invents prose: removal and description are judgment, and judgment
+stays human.
+
+**Enforced by:** the hygiene checks (`awino/hygiene.py`), surfaced in the
+default buddy report and on demand.
+
+## 8. Engineering principles: SOLID, enforced by review and health checks
+
+Principles nobody checks are decoration. Ours are checked the way the rest
+of the philosophy is: by the machine where it can, by a human where only a
+human can.
+
+- **Single responsibility:** one module, one reason to change — the `owns:`
+  declaration at the top of every CLI module says what it owns, and the
+  layout test fails when a command is registered twice or nowhere.
+- **Open/closed:** new task classes, skills, and loop kinds are added by
+  adding files, not by editing the router; the skill registry is parsed from
+  `SKILL.md` at load time, never hardcoded.
+- **Substitution and interface segregation:** commands consume narrow
+  helpers (`_echo`, `_paths`, `_workspace`), not the whole CLI object; the
+  proof verifier depends only on the pack directory, never on project state.
+- **Dependency direction:** doctrine flows one way — `MEMORY.md` records
+  decisions, `PHILOSOPHY.md` states principles, and the code cites both; no
+  module reaches around another's stated contract.
+
+Ruff and the health gates catch the mechanical half (unused code, unsorted
+imports, drift). The structural half is review: a change that edits the
+router to add a leaf, duplicates a parser instead of sharing it, or hardcodes
+what discovery already provides is rejected the same way a failing gate is —
+with the reason named.
+
+**Enforced by:** health checks and lint for the mechanical half; human review
+for the structural half.

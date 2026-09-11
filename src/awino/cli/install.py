@@ -14,6 +14,7 @@ import typer
 from awino import (
     harness,
     modes,
+    skill_catalog,
 )
 from awino.cli import (
     _echo,
@@ -384,23 +385,32 @@ def skills(
     as_json_output: bool = typer.Option(False, "--json", help="Machine-readable output"),
     route: str | None = typer.Option(None, "--route", help="Recommend a skill for this request"),
 ) -> None:
-    """List canonical skills, optionally recommending one for a request.
+    """List canonical skills with purpose and when to use each.
+
+    The registry is parsed from each skill's SKILL.md at load time -- never
+    hardcoded. A skill whose doc lacks a purpose/when-to-use section is
+    listed as undocumented, and buddy's docs-coverage flags it.
 
     This is how A.W.I.N.O. learns where its own skills live at load time rather than
     hardcoding a directory that moves when the install location changes.
     """
     paths = _paths()
     catalog = _skill_catalog()
-    found = [
-        {
-            "name": item.name,
-            "namespaced": f"awino:{item.name}",
-            "path": str(item.path),
-            "description": item.description,
-            "source": item.source,
-        }
-        for item in catalog.skills
-    ]
+    found = []
+    for item in catalog.skills:
+        doc = skill_catalog.describe(item)
+        found.append(
+            {
+                "name": item.name,
+                "namespaced": f"awino:{item.name}",
+                "path": str(item.path),
+                "description": item.description,
+                "purpose": doc.purpose,
+                "when_to_use": doc.when_to_use,
+                "documented": doc.documented,
+                "source": item.source,
+            }
+        )
     recommendation = catalog.recommend(route) if route is not None else None
     routed = None
     if recommendation is not None:
@@ -439,11 +449,11 @@ def skills(
         return
 
     _echo(f"root: {paths.root}")
-    _echo(f"{len(found)} skill(s):")
+    _echo(f"{len(found)} skill(s), one-line when-to-use each:")
     width = max((len(i["name"]) for i in found), default=0)
     for item in found:
-        summary = item["description"].split(". ")[0][:80]
-        _echo(f"  {item['name']:<{width}}  [{item['source']}] {summary}")
+        when = item["when_to_use"] or "(no purpose/when-to-use documented in SKILL.md)"
+        _echo(f"  {item['name']:<{width}}  [{item['source']}] {when}")
     if route is not None:
         _echo("")
         if routed is None:

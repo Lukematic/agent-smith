@@ -26,6 +26,7 @@ Long-form, task-oriented documentation for A.W.I.N.O.
 | [Enforcement](enforcement.md) | Gate-ledger design |
 | [Harness](harness.md) | Mental models, guides, and sensors |
 | [Skills](skills.md) | Generated canonical skill catalog |
+| [Commands](commands.md) | Generated command reference (live `--help`) |
 | [API keys](api-keys.md) | Provider credentials and custom gateways |
 | [Nuclear engineer walkthrough](walkthrough-nuclear-engineer.md) | Domain-support example |
 | [Credits and sources](credits-and-sources.md) | Attribution and upstream sources |
@@ -45,4 +46,5 @@ Documentation is Markdown. Use canonical `awino` commands in executable examples
 ## Stability
 
 Edit human-authored guides directly. `skills.md` is generated from the installed
-skill catalog and must be refreshed through the repository's generation workflow.
+skill catalog and `commands.md` from live `--help`; both must be refreshed
+through the repository's generation workflow (`buddy --fix`).

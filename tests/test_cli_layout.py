@@ -24,7 +24,8 @@ CLI_PACKAGE = SRC / "cli"
 # cli.py before the package split (89 names), extended as commands were added
 # afterwards: buddy (Phase 1), loop run ralph / loop run delegate / loop
 # answer / loop default (Phase 2), loop close (outcome verdict), brief
-# (stakeholder brief, Phase 2). 101 names.
+# (stakeholder brief, Phase 2), proof export / proof verify (FAIR proof
+# packs, Phase 2), buddy health (repo hygiene, Phase 2). 104 names.
 PRE_SPLIT_COMMANDS = frozenset(
     {
         "ask",
@@ -81,6 +82,7 @@ PRE_SPLIT_COMMANDS = frozenset(
         "limits",
         "link",
         "buddy check",
+        "buddy health",
         "loop approve",
         "loop back",
         "loop close",
@@ -100,6 +102,8 @@ PRE_SPLIT_COMMANDS = frozenset(
         "pointer",
         "project-bootstrap",
         "project-scaffold",
+        "proof export",
+        "proof verify",
         "push",
         "registry-json",
         "remember",
@@ -217,8 +221,8 @@ class TestCommandSurfaceIsUnchanged:
         )
 
     def test_command_count_is_exactly_the_registered_set(self) -> None:
-        assert len(PRE_SPLIT_COMMANDS) == 101
-        assert len(_registered(cli.app)) == 101
+        assert len(PRE_SPLIT_COMMANDS) == 104
+        assert len(_registered(cli.app)) == 104
 
     def test_public_entry_points_survive(self) -> None:
         assert isinstance(cli.app, typer.Typer)

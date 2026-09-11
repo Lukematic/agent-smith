@@ -1,4 +1,4 @@
-"""owns: buddy check
+"""owns: buddy check, buddy health
 
 Diagnostic: reports mechanism effectiveness FROM REAL STATE, never from
 claims. Every number printed traces to a file this command names: the run
@@ -23,14 +23,16 @@ import yaml
 
 from awino import (
     heilmeier,
+    hygiene,
     loops,
     session_markers,
     session_state,
+    skill_catalog,
     skill_receipts,
     stance,
     working_memory,
 )
-from awino.cli import _echo, _paths, _workspace
+from awino.cli import _echo, _paths, _skill_catalog, _workspace
 from awino.enforce import LOOPS, Ledger, LoopEvent, Run
 from awino.paths import Workspace, project_state_dir
 
@@ -1029,6 +1031,81 @@ def _dedupe_markers(path: Path) -> int:
 # ── the report ───────────────────────────────────────────────────────────────
 
 
+# ── section 8: repo hygiene ("one clean") ────────────────────────────────────
+#
+# Dead code, docs coverage, docs drift. Two tiers for dead code: the fast
+# static pass (ruff F401) runs in the default report; the deep coverage tier
+# runs only under `buddy health --deep` because it executes the whole suite.
+
+
+def _command_help_entries() -> list[tuple[str, str]]:
+    """(command, short help) for every registered command, via click."""
+    from typer.main import get_command
+
+    from awino.cli import app as cli_app
+
+    root = get_command(cli_app)
+    entries: list[tuple[str, str]] = []
+
+    def walk(node, prefix: str) -> None:
+        children = getattr(node, "commands", None)
+        if children:
+            for name in sorted(children):
+                walk(children[name], f"{prefix}{name} ")
+            return
+        short = ""
+        try:
+            short = node.get_short_help_str() or ""
+        except Exception:
+            short = ""
+        if not short:
+            help_text = getattr(node, "help", "") or ""
+            short = help_text.strip().splitlines()[0] if help_text.strip() else ""
+        entries.append((prefix.strip(), short))
+
+    walk(root, "")
+    return entries
+
+
+def _report_repo_hygiene(project_root: Path) -> None:
+    """Section 8: dead code (fast tier), docs coverage, docs drift."""
+    _echo("REPO HYGIENE  (one clean: dead code, docs coverage, docs drift)")
+    # Dead code, fast tier: ruff F401 over the project.
+    diagnostics = hygiene.ruff_diagnostics(project_root)
+    if diagnostics is None:
+        _echo("  DEAD CODE (fast): ruff unavailable -- static pass skipped")
+    else:
+        dead = hygiene.dead_code_from_ruff(diagnostics, project_root)
+        if not dead:
+            _echo("  DEAD CODE (fast): no unused imports (ruff F401)")
+        for finding in dead:
+            _echo(f"  DEAD_CODE  {finding.target}: {finding.detail}")
+        _echo("  (deep tier: `buddy health --deep` runs the suite under coverage)")
+    # Docs coverage: every registered command and every skill documented.
+    entries = _command_help_entries()
+    names = [name for name, _ in entries]
+    mentions = hygiene.doc_mentions(project_root / "docs")
+    missing = hygiene.undocumented_commands(names, mentions)
+    for command in missing:
+        _echo(f"  DOCS_COVERAGE  'awino {command}' has no documentation in docs/")
+    catalog = _skill_catalog()
+    undocumented_skills = [
+        skill.name
+        for skill in catalog.skills
+        if not skill_catalog.describe(skill).documented
+    ]
+    for name in undocumented_skills:
+        _echo(f"  DOCS_COVERAGE  skill '{name}': SKILL.md lacks purpose/when-to-use")
+    if not missing and not undocumented_skills:
+        _echo("  DOCS_COVERAGE  every command and skill is documented")
+    # Docs drift: generated reference vs live --help, plus dead references.
+    for finding in hygiene.reference_drift(entries, project_root / "docs"):
+        _echo(f"  DOCS_DRIFT  {finding.target}: {finding.detail}")
+    for ref in hygiene.dead_doc_refs(mentions, names):
+        _echo(f"  DOCS_DRIFT  docs mention `{ref}` which is not a registered command")
+    _echo("")
+
+
 def _run_report() -> None:
     workspace = _workspace()
     ledger = Ledger(workspace.state_root)
@@ -1157,6 +1234,11 @@ def _run_report() -> None:
 
     # 7. state hygiene: stale sessions, orphaned/partial loop state, clutter.
     _report_hygiene(workspace.state_root, ledger)
+    _echo("")
+
+    # 8. repo hygiene ("one clean"): dead code (fast tier), docs coverage,
+    # docs drift. The deep coverage tier is `buddy health --deep`.
+    _report_repo_hygiene(workspace.project.root)
 
 
 def _backfill_unrecorded_decisions(
@@ -1683,7 +1765,76 @@ def _run_fix() -> None:
             need_human += 1
     _echo("")
 
+    # 8. repo hygiene: regenerate the command reference from live --help when
+    # the drift is one-sided (reference missing or out of sync). The content
+    # comes from the code itself, never invented; rows for commands with no
+    # help text are marked draft for a human to describe. A project with no
+    # docs/ at all is left alone -- creating a docs tree unprompted is
+    # presumptuous, and the report's coverage section already names the gap.
+    # Dead code is never auto-deleted -- removing code is judgment, so it
+    # stays a prompt.
+    _echo("REPO HYGIENE")
+    entries = _command_help_entries()
+    docs_dir = project_root / "docs"
+    if not docs_dir.is_dir():
+        _echo("  note: no docs/ directory -- command reference not generated")
+    else:
+        names = [name for name, _ in entries]
+        mentions = hygiene.doc_mentions(docs_dir)
+        missing = hygiene.undocumented_commands(names, mentions)
+        drift = hygiene.reference_drift(entries, docs_dir)
+        if not missing and not drift:
+            _echo("  command reference is current (no correction needed)")
+        else:
+            path = hygiene.write_commands_reference(docs_dir, entries)
+            _echo(
+                f"  FIX regenerated {path} from live --help "
+                f"({len(entries)} commands)"
+            )
+            applied += 1
+    diagnostics = hygiene.ruff_diagnostics(project_root)
+    if diagnostics is None:
+        _echo("  note: ruff unavailable -- dead-code pass skipped")
+    else:
+        for finding in hygiene.dead_code_from_ruff(diagnostics, project_root):
+            _echo(
+                f"  PROMPT  {finding.target}: {finding.detail} -- "
+                "remove it by hand when sure"
+            )
+            need_human += 1
+    _echo("")
+
     _echo(f"BUDDY-FIX done: {applied} correction(s) applied, {need_human} need a human")
+
+
+@buddy_app.command("health")
+def buddy_health(
+    deep: bool = typer.Option(
+        False,
+        "--deep",
+        help="Run the full suite under coverage and flag unexecuted "
+        "modules/functions (slow: minutes, not seconds).",
+    ),
+) -> None:
+    """Repo hygiene on demand: dead code, docs coverage, docs drift.
+
+    The default is the fast tier (static ruff pass, no test run).
+    ``--deep`` runs the whole suite under coverage instead.
+    """
+    project_root = _workspace().project.root
+    if not deep:
+        _report_repo_hygiene(project_root)
+        return
+    _echo("BUDDY HEALTH --deep  (coverage tier: the suite runs under coverage)")
+    findings, note = hygiene.run_coverage_deep(project_root)
+    _echo(f"  {note}")
+    if findings is None:
+        _echo("  SKIP  deep tier unavailable here")
+        return
+    if not findings:
+        _echo("  every measured module and function was executed by the suite")
+    for finding in findings:
+        _echo(f"  DEAD_CODE  {finding.target}: {finding.detail}")
 
 
 @buddy_app.command("check")

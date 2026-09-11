@@ -23,6 +23,15 @@ from enum import StrEnum
 from pathlib import Path
 
 from awino.paths import AwinoPaths
+from awino.skill_catalog import SkillCatalog
+from awino.skill_catalog import describe as describe_skill
+
+
+def _truncate_cell(text: str, limit: int = 110) -> str:
+    text = text.split(". ")[0].rstrip(".").strip()
+    if len(text) > limit:
+        text = text[: limit - 3] + "..."
+    return text.replace("|", "\\|")
 
 
 class Outcome(StrEnum):
@@ -58,14 +67,22 @@ def skill_index(paths: AwinoPaths) -> str:
 
     The index is derived, never authored. A hand-maintained list of skills drifts
     the moment someone adds a directory, and a router that lies about what exists
-    is worse than no router.
+    is worse than no router. Purpose and when-to-use come from the same dynamic
+    registry parsing that powers ``awino skills``.
     """
-    rows: list[tuple[str, str, str]] = []
-    for skill in sorted(paths.skills.glob("awino-*/SKILL.md")):
-        text = skill.read_text(encoding="utf-8")
-        name = _frontmatter_value(text, "name") or skill.parent.name
-        description = _frontmatter_value(text, "description") or "(no description)"
-        rows.append((name, description, f"../skills/{skill.parent.name}/SKILL.md"))
+    catalog = SkillCatalog(paths.root, paths.root, paths.skills)
+    rows: list[tuple[str, str, str, str]] = []
+    for item in catalog.skills:
+        doc = describe_skill(item)
+        purpose = _truncate_cell(doc.purpose) if doc.documented else "(undocumented)"
+        when = (
+            _truncate_cell(doc.when_to_use)
+            if doc.documented
+            else "(no purpose/when-to-use in SKILL.md)"
+        )
+        rows.append(
+            (doc.name, purpose, when, f"../skills/{item.path.parent.name}/SKILL.md")
+        )
 
     lines = [
         "# Skills",
@@ -74,14 +91,11 @@ def skill_index(paths: AwinoPaths) -> str:
         "",
         f"{len(rows)} canonical A.W.I.N.O. skill(s).",
         "",
-        "| Skill | Purpose |",
-        "| --- | --- |",
+        "| Skill | Purpose | When to use |",
+        "| --- | --- | --- |",
     ]
-    for name, description, link in rows:
-        summary = description.split(". ")[0].rstrip(".")
-        if len(summary) > 110:
-            summary = summary[:107] + "..."
-        lines.append(f"| [`{name}`]({link}) | {summary} |")
+    for name, purpose, when, link in rows:
+        lines.append(f"| [`{name}`]({link}) | {purpose} | {when} |")
     lines += [
         "",
         "## Invocation",
@@ -100,11 +114,6 @@ def skill_index(paths: AwinoPaths) -> str:
         "",
     ]
     return "\n".join(lines)
-
-
-def _frontmatter_value(text: str, key: str) -> str | None:
-    match = re.search(rf"^{key}:\s*(.+)$", text, re.MULTILINE)
-    return match.group(1).strip() if match else None
 
 
 def plugin_skill_list(paths: AwinoPaths) -> list[str]:

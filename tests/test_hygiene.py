@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,9 +23,14 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from awino import session_state
+from awino import cli, hygiene, session_state, skill_catalog
 from awino.cli import buddy
 from awino.enforce import Ledger, LoopEvent
+
+try:
+    import coverage
+except ImportError:  # pragma: no cover
+    coverage = None
 
 STALE_DAYS = 40
 
@@ -241,3 +248,246 @@ def test_ledger_still_resolves_every_referenced_artifact_after_fix(
     assert ledger.loop_events()
     # Run evidence the clutter check read is untouched.
     assert (messy_state / "run" / "r1" / "evidence.jsonl").is_file()
+
+
+# ── repo hygiene ("one clean"): dead code, docs coverage, docs drift ──────
+
+
+def test_dead_code_from_ruff_f401(tmp_path: Path) -> None:
+    module = tmp_path / "m.py"
+    diagnostics = [
+        {
+            "code": "F401",
+            "filename": str(module),
+            "location": {"row": 3},
+            "message": "`os` imported but unused",
+        },
+        {
+            "code": "E501",
+            "filename": str(module),
+            "location": {"row": 9},
+            "message": "line too long",
+        },
+    ]
+    findings = hygiene.dead_code_from_ruff(diagnostics, tmp_path)
+    assert len(findings) == 1
+    assert findings[0].target == "m.py:3"
+    assert "unused" in findings[0].detail
+
+
+def test_doc_mentions_finds_commands_in_docs(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "usage.md").write_text(
+        "Run `awino ask` to check a question.\n"
+        "Then try `awino loop run ralph` for iteration.\n"
+        "Undocumented here: doctor.\n",
+        encoding="utf-8",
+    )
+    mentions = hygiene.doc_mentions(docs)
+    assert "awino ask" in mentions
+    assert "awino loop run ralph" in mentions
+    assert "doctor" not in mentions
+
+
+def test_undocumented_commands_flagged(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "usage.md").write_text("Use `awino ask` to ask questions.\n")
+    mentions = hygiene.doc_mentions(docs)
+    missing = hygiene.undocumented_commands(["ask", "doctor", "loop run"], mentions)
+    assert missing == ["doctor", "loop run"]
+
+
+def test_dead_doc_refs_flagged() -> None:
+    dead = hygiene.dead_doc_refs({"awino ask", "awino time machine"}, ["ask", "doctor"])
+    assert dead == ["awino time machine"]
+    assert hygiene.dead_doc_refs({"awino ask"}, ["ask", "doctor"]) == []
+
+
+def test_dead_doc_refs_accepts_real_command_groups() -> None:
+    """A mention naming a group (`awino buddy`, `awino gate plan ...`) is alive."""
+    commands = ["buddy check", "buddy health", "gate plan approve"]
+    mentions = {"awino buddy", "awino buddy --fix", "awino gate plan ..."}
+    assert hygiene.dead_doc_refs(mentions, commands) == []
+
+
+def test_write_commands_reference_marks_draft(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    path = hygiene.write_commands_reference(
+        docs, [("ask", "Check a question"), ("ghost", "")]
+    )
+    assert path == docs / "commands.md"
+    text = path.read_text(encoding="utf-8")
+    assert "Do not edit by hand" in text
+    assert "regenerated" in text
+    assert "`awino ask`" in text and "Check a question" in text
+    assert "`awino ghost`" in text and "[DRAFT]" in text
+
+
+def test_reference_drift_detects_stale_body(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    entries = [("ask", "Check a question")]
+    hygiene.write_commands_reference(docs, entries)
+    assert hygiene.reference_drift(entries, docs) == []
+    drift = hygiene.reference_drift([("ask", "TOTALLY DIFFERENT HELP")], docs)
+    assert len(drift) == 1
+    assert drift[0].target == "awino ask"
+    assert "buddy --fix" in drift[0].detail
+    # No reference yet is coverage's finding, not drift's.
+    missing_dir = tmp_path / "empty-docs"
+    missing_dir.mkdir()
+    assert hygiene.reference_drift(entries, missing_dir) == []
+
+
+@pytest.mark.skipif(coverage is None, reason="coverage not installed")
+def test_coverage_deep_flags_unexecuted_function(tmp_path: Path) -> None:
+    """Real coverage run: only `live` is executed, `dead` must be flagged."""
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "pkgmod.py").write_text(
+        "def live():\n    return 1\n\n\ndef dead():\n    return 2\n",
+        encoding="utf-8",
+    )
+    (proj / "use_live.py").write_text("import pkgmod\nprint(pkgmod.live())\n")
+    env = {**os.environ, "COVERAGE_FILE": str(proj / ".coverage")}
+    run = subprocess.run(
+        [sys.executable, "-m", "coverage", "run", "--source", "pkgmod", "use_live.py"],
+        cwd=proj,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert run.returncode == 0, run.stderr
+    report = subprocess.run(
+        [sys.executable, "-m", "coverage", "json", "-o", "cov.json"],
+        cwd=proj,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert report.returncode == 0, report.stderr
+    data = json.loads((proj / "cov.json").read_text(encoding="utf-8"))
+    findings = hygiene.dead_from_coverage(data, proj)
+    targets = [finding.target for finding in findings]
+    assert "pkgmod.py:5" in targets
+    assert "function 'dead' never executed" in " ".join(f.detail for f in findings)
+    assert not any(target == "pkgmod.py:1" for target in targets)
+
+
+def test_run_coverage_deep_honest_when_coverage_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(hygiene, "coverage_available", lambda: False)
+    findings, note = hygiene.run_coverage_deep(tmp_path)
+    assert findings is None
+    assert "coverage" in note
+
+
+def test_buddy_health_fast_tier_reports_all_sections(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`buddy health` (fast tier) exits 0 and shows the three hygiene lenses."""
+    for var in ("AWINO_HOME", "SMITH_HOME", "AWINO_PROJECT", "SMITH_PROJECT"):
+        monkeypatch.delenv(var, raising=False)
+    result = CliRunner().invoke(cli.app, ["buddy", "health"])
+    assert result.exit_code == 0, result.output
+    assert "REPO HYGIENE" in result.output
+    # Dead code: either the fast-tier header (clean) or per-finding lines.
+    assert "DEAD_CODE" in result.output or "DEAD CODE (fast)" in result.output
+    # Docs coverage and drift: headers or per-finding lines.
+    assert "DOCS_COVERAGE" in result.output or "DOCS_DRIFT" in result.output
+
+
+def test_every_shipped_skill_has_purpose_and_when_to_use() -> None:
+    """The registry parses purpose/when-to-use for all real skills."""
+    from awino.cli import _skill_catalog as _real_catalog
+
+    catalog = _real_catalog()
+    assert len(catalog.skills) >= 16
+    undocumented = [
+        skill.name
+        for skill in catalog.skills
+        if not skill_catalog.describe(skill).documented
+    ]
+    assert undocumented == [], f"skills missing purpose/when-to-use: {undocumented}"
+    for skill in catalog.skills:
+        doc = skill_catalog.describe(skill)
+        assert doc.purpose, skill.name
+        assert doc.when_to_use, skill.name
+
+
+def test_fixture_skill_discovered_dynamically(tmp_path: Path) -> None:
+    """A new SKILL.md directory appears in the registry with no hardcoding."""
+    skills_dir = tmp_path / "skills"
+    (skills_dir / "demo").mkdir(parents=True)
+    (skills_dir / "demo" / "SKILL.md").write_text(
+        "---\ndescription: Demo skill for registry tests.\n---\n"
+        "# demo\n\nUse this skill when testing the registry discovery.\n",
+        encoding="utf-8",
+    )
+    catalog = skill_catalog.SkillCatalog(tmp_path, tmp_path, skills_dir)
+    (item,) = catalog.skills
+    doc = skill_catalog.describe(item)
+    assert doc.name == "demo"
+    assert doc.documented
+    assert "testing the registry" in doc.when_to_use.lower()
+
+
+def test_skill_without_doc_sections_is_flagged(tmp_path: Path) -> None:
+    """A SKILL.md with no frontmatter description is honestly undocumented."""
+    skills_dir = tmp_path / "skills"
+    (skills_dir / "vague").mkdir(parents=True)
+    (skills_dir / "vague" / "SKILL.md").write_text(
+        "# vague\n\nSome rambling text without structure.\n", encoding="utf-8"
+    )
+    catalog = skill_catalog.SkillCatalog(tmp_path, tmp_path, skills_dir)
+    (item,) = catalog.skills
+    doc = skill_catalog.describe(item)
+    assert not doc.documented
+
+
+def test_awino_skills_shows_when_to_use(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`awino skills` lists every skill with its one-line when-to-use."""
+    for var in ("AWINO_HOME", "SMITH_HOME", "AWINO_PROJECT", "SMITH_PROJECT"):
+        monkeypatch.delenv(var, raising=False)
+    result = CliRunner().invoke(cli.app, ["skills"])
+    assert result.exit_code == 0, result.output
+    assert "when-to-use" in result.output
+    assert "awino-debug" in result.output
+    assert "awino-ralph" in result.output
+    assert "(no purpose/when-to-use documented in SKILL.md)" not in result.output
+
+
+def test_fix_regenerates_drifted_command_reference(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cli_runner: CliRunner
+) -> None:
+    """--fix corrects one-sided drift: stale reference, live --help wins."""
+    monkeypatch.chdir(tmp_path)
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    hygiene.write_commands_reference(docs, [("ask", "STALE HELP TEXT")])
+    result = cli_runner.invoke(buddy.buddy_app, ["--fix"])
+    assert result.exit_code == 0, result.output
+    assert "FIX regenerated" in result.output
+    text = (docs / "commands.md").read_text(encoding="utf-8")
+    assert "`awino ask`" in text
+    assert "STALE HELP TEXT" not in text
+    # Second run is quiet: the reference is now in sync.
+    again = cli_runner.invoke(buddy.buddy_app, ["--fix"])
+    assert again.exit_code == 0, again.output
+    assert "FIX regenerated" not in again.output
+    assert "command reference is current" in again.output
+
+
+def test_fix_leaves_docless_project_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cli_runner: CliRunner
+) -> None:
+    """No docs/ directory: --fix notes it, creates nothing, counts nothing."""
+    monkeypatch.chdir(tmp_path)
+    result = cli_runner.invoke(buddy.buddy_app, ["--fix"])
+    assert result.exit_code == 0, result.output
+    assert "no docs/ directory" in result.output
+    assert not (tmp_path / "docs").exists()

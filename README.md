@@ -182,6 +182,7 @@ The generated editor modes are: 🧭 A.W.I.N.O., 🧭 A.W.I.N.O. Consult,
 | [Enforcement](docs/enforcement.md) | Gate-ledger mechanics |
 | [Harness](docs/harness.md) | Mental models, guides, and sensors |
 | [Skills](docs/skills.md) | Generated canonical skill catalog |
+| [Commands](docs/commands.md) | Generated command reference (live `--help`) |
 | [API keys](docs/api-keys.md) | Provider credentials and custom gateways |
 | [Nuclear engineer walkthrough](docs/walkthrough-nuclear-engineer.md) | Domain-support example |
 | [Credits and sources](docs/credits-and-sources.md) | Attribution and upstream sources |

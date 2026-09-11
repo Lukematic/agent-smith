@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
-from awino import heilmeier, loops, working_memory
+from awino import heilmeier, loops, proof, working_memory
 from awino.cli import _echo, _workspace, app
 from awino.enforce import Ledger, LoopEvent
 from awino.paths import Workspace
@@ -29,43 +29,20 @@ from awino.paths import Workspace
 # `awino loop close` records one outcome_verdict event per loop with a
 # "verdict: yes|partial|no" detail plus "criteria_met: ...",
 # "criteria_unmet: ...", "criteria_unjudgeable: ..." lists judged against the
-# mission's success criteria at close time. The brief aggregates those per
-# criterion: the latest verdict that mentions a criterion decides its
-# status; a criterion no verdict ever mentioned is unjudgeable.
-
-_CRITERION_LABEL_RE = re.compile(
-    r"(?i)(?:^|;\s*)(criteria_met|criteria_unmet|criteria_unjudgeable)\s*:"
-)
-_LABEL_TO_STATUS = {
-    "criteria_met": "met",
-    "criteria_unmet": "unmet",
-    "criteria_unjudgeable": "unjudgeable",
-}
-_NO_CRITERIA_NOTE = "no success criteria on file"
-_NONE_PLACEHOLDER = "(none)"
+# mission's success criteria at close time. The parsing lives in
+# awino.proof so the brief and the proof pack can never disagree on what a
+# verdict said. The brief aggregates those per criterion: the latest verdict
+# that mentions a criterion decides its status; a criterion no verdict ever
+# mentioned is unjudgeable.
 
 
 def _norm(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().lower()
 
 
-def _verdict_criteria(detail: str | None) -> dict[str, list[str]]:
-    """criteria lists from one outcome_verdict detail, keyed met/unmet/unjudgeable."""
-    out: dict[str, list[str]] = {"met": [], "unmet": [], "unjudgeable": []}
-    detail = detail or ""
-    matches = list(_CRITERION_LABEL_RE.finditer(detail))
-    for i, match in enumerate(matches):
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(detail)
-        chunk = detail[match.end() : end].strip().rstrip(";").strip()
-        if not chunk or chunk.lower() in {_NONE_PLACEHOLDER, _NO_CRITERIA_NOTE}:
-            continue
-        status = _LABEL_TO_STATUS[match.group(1).lower()]
-        out[status] = [
-            item.strip()
-            for item in chunk.split(";")
-            if item.strip() and item.strip().lower() != _NONE_PLACEHOLDER
-        ]
-    return out
+# Kept for the existing unit tests: the single implementation lives in
+# awino.proof.verdict_criteria.
+_verdict_criteria = proof.verdict_criteria
 
 
 @dataclass(frozen=True)
@@ -94,7 +71,7 @@ def _judge_criteria(
     for event in events:  # loops.jsonl is oldest-first; later wins
         if event.kind != "outcome_verdict":
             continue
-        parsed = _verdict_criteria(event.detail)
+        parsed = proof.verdict_criteria(event.detail)
         for status in ("met", "unmet", "unjudgeable"):
             for item in parsed[status]:
                 criterion = index.get(_norm(item))
@@ -115,7 +92,6 @@ def _judge_criteria(
 # each claim fared.
 
 _TASK_IN_STARTED = re.compile(r"(?m)^task:\s*(.+?)\s*$")
-_VERDICT_IN_DETAIL = re.compile(r"(?:^|;)\s*verdict\s*:\s*(yes|partial|no)\b", re.I)
 _VALIDATED_ARTIFACT_RE = re.compile(r"passed validation:\s*(.+?)\s*$", re.I)
 
 
@@ -150,12 +126,12 @@ def _deliverables_from_loops(events: list[LoopEvent]) -> list[Deliverable]:
         for event in trail:
             if event.kind != "outcome_verdict":
                 continue
-            match = _VERDICT_IN_DETAIL.search(event.detail or "")
-            if match:
-                verdict = match.group(1).lower()
-            parsed = _verdict_criteria(event.detail)
+            word = proof.verdict_word(event.detail)
+            if word is not None:
+                verdict = word
+            parsed = proof.verdict_criteria(event.detail)
             met, unmet = len(parsed["met"]), len(parsed["unmet"])
-        proof = [
+        proof_lines = [
             f"loops.jsonl: {len(trail)} events "
             f"({', '.join(sorted(kinds))})"
         ]
@@ -167,17 +143,21 @@ def _deliverables_from_loops(events: list[LoopEvent]) -> list[Deliverable]:
             if match and match.group(1) not in validated:
                 validated.append(match.group(1))
         for artifact in validated:
-            proof.append(f"validated artifact: {artifact}")
+            proof_lines.append(f"validated artifact: {artifact}")
         if verdict is not None:
-            proof.append(
+            proof_lines.append(
                 f"outcome verdict '{verdict}': {met} criteria met, "
                 f"{unmet} unmet"
             )
         else:
-            proof.append("no outcome verdict recorded for this loop")
+            proof_lines.append("no outcome verdict recorded for this loop")
         out.append(
             Deliverable(
-                title=title, kind="loop", ref=loop_id, verdict=verdict, proof=proof
+                title=title,
+                kind="loop",
+                ref=loop_id,
+                verdict=verdict,
+                proof=proof_lines,
             )
         )
     return out
@@ -549,8 +529,8 @@ def _compile_brief(state_root: Path, project_root: Path, workspace: Workspace) -
         lines.append(f"  - {item.title} ({item.kind} {item.ref})")
         if item.verdict is not None:
             lines.append(f"    outcome: {_VERDICT_WORD[item.verdict]}")
-        for proof in item.proof:
-            lines.append(f"    proof: {proof}")
+        for claim in item.proof:
+            lines.append(f"    proof: {claim}")
     lines.append("")
 
     # 3. Decisions: each with its why, plus the steel-man losing case.

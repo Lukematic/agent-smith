@@ -132,6 +132,73 @@ class SkillCatalog:
         return discovered
 
 
+@dataclass(frozen=True)
+class SkillDoc:
+    """A skill's documentation: purpose and when to use it, parsed from SKILL.md.
+
+    ``purpose`` is the frontmatter description. ``when_to_use`` is the
+    one-line answer to "when do I reach for this skill", parsed from an
+    explicit section or use-line, falling back to the description's first
+    sentence. A doc with neither is undocumented -- the registry says so
+    and buddy's docs-coverage flags it.
+    """
+
+    name: str
+    path: Path
+    source: str
+    purpose: str
+    when_to_use: str
+
+    @property
+    def documented(self) -> bool:
+        return bool(self.purpose or self.when_to_use)
+
+
+_USE_HEADING_RE = re.compile(
+    r"(?im)^#{1,4}\s*(when to use|use this skill when|usage)\s*$"
+)
+_USE_LINE_RE = re.compile(
+    r"(?m)^(Use this skill [^.\n]*\.?|Use when [^.\n]*\.?|Use for [^.\n]*\.?)\s*$"
+)
+
+
+def _one_line(text: str, limit: int = 140) -> str:
+    line = re.sub(r"\s+", " ", text).strip().rstrip(".")
+    return line if len(line) <= limit else line[: limit - 3].rstrip() + "..."
+
+
+def _when_to_use(text: str, purpose: str) -> str:
+    body = text.split("---", 2)[2] if text.startswith("---") else text
+    heading = _USE_HEADING_RE.search(body)
+    if heading:
+        for line in body[heading.end() :].splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
+                return _one_line(stripped)
+    line = _USE_LINE_RE.search(body)
+    if line:
+        return _one_line(line.group(1))
+    if purpose:
+        return _one_line(purpose.split(". ")[0])
+    return ""
+
+
+def describe(skill: Skill) -> SkillDoc:
+    """Parse a skill's SKILL.md into its registry entry. Never hardcoded."""
+    try:
+        text = skill.path.read_text(encoding="utf-8")
+    except OSError:
+        return SkillDoc(skill.name, skill.path, skill.source, "", "")
+    purpose = skill.description.strip()
+    return SkillDoc(
+        name=skill.name,
+        path=skill.path,
+        source=skill.source,
+        purpose=purpose,
+        when_to_use=_when_to_use(text, purpose),
+    )
+
+
 def _stem(word: str) -> str:
     """Conservative English stemming: plurals and common verb endings only.
 
