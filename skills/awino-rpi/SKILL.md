@@ -157,6 +157,15 @@ Explicit questions needing human input, one per line in `Qn:` format:
 
 Q1: which approach — A, B, or something else?
 Q2: who approves the plan?
+
+## Required skills
+The skill(s) each phase runs under, one `- <phase>: <skill>` item per phase
+(the driver checks this section, and the receipt gate requires a valid
+receipt for every skill named here before the loop leaves the phase):
+
+- research: awino-rpi
+- pair-plan: awino-rpi
+- plan: awino-rpi
 ```
 
 **Then stop.** The driver prints the questions verbatim. The human answers each

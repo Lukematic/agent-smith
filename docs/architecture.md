@@ -206,6 +206,78 @@ to do string surgery. The human never reads the raw file — `awino best`
 renders the brief. Facts and decisions stay markdown because humans do read
 those, as append-only logs.
 
+### Skill receipts
+
+Skill usage is a gated, checkable step. When a phase's artifact validates,
+the loop driver writes a receipt for every required skill:
+
+`.awino/receipts/<loop-id>--<phase>--<skill>.json`
+
+```json
+{
+  "skill": "awino-rpi",
+  "version": "<skill SKILL.md content hash, 12 hex chars>",
+  "phase": "research",
+  "inputs_hash": "<sha256>",
+  "output_artifact": "thoughts/research/2026-09-11-0800-auth.md",
+  "artifact_hash": "<sha256 of the artifact bytes at validation time>",
+  "timestamp": "<iso-8601>"
+}
+```
+
+The honest write point is the driver, right after the phase artifact
+validates — a handwritten receipt file alone proves nothing, because the
+receipt only passes the gate when (a) its `inputs_hash` matches the phase's
+current actual inputs and (b) its declared output artifact equals the
+phase's artifact, exists, and — unless it is byte-identical to what
+validated — passes that artifact's own validation at gate time.
+`artifact_hash` lets the gate accept an unchanged artifact without
+re-running the validator: some validators (ralph retry) record progress as
+a side effect and are not idempotent, so a re-run on an unchanged artifact
+would wrongly fail. When the artifact changed after the receipt was
+written, the gate re-runs the artifact's own validator and reports its
+problems.
+
+**`inputs_hash`** is SHA-256 over canonical JSON (sorted keys, UTF-8) of
+exactly the phase's consumed inputs: `artifact_path` (the repo-relative
+phase artifact path), `criteria_hash` (the mission's live objective +
+success criteria hash), and `seed_id` (the loop's linked seed id, or `""`
+when none). A receipt is refreshed when the inputs moved (stale
+`inputs_hash`) or the artifact's bytes changed (stale `artifact_hash`); an
+unchanged receipt stands and emits no duplicate ledger event.
+
+**Required skills** come from the pairing brief's `## Required skills`
+section — one `- <phase>: <skill>[, <skill>...]` item per phase — and the
+brief's validator rejects a missing section, names any phase missing a
+declaration, and rejects skill names that resolve to no real skill (project
+`<project>/skills/` first, then the bundled `skills/`). Loops
+without a pairing brief (or non-RPI loops) fall back to the loop kind's own
+skill (`awino-rpi`, `awino-ralph`, `awino-delegate`); phases that produce no
+artifact (verify, assign, implement, controller-verify) require no receipts.
+
+**The gate**: `advance()` refuses to leave a phase while any required skill
+lacks a valid receipt, raising `ReceiptBlocked` with one problem per skill —
+missing receipt (names the skill), malformed receipt file (names the skill),
+stale `inputs_hash` (inputs moved since the attestation), an output artifact
+that is not the phase's artifact or is missing (names the path), or an
+output that fails its own validation (names the first failure). `loop next`
+renders these as `REFUSED` lines naming the skill and the problem; the fix
+is to re-validate the phase so the driver re-attests — receipts are written
+by the driver, never by hand.
+
+**The trail**: each written receipt emits a `skill_receipt` ledger event.
+The checklist item's `"skills"` entry is the current phase's
+`{"<skill>": "received|missing|invalid"}` (per-phase history accumulates
+under `"skills_by_phase"`), and the compact brief shows the current phase's
+line (e.g. `SKILLS  awino-rpi=received`).
+
+**Buddy** audits completed phases for valid receipts and flags receiptless
+ones. `buddy --fix` never writes a receipt — it re-arms the phase via the
+driver's re-entry (active loops) or the dedicated re-open path (done
+loops), so the skill step runs again and the driver's `check()` writes a
+fresh receipt when the artifact validates. Forging one would make the audit
+lie.
+
 
 
 

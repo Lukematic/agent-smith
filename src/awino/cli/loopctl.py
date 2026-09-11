@@ -295,6 +295,16 @@ def loop_next(
                 f"--answer \"...\" --id {state.id}"
             )
         raise typer.Exit(1) from None
+    except loops.ReceiptBlocked as exc:
+        _echo(f"REFUSED  {exc}")
+        for problem in exc.problems:
+            _echo(f"  - {problem}")
+        _echo(
+            "Receipts are written by the driver when the artifact validates, "
+            "never by hand: fix the named problem, then rerun "
+            f"`awino loop next --id {state.id}`."
+        )
+        raise typer.Exit(1) from None
     except loops.LoopError as exc:
         _echo(f"REFUSED  {exc}")
         raise typer.Exit(1) from None

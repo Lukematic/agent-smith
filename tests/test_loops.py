@@ -211,7 +211,7 @@ class TestPlanValidation:
     def _research_done(self, driver: loops.RpiDriver) -> loops.LoopState:
         state = driver.new("add an RPI loop driver")
         _write_research(driver, state, RESEARCH_OK)
-        assert driver.validate_current(state) == []
+        assert driver.check(state) == []
         driver.advance(state)
         return driver.load(state.id)
 
@@ -251,10 +251,11 @@ class TestApprovalGate:
     def _at_plan(self, driver: loops.RpiDriver) -> loops.LoopState:
         state = driver.new("add an RPI loop driver")
         _write_research(driver, state, RESEARCH_OK)
+        assert driver.check(state) == []
         driver.advance(state)
         state = driver.load(state.id)
         _write_plan(driver, state, PLAN_OK)
-        assert driver.validate_current(state) == []
+        assert driver.check(state) == []
         return state
 
     def test_next_past_plan_without_approval_is_refused(
@@ -281,10 +282,12 @@ class TestImplementHandoff:
     def _at_implement(self, driver: loops.RpiDriver) -> loops.LoopState:
         state = driver.new("add an RPI loop driver")
         _write_research(driver, state, RESEARCH_OK)
+        assert driver.check(state) == []
         driver.advance(state)
         state = driver.load(state.id)
         _write_plan(driver, state, PLAN_OK)
         driver.approve_plan(state, by="Luke", reason="ok")
+        assert driver.check(state) == []
         driver.advance(state)
         return driver.load(state.id)
 
@@ -303,10 +306,12 @@ class TestImplementHandoff:
         )
         state = driver.new("add an RPI loop driver")
         _write_research(driver, state, RESEARCH_OK)
+        assert driver.check(state) == []
         driver.advance(state)
         state = driver.load(state.id)
         _write_plan(driver, state, PLAN_OK)
         driver.approve_plan(state, by="Luke", reason="ok")
+        assert driver.check(state) == []
         driver.advance(state)
         state = driver.load(state.id)
         missing = driver.validate_current(state)
@@ -611,8 +616,10 @@ class TestLedgerTrail:
             ("loop_started", "research"),
             ("phase_started", "research"),
             ("artifact_validated", "research"),
+            ("skill_receipt", "research"),
             ("phase_started", "plan"),
             ("artifact_validated", "plan"),
+            ("skill_receipt", "plan"),
             ("approval_granted", "plan"),
             ("phase_started", "implement"),
             ("loop_closed", "implement"),
@@ -713,6 +720,7 @@ class TestBackDriver:
         state = self._at_plan(event_driver)
         _write_plan(event_driver, state, PLAN_OK)
         event_driver.approve_plan(state, by="Luke", reason="ok")
+        assert event_driver.check(state) == []
         event_driver.advance(state)
         event_driver.advance(event_driver.load(state.id))
         done = event_driver.load(state.id)

@@ -244,6 +244,7 @@ class TestAssignOwnership:
             driver, state, "decompose",
             "# Decompose\n\n## Assignments\n\n### alice\nfiles:\nsrc/does-not-exist.py\n",
         )
+        assert driver.check(state) == []  # decompose shape is fine
         driver.advance(state)
         missing = driver.check(state)
         assert missing
@@ -265,6 +266,7 @@ class TestAssignOwnership:
             "### alice\nfiles:\nsrc/a.py\n\n"
             "### bob\nfiles:\nsrc/a.py\n",
         )
+        assert driver.check(state) == []  # decompose shape is fine
         driver.advance(state)
         for _ in range(loops.MAX_ATTEMPTS):
             assert driver.check(state)
@@ -344,6 +346,7 @@ class TestControllerVerify:
             "# Execute\n\n## Results\n\n"
             "### alice\ndone: did the thing\noutput: src/nope.py\n",
         )
+        assert driver.check(state) == []  # execute shape is fine
         driver.advance(state)
         missing = driver.check(state)
         assert missing
@@ -360,6 +363,7 @@ class TestControllerVerify:
             driver, state, "execute",
             "# Execute\n\n## Results\n\n### alice\ndone: did the thing\noutput: src/empty.py\n",
         )
+        assert driver.check(state) == []  # execute shape is fine
         driver.advance(state)
         missing = driver.check(state)
         assert missing
@@ -373,6 +377,7 @@ class TestControllerVerify:
             driver, state, "execute",
             "# Execute\n\n## Results\n\n### alice\ndone: trust me\n",
         )
+        assert driver.check(state) == []  # execute shape is fine
         driver.advance(state)
         missing = driver.check(state)
         assert missing
@@ -384,10 +389,12 @@ class TestControllerVerify:
     ) -> None:
         state = driver.new("split the parser work", seed_id="seed-3")
         _write(driver, state, "decompose", DECOMPOSE_OK)
+        assert driver.check(state) == []
         driver.advance(state)  # assign
         driver.advance(state)  # execute
         state = driver.load(state.id)
         _write(driver, state, "execute", EXECUTE_OK)
+        assert driver.check(state) == []
         driver.advance(state)  # controller-verify
         assert driver.advance(state) == "done"
         assert len(seeds_closed) == 1
@@ -399,6 +406,7 @@ class TestControllerVerify:
     ) -> None:
         state = driver.new("split the parser work", seed_id="seed-4")
         _write(driver, state, "decompose", DECOMPOSE_OK)
+        assert driver.check(state) == []
         driver.advance(state)
         driver.advance(state)
         state = driver.load(state.id)
@@ -406,6 +414,7 @@ class TestControllerVerify:
             driver, state, "execute",
             "# Execute\n\n## Results\n\n### alice\ndone: nope\ncheck: false\n",
         )
+        assert driver.check(state) == []  # execute shape is fine
         driver.advance(state)
         # Three failed controller-verifies lock the loop; the seed stays open.
         for _ in range(loops.MAX_ATTEMPTS):

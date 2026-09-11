@@ -39,9 +39,9 @@ from typing import ClassVar
 
 import yaml
 
-from awino import heilmeier, seeds, working_memory
+from awino import heilmeier, seeds, skill_receipts, working_memory
 from awino.enforce import Ledger, LoopEvent
-from awino.paths import project_state_dir
+from awino.paths import AwinoPaths, project_state_dir
 
 MAX_ATTEMPTS = 3
 RESEARCH_MIN_CHARS = 200
@@ -298,6 +298,23 @@ class PairingIncomplete(LoopError):
 
 class LoopLocked(LoopError):
     """A phase failed validation three times; a human must intervene."""
+
+
+class ReceiptBlocked(LoopError):
+    """Advancement blocked: a required skill has no valid receipt.
+
+    The receipt names the skill and the problem (missing, stale, or an
+    output artifact that fails its own validation). The driver writes
+    receipts when the artifact validates -- rerun the phase's check and
+    the driver re-attests; nothing else may write one.
+    """
+
+    def __init__(self, phase: str, problems: list[str]) -> None:
+        self.phase = phase
+        self.problems = problems
+        super().__init__(
+            "cannot advance from '" + phase + "': " + "; ".join(problems)
+        )
 
 
 def slugify(text: str, max_words: int = 6) -> str:
@@ -574,6 +591,38 @@ class PairPlanPhase(Phase):
                 "pairing brief has no questions in 'Qn:' format "
                 "(e.g. 'Q1: which approach?')"
             )
+        # Required skills: the plan declares which skill(s) each phase runs
+        # under, so the receipt gate knows what to require. The validator
+        # rejects a brief with no declaration, names any phase missing one,
+        # and rejects invented skill names.
+        skills_text = _section_text(text, ("required skills",))
+        if not skills_text.strip():
+            missing.append(
+                "pairing brief missing required section: 'required skills' -- "
+                "declare the required skill(s) per phase, e.g. "
+                "'- research: awino-rpi'"
+            )
+        else:
+            declared = skill_receipts.parse_required_skills(skills_text)
+            for phase_name in driver.artifact_phases:
+                if phase_name not in declared:
+                    missing.append(
+                        "pairing brief has no required-skills declaration for "
+                        f"phase '{phase_name}'"
+                    )
+            for phase_name, skills in declared.items():
+                if phase_name not in driver.phase_order:
+                    missing.append(
+                        "pairing brief declares required skills for unknown "
+                        f"phase '{phase_name}'"
+                    )
+                for skill in skills:
+                    if not driver.skill_known(skill):
+                        missing.append(
+                            f"pairing brief declares unknown skill '{skill}' for "
+                            f"phase '{phase_name}': no such skill in the "
+                            "project or bundled skills/"
+                        )
         return missing
 
 
@@ -1399,6 +1448,229 @@ class LoopDriver(abc.ABC):
             return None
         return working_memory.Decisions(self.state_root)
 
+    # ── skill receipts ───────────────────────────────────────────────────────────
+    # Skill usage as a gated, checkable step. The driver writes a receipt
+    # when a phase's artifact validates (the honest write point); the
+    # advance gate requires a valid receipt for every required skill before
+    # the loop leaves the phase. See awino/skill_receipts.py for the format.
+
+    def _receipts_root(self) -> Path:
+        """Where receipts live. Falls back to the derived state dir when
+        the driver was built without one -- driver-only tests stay
+        file-free, and the production CLI always passes state_root."""
+        if self.state_root is not None:
+            return self.state_root
+        return project_state_dir(self.project_root)
+
+    def _skills_dir(self) -> Path:
+        if self.skill_md is not None:
+            return self.skill_md.parent.parent
+        return AwinoPaths.discover().skills
+
+    def _skill_doc(self, name: str) -> Path | None:
+        """The SKILL.md that `name` resolves to: project skills first.
+
+        A pairing brief may declare a skill the project added under
+        <project>/skills/, not only the bundled set the driver's own skill
+        document came from. Returns None for invented names.
+        """
+        cleaned = name.strip()
+        if not cleaned:
+            return None
+        for root in (self.project_root / "skills", self._skills_dir()):
+            doc = root / cleaned / "SKILL.md"
+            if doc.is_file():
+                return doc
+        return None
+
+    def skill_known(self, name: str) -> bool:
+        """Whether `name` is a real skill: honesty for declared skill names."""
+        return self._skill_doc(name) is not None
+
+    def _skill_version(self, skill: str) -> str:
+        """Pin which skill text the phase ran under (project-first)."""
+        doc = self._skill_doc(skill)
+        if doc is None:
+            return "unknown"
+        return skill_receipts.skill_version(doc.parent.parent, skill)
+
+    def required_skills(self, _state: LoopState, phase_name: str) -> list[str]:
+        """Skills that must hold valid receipts before advancing FROM the phase.
+
+        Only artifact phases need receipts: a receipt attests an artifact's
+        production, and machine-check phases (verify, assign, implement, ...)
+        produce none. The base default is the loop kind's own skill -- the
+        skill document the phase prompt was extracted from; RPI consults the
+        pairing brief's per-phase declaration first.
+        """
+        if phase_name not in self.artifact_phases:
+            return []
+        return [f"awino-{self.loop_kind}"]
+
+    def _live_criteria_hash(self) -> str:
+        return heilmeier.criteria_hash(
+            heilmeier.load(project_state_dir(self.project_root))
+        )
+
+    def _phase_inputs_hash(
+        self, state: LoopState, phase_name: str, criteria_hash: str
+    ) -> str:
+        """The receipt's inputs_hash: exactly the phase's consumed inputs --
+        artifact path, live mission criteria hash, seed id. Canonical JSON
+        with sorted keys. A handwritten receipt alone proves nothing because
+        this hash and the artifact's own validation must match at gate time."""
+        return skill_receipts.inputs_hash(
+            artifact_path=self.phase_artifact(state, phase_name) or "",
+            criteria_hash=criteria_hash,
+            seed_id=state.seed_id,
+        )
+
+    def validate_receipt(
+        self, state: LoopState, phase_name: str, skill: str
+    ) -> str | None:
+        """None when the skill's receipt for the phase is valid; the exact
+        problem otherwise. Existence, then inputs_hash against the phase's
+        current actual inputs, then the receipt's declared output artifact
+        equals the phase's artifact, exists, and -- unless it is byte-identical
+        to what validated when the receipt was written -- passes its own
+        validation. Each failure names the skill and the problem."""
+        receipt = skill_receipts.read_receipt(
+            self._receipts_root(), loop_id=state.id, phase=phase_name, skill=skill
+        )
+        if receipt is None:
+            if skill_receipts.receipt_exists(
+                self._receipts_root(),
+                loop_id=state.id,
+                phase=phase_name,
+                skill=skill,
+            ):
+                return (
+                    f"skill receipt for skill '{skill}' (phase '{phase_name}') "
+                    "is malformed: the receipt file exists but does not parse; "
+                    "delete it and re-run `awino loop check` on the valid artifact"
+                )
+            return (
+                f"no skill receipt for skill '{skill}' (phase '{phase_name}'): "
+                "the phase completed without one"
+            )
+        expected = self._phase_inputs_hash(
+            state, phase_name, self._live_criteria_hash()
+        )
+        if receipt.inputs_hash != expected:
+            return (
+                f"stale skill receipt for skill '{skill}' (phase '{phase_name}'): "
+                "inputs changed since the receipt was written "
+                f"(receipt inputs_hash={receipt.inputs_hash[:12]}...)"
+            )
+        artifact_rel = self.phase_artifact(state, phase_name)
+        if receipt.output_artifact != artifact_rel:
+            return (
+                f"skill receipt for skill '{skill}' (phase '{phase_name}') "
+                f"points at '{receipt.output_artifact}', not the phase's "
+                f"output artifact '{artifact_rel}'"
+            )
+        artifact = self.project_root / receipt.output_artifact
+        if not artifact.is_file():
+            return (
+                f"skill receipt for skill '{skill}' (phase '{phase_name}') "
+                f"points at a missing output artifact: '{receipt.output_artifact}'"
+            )
+        if (
+            receipt.artifact_hash is not None
+            and skill_receipts.file_sha256(artifact) == receipt.artifact_hash
+        ):
+            # Byte-identical to the artifact that validated when the receipt
+            # was written: re-running the validator is unnecessary, and some
+            # validators (ralph retry) are not idempotent.
+            return None
+        problems = self._phase(phase_name).validate(self, state)
+        if problems:
+            return (
+                f"skill receipt for skill '{skill}' (phase '{phase_name}') "
+                f"points at output artifact '{receipt.output_artifact}' that "
+                f"fails its own validation: {problems[0]}"
+            )
+        return None
+
+    def receipt_problems(self, state: LoopState) -> list[str]:
+        """Receipt problems blocking advance FROM the current phase."""
+        return [
+            problem
+            for skill in self.required_skills(state, state.phase)
+            if (problem := self.validate_receipt(state, state.phase, skill))
+            is not None
+        ]
+
+    def skill_statuses(self, state: LoopState, phase_name: str) -> dict[str, str]:
+        """received|missing|invalid per required skill, for the checklist."""
+        statuses: dict[str, str] = {}
+        for skill in self.required_skills(state, phase_name):
+            problem = self.validate_receipt(state, phase_name, skill)
+            if problem is None:
+                statuses[skill] = "received"
+            elif problem.startswith("no skill receipt"):
+                statuses[skill] = "missing"
+            else:
+                # Stale, malformed, or pointing at a bad artifact: invalid.
+                statuses[skill] = "invalid"
+        return statuses
+
+    def _ensure_phase_receipts(self, state: LoopState, criteria_hash: str) -> None:
+        """Write (or refresh) receipts for the current phase's required skills.
+
+        Called from check() when the phase's artifact validates: the honest
+        write point. A receipt is refreshed when the phase's actual inputs
+        moved since it was written (stale inputs_hash) or the artifact's
+        bytes changed (stale artifact_hash); an unchanged receipt stands
+        and no new ledger event fires. Fires one `skill_receipt` ledger
+        event per written receipt.
+        """
+        if state.phase not in self.artifact_phases:
+            return
+        expected = self._phase_inputs_hash(state, state.phase, criteria_hash)
+        artifact_rel = self.phase_artifact(state, state.phase) or ""
+        artifact_hash = skill_receipts.file_sha256(
+            self.project_root / artifact_rel
+        )
+        statuses: dict[str, str] = {}
+        for skill in self.required_skills(state, state.phase):
+            current = skill_receipts.read_receipt(
+                self._receipts_root(),
+                loop_id=state.id,
+                phase=state.phase,
+                skill=skill,
+            )
+            if (
+                current is not None
+                and current.inputs_hash == expected
+                and current.artifact_hash == artifact_hash
+            ):
+                statuses[skill] = "received"
+                continue
+            receipt = skill_receipts.write_receipt(
+                self._receipts_root(),
+                loop_id=state.id,
+                skill=skill,
+                version=self._skill_version(skill),
+                phase=state.phase,
+                inputs_hash=expected,
+                output_artifact=artifact_rel,
+                artifact_hash=artifact_hash,
+            )
+            self._emit(
+                state,
+                "skill_receipt",
+                detail=(
+                    f"skill={skill} phase={state.phase} artifact={artifact_rel} "
+                    f"inputs_hash={receipt.inputs_hash[:12]}..."
+                ),
+            )
+            statuses[skill] = "received"
+        checklist = self._checklist()
+        if checklist is not None and statuses:
+            checklist.note_skill_status(state.id, state.phase, statuses)
+
+
     # ── lifecycle ────────────────────────────────────────────────────────────
 
     def new(
@@ -1503,9 +1775,14 @@ class LoopDriver(abc.ABC):
             # Phase-boundary mission revisit: the work stands, so record the
             # live criteria hash. `loop close` compares this against the live
             # hash and prompts instead of judging stale criteria.
-            state.criteria_hash = heilmeier.criteria_hash(
+            live_criteria = heilmeier.criteria_hash(
                 heilmeier.load(project_state_dir(self.project_root))
             )
+            # The honest write point for skill receipts: the artifact just
+            # validated, so attest it -- write receipts when missing, refresh
+            # them when the phase's actual inputs moved since the last one.
+            self._ensure_phase_receipts(state, live_criteria)
+            state.criteria_hash = live_criteria
             self.save(state)
         return missing
 
@@ -1661,10 +1938,12 @@ class LoopDriver(abc.ABC):
 
     def advance(self, state: LoopState) -> str:
         """Move to the next phase. The current phase must already validate
-        (the CLI checks first); this enforces the human gates and transitions.
+        (the CLI checks first); this enforces the human gates, the skill
+        receipt gate, and transitions.
 
         Raises ApprovalRequired/PairingIncomplete when a human gate is
-        unsatisfied, and LoopLocked when the loop is locked.
+        unsatisfied, ReceiptBlocked when a required skill has no valid
+        receipt, and LoopLocked when the loop is locked.
         """
         if state.locked:
             raise LoopLocked(
@@ -1674,6 +1953,14 @@ class LoopDriver(abc.ABC):
         if state.phase == "done":
             raise LoopError("loop is already done")
         self._check_advance_allowed(state)
+        receipt_problems = self.receipt_problems(state)
+        if receipt_problems:
+            checklist = self._checklist()
+            if checklist is not None:
+                checklist.note_skill_status(
+                    state.id, state.phase, self.skill_statuses(state, state.phase)
+                )
+            raise ReceiptBlocked(state.phase, receipt_problems)
         nxt = self._next_phase(state)
         if nxt is None:
             self._complete(state)
@@ -1755,6 +2042,50 @@ class LoopDriver(abc.ABC):
         if checklist is not None:
             checklist.note_unblocked(
                 state.id, f"re-entered {phase!r} from {previous!r}: {note}"
+            )
+        return state
+
+    def reopen_phase(
+        self, state: LoopState, phase: str, reason: str = ""
+    ) -> LoopState:
+        """Re-open a DONE loop at an earlier phase so a receiptless skill step
+        can honestly re-run.
+
+        The dedicated path for buddy --fix on a completed loop whose phase
+        finished without a valid skill receipt: the only honest fix is to
+        re-run the phase's skill step so check() can write a fresh receipt.
+        This method never writes a receipt itself. The loop's recorded
+        outcome (verdict, loop_closed event) stays in the ledger as history;
+        re-opening a done loop is the operator's explicit choice, named in
+        the reason. Like reenter_phase, it clears a three-strikes lock: the
+        re-entry is a human intervention.
+        """
+        if phase not in self.phase_order:
+            raise LoopError(
+                f"unknown phase {phase!r}; one of {', '.join(self.phase_order)}"
+            )
+        if state.phase != "done":
+            raise LoopError(
+                f"loop is not done (phase {state.phase!r}); "
+                "`back` re-enters earlier phases of an active loop"
+            )
+        if phase == "done":
+            raise LoopError("cannot re-open a done loop at 'done'")
+        note = reason.strip() or "(no reason given)"
+        state.phase = phase
+        state.attempts[phase] = 0
+        state.locked = False
+        self._emit(
+            state,
+            "phase_reentered",
+            detail=f"re-opened done loop at {phase!r}: {note}",
+        )
+        self._emit(state, "phase_started", detail=f"re-entry of {phase!r}")
+        self.save(state)
+        checklist = self._checklist()
+        if checklist is not None:
+            checklist.note_unblocked(
+                state.id, f"re-opened at {phase!r}: {note}", phase=phase
             )
         return state
 
@@ -1961,6 +2292,34 @@ class RpiDriver(LoopDriver):
         state.research_artifact = f"thoughts/research/{stamp}-{topic}.md"
         state.pairing_artifact = f"thoughts/pairing/{stamp}-{topic}.md"
         state.plan_artifact = f"thoughts/plans/{stamp}-{topic}.md"
+
+    def declared_skills(self, state: LoopState) -> dict[str, list[str]]:
+        """The pairing brief's per-phase required-skills declaration.
+
+        Empty when the pairing brief is absent or unreadable (pair-planning
+        skipped or not yet written): the loop-kind default skill governs
+        those phases instead.
+        """
+        if not state.pairing_artifact:
+            return {}
+        path = self.project_root / state.pairing_artifact
+        if not path.is_file():
+            return {}
+        return skill_receipts.parse_required_skills(
+            _section_text(path.read_text(encoding="utf-8", errors="replace"),
+                          ("required skills",))
+        )
+
+    def required_skills(self, state: LoopState, phase_name: str) -> list[str]:
+        """The pairing brief's declaration wins when present; otherwise the
+        loop kind's own skill -- the skill document the phase prompt was
+        extracted from."""
+        if phase_name not in self.artifact_phases:
+            return []
+        declared = self.declared_skills(state).get(phase_name)
+        if declared:
+            return declared
+        return [f"awino-{self.loop_kind}"]
 
     def artifact_path(self, state: LoopState) -> str | None:
         return self.phase_artifact(state, state.phase)

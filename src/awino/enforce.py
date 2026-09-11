@@ -376,6 +376,7 @@ LOOP_EVENT_KINDS: tuple[str, ...] = (
     "verify_failed",
     "human_answered",
     "outcome_verdict",
+    "skill_receipt",
 )
 
 

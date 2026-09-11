@@ -232,6 +232,7 @@ class TestRalphVerifyPass:
         )
         state = driver.new("fix the flaky test", check="true", seed_id="seed-9")
         _write_attempt(driver, state, ATTEMPT_OK)
+        assert driver.check(state) == []
         driver.advance(state)
         # The loop still completes; only the seed close failed, and the note says so.
         assert driver.advance(state) == "done"
@@ -335,6 +336,7 @@ class TestRalphEscalation:
     ) -> None:
         state = driver.new("fix the flaky test", check="false", seed_id="seed-2")
         _write_attempt(driver, state, ATTEMPT_OK)
+        assert driver.check(state) == []
         driver.advance(state)
         for _ in range(2):
             assert driver.advance(state) == "retry"

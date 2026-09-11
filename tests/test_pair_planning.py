@@ -85,6 +85,12 @@ effort: three days
 ## Questions
 Q1: Which approach do you prefer, big bang or strangler?
 Q2: What is the downtime budget for the migration window?
+
+## Required skills
+
+- research: awino-rpi
+- pair-plan: awino-rpi
+- plan: awino-rpi
 """
 
 PLAN_OK = """# Plan: auth migration
@@ -181,6 +187,7 @@ class TestPairBriefValidation:
     def test_missing_brief_names_the_path(self, driver: loops.RpiDriver) -> None:
         state = driver.new("migrate auth")
         _write(driver, state, "research", RESEARCH_OK)
+        assert driver.check(state) == []
         driver.advance(state)  # no brief -> skips to plan; force pair-plan
         state = driver.load(state.id)
         driver.reenter_phase(state, "pair-plan", "test")
@@ -195,6 +202,7 @@ class TestPairBriefValidation:
             driver, state, "pair-plan",
             BRIEF_OK.replace("## Sub-problems", "## Background"),
         )
+        assert driver.check(state) == []
         driver.advance(state)
         missing = driver.check(state)
         assert any("sub-problems" in item for item in missing)
@@ -204,6 +212,7 @@ class TestPairBriefValidation:
         _write(driver, state, "research", RESEARCH_OK)
         one = BRIEF_OK.split("### Strangler")[0]
         _write(driver, state, "pair-plan", one)
+        assert driver.check(state) == []
         driver.advance(state)
         missing = driver.check(state)
         assert any("need at least 2" in item for item in missing)
@@ -214,6 +223,7 @@ class TestPairBriefValidation:
         no_tradeoff = BRIEF_OK.replace("trade-off:", "note:").replace("pro:", "plus:")
         no_tradeoff = no_tradeoff.replace("con:", "minus:")
         _write(driver, state, "pair-plan", no_tradeoff)
+        assert driver.check(state) == []
         driver.advance(state)
         missing = driver.check(state)
         assert any("trade-off" in item for item in missing)
@@ -225,6 +235,7 @@ class TestPairBriefValidation:
             driver, state, "pair-plan",
             BRIEF_OK.replace("Q1:", "Question one:").replace("Q2:", "Question two:"),
         )
+        assert driver.check(state) == []
         driver.advance(state)
         missing = driver.check(state)
         assert any("Qn:" in item for item in missing)
@@ -307,6 +318,7 @@ class TestPairingGate:
         state = _at_pair_plan(driver)
         driver.record_pair_answer(state, "Q1", "answer", "strangler")
         driver.record_pair_answer(state, "Q2", "default", "zero downtime assumed")
+        assert driver.check(state) == []
         assert driver.advance(state) == "plan"
 
     def test_no_brief_skips_pair_plan(self, driver: loops.RpiDriver) -> None:
@@ -324,6 +336,7 @@ class TestPairingGate:
         Decisions section still validates (backward compatibility)."""
         state = driver.new("migrate auth")
         _write(driver, state, "research", RESEARCH_OK)
+        assert driver.check(state) == []
         assert driver.advance(state) == "plan"
         state = driver.load(state.id)
         plan_without_decisions = "\n".join(
@@ -344,6 +357,7 @@ class TestPlanDecisionTrace:
         state = _at_pair_plan(driver)
         driver.record_pair_answer(state, "Q1", "answer", "strangler")
         driver.record_pair_answer(state, "Q2", "default", "zero downtime assumed")
+        assert driver.check(state) == []
         assert driver.advance(state) == "plan"
         return driver.load(state.id)
 
@@ -392,6 +406,7 @@ class TestPairPlanBack:
         state = _at_pair_plan(driver)
         driver.record_pair_answer(state, "Q1", "answer", "strangler")
         driver.record_pair_answer(state, "Q2", "answer", "zero")
+        assert driver.check(state) == []
         driver.advance(state)
         state = driver.load(state.id)
         assert state.phase == "plan"
@@ -402,6 +417,7 @@ class TestPairPlanBack:
         state = _at_pair_plan(driver)
         driver.record_pair_answer(state, "Q1", "answer", "strangler")
         driver.record_pair_answer(state, "Q2", "answer", "zero")
+        assert driver.check(state) == []
         driver.advance(state)
         state = driver.load(state.id)
         driver.reenter_phase(state, "pair-plan", "rethink")

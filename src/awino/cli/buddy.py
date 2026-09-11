@@ -20,10 +20,10 @@ from pathlib import Path
 import typer
 import yaml
 
-from awino import heilmeier, session_markers, stance, working_memory
-from awino.cli import _echo, _workspace
+from awino import heilmeier, loops, session_markers, skill_receipts, stance, working_memory
+from awino.cli import _echo, _paths, _workspace
 from awino.enforce import LOOPS, Ledger, LoopEvent, Run
-from awino.paths import project_state_dir
+from awino.paths import Workspace, project_state_dir
 
 # Honest marker detail prefix written by `buddy --fix` for a declared loop
 # that was never walked. The event kind stays "loop_started" (a real kind,
@@ -171,6 +171,133 @@ def _loop_honesty(ledger: Ledger) -> tuple[dict[str, tuple[int, int]], str]:
         _loop_honesty_from_runs(ledger),
         "run checkpoints/skill-used (predates loop events)",
     )
+
+
+# ── skill receipts ───────────────────────────────────────────────────────────
+#
+# A completed phase must carry a valid skill receipt for every required
+# skill (see awino/skill_receipts.py). Buddy audits that trail; buddy --fix
+# re-arms the phase -- it never writes a receipt file itself. Forging one
+# would make the audit lie, so re-arming sends the loop back to the phase:
+# the skill step runs again and the driver's check() writes a fresh receipt.
+
+_DRIVERS: dict[str, type] = {
+    "rpi": loops.RpiDriver,
+    "ralph": loops.RalphDriver,
+    "delegate": loops.DelegateDriver,
+}
+
+
+def _auditable_loops(
+    workspace: Workspace, ledger: Ledger
+) -> list[tuple[loops.LoopDriver, loops.LoopState]]:
+    """(driver, state) for every loop with ledger events and a readable state.
+
+    A diagnostic survives the state it diagnoses: loops with unreadable
+    state files or unknown kinds are skipped, never fatal.
+    """
+    events = ledger.loop_events()
+    if not events:
+        return []
+    skills_dir = _paths().skills
+    found: list[tuple[loops.LoopDriver, loops.LoopState]] = []
+    seen: set[str] = set()
+    for event in events:
+        loop_id = event.loop_id
+        if loop_id in seen:
+            continue
+        seen.add(loop_id)
+        try:
+            kind = loops.kind_of(loop_id)
+        except loops.LoopError:
+            continue
+        driver_cls = _DRIVERS.get(kind)
+        if driver_cls is None:
+            continue
+        state_path = workspace.state_root / "loops" / f"{loop_id}.json"
+        if not state_path.is_file():
+            continue
+        try:
+            state = loops.LoopState.from_dict(
+                json.loads(state_path.read_text(encoding="utf-8"))
+            )
+        except (OSError, ValueError, TypeError):
+            continue
+        skill_md = skills_dir / f"awino-{kind}" / "SKILL.md"
+        found.append(
+            (
+                driver_cls(
+                    project_root=workspace.project.root,
+                    loops_dir=workspace.state_root / "loops",
+                    skill_md=skill_md if skill_md.is_file() else None,
+                    ledger=ledger,
+                    state_root=workspace.state_root,
+                ),
+                state,
+            )
+        )
+    return found
+
+
+def _receipt_findings(
+    workspace: Workspace, ledger: Ledger
+) -> list[skill_receipts.ReceiptFinding]:
+    """Completed phases without a valid receipt for each required skill."""
+    events = ledger.loop_events()
+    findings: list[skill_receipts.ReceiptFinding] = []
+    for driver, state in _auditable_loops(workspace, ledger):
+        findings.extend(skill_receipts.find_receipt_problems(driver, state, events))
+    return findings
+
+
+def _rearm_receiptless_phases(
+    workspace: Workspace, ledger: Ledger
+) -> tuple[list[str], list[str]]:
+    """Re-arm each loop's earliest receiptless completed phase.
+
+    Returns (rearmed_labels, human_prompts). Re-arming sends the loop back
+    to the phase with the driver's reenter_phase (active loops) or
+    reopen_phase (done loops, via the dedicated re-open path) -- the skill
+    step runs again and the driver's check() writes a fresh receipt when
+    the artifact validates. This function never writes a receipt file
+    itself: buddy --fix can never forge one.
+    """
+    events = ledger.loop_events()
+    by_loop: dict[str, tuple[loops.LoopDriver, loops.LoopState, list]] = {}
+    for driver, state in _auditable_loops(workspace, ledger):
+        findings = skill_receipts.find_receipt_problems(driver, state, events)
+        if not findings:
+            continue
+        key = f"{driver.loop_kind}:{state.id}"
+        if key in by_loop:
+            by_loop[key][2].extend(findings)
+        else:
+            by_loop[key] = (driver, state, findings)
+    rearmed: list[str] = []
+    prompts: list[str] = []
+    for _key, (driver, state, findings) in sorted(by_loop.items()):
+        earliest = min(
+            findings, key=lambda f: driver.phase_order.index(f.phase)
+        )
+        reason = (
+            f"buddy --fix: re-running the '{earliest.phase}' skill step "
+            f"({earliest.problem})"
+        )
+        try:
+            if state.phase == "done":
+                driver.reopen_phase(state, earliest.phase, reason)
+            else:
+                driver.reenter_phase(state, earliest.phase, reason)
+        except loops.LoopError as exc:
+            prompts.append(
+                f"could not re-arm loop {state.id} phase '{earliest.phase}': {exc}"
+            )
+            continue
+        rearmed.append(
+            f"loop {state.id} re-armed at phase '{earliest.phase}': "
+            f"rerun the '{earliest.skill}' skill step, then `awino loop next`"
+        )
+    return rearmed, prompts
 
 
 # ── section 0: outcome rates ─────────────────────────────────────────────────
@@ -634,6 +761,23 @@ def _run_report() -> None:
             _echo(f"  gap: {gap} run(s) declared a loop with no phase evidence")
     _echo("")
 
+    # 2b. skill receipts: a completed phase must carry a valid receipt for
+    # every required skill -- the receipt gate's audit trail.
+    _echo("SKILL RECEIPTS  (completed phases must carry a valid skill receipt)")
+    if not ledger.loop_events():
+        _echo("  none found (no loop events)")
+    else:
+        findings = _receipt_findings(workspace, ledger)
+        if not findings:
+            _echo("  every completed phase carries a valid skill receipt")
+        else:
+            for finding in findings:
+                _echo(
+                    f"  RECEIPT_{finding.status.upper()}  loop {finding.loop_id} "
+                    f"phase '{finding.phase}': {finding.problem}"
+                )
+    _echo("")
+
     # 3. playbook events
     _echo("PLAYBOOK EVENTS  (task-close from run markers; session-end from session_ends.jsonl)")
     events = _playbook_events(ledger)
@@ -978,6 +1122,21 @@ def _run_fix() -> None:
                 "(run-level data has no loop id; a marker would be fake)"
             )
             need_human += 1
+    _echo("")
+
+    # 2b. skill receipts: --fix never forges a receipt. It re-arms the
+    # phase's skill step -- the loop goes back to the phase so the work
+    # runs again and the driver's check() writes a fresh receipt.
+    _echo("SKILL RECEIPTS")
+    rearmed, prompts = _rearm_receiptless_phases(workspace, ledger)
+    if not rearmed and not prompts:
+        _echo("  every completed phase carries a valid skill receipt (no fix needed)")
+    for label in rearmed:
+        _echo(f"  FIX {label}")
+        applied += 1
+    for prompt in prompts:
+        _echo(f"  ACTION  {prompt}")
+        need_human += 1
     _echo("")
 
     # 3. playbook events: the session-end order fires only via `best --end`

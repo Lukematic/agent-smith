@@ -189,6 +189,9 @@ class Checklist:
         self._move(
             data, item, "doing", f"advanced: {old_phase} -> {new_phase}", phase=new_phase
         )
+        # Entering a new phase: no receipt status is known for it yet. The
+        # previous phase's statuses stay under "skills_by_phase".
+        item["skills"] = {}
         self._save(data)
 
     def note_blocked(self, loop_id: str, blocker: str) -> None:
@@ -200,13 +203,15 @@ class Checklist:
         self._move(data, item, "blocked", f"blocked: {blocker}", blocker=blocker)
         self._save(data)
 
-    def note_unblocked(self, loop_id: str, note: str) -> None:
+    def note_unblocked(self, loop_id: str, note: str, *, phase: str | None = None) -> None:
         """`loop back` re-entered a phase: a human intervened, work resumes."""
         data = self._load()
         item = self._item(data, loop_id)
         if item is None:
             return
-        self._move(data, item, "doing", note or "re-entered an earlier phase")
+        self._move(
+            data, item, "doing", note or "re-entered an earlier phase", phase=phase
+        )
         self._save(data)
 
     def note_done(self, loop_id: str, note: str) -> None:
@@ -239,6 +244,43 @@ class Checklist:
         detail = f"outcome verdict: {verdict}" + (f" -- {note}" if note else "")
         self._move(data, item, "done", detail, phase="done")
         self._save(data)
+
+    def note_skill_status(
+        self, loop_id: str, phase: str, statuses: dict[str, str]
+    ) -> None:
+        """Record per-skill receipt status for a phase.
+
+        statuses maps skill name -> "received" | "missing" | "invalid".
+        The item's "skills" entry is the current phase's statuses, exactly
+        {"<skill>": "received|missing|invalid"}; per-phase history
+        accumulates under "skills_by_phase". Additive: phases with no
+        recorded status simply carry none.
+        """
+        data = self._load()
+        item = self._item(data, loop_id)
+        if item is None:
+            return
+        item["skills"] = statuses
+        item.setdefault("skills_by_phase", {})[phase] = statuses
+        self._save(data)
+
+    def skill_status(self, loop_id: str) -> dict[str, str]:
+        """Current phase's skill receipt status for a loop, {} when none."""
+        data = self._load()
+        item = self._item(data, loop_id)
+        if item is None:
+            return {}
+        skills = item.get("skills")
+        return skills if isinstance(skills, dict) else {}
+
+    def skill_status_by_phase(self, loop_id: str) -> dict[str, dict[str, str]]:
+        """Per-phase skill receipt history for a loop, or {} when none."""
+        data = self._load()
+        item = self._item(data, loop_id)
+        if item is None:
+            return {}
+        history = item.get("skills_by_phase")
+        return history if isinstance(history, dict) else {}
 
     # -- reads ------------------------------------------------------------
 
@@ -276,6 +318,15 @@ class Checklist:
                 f"CHECKLIST  focus={focus['loop_id']} "
                 f"(phase {focus.get('phase')}, {focus.get('status')})"
             )
+            phase_skills = focus.get("skills") or {}
+            if phase_skills:
+                lines.append(
+                    "SKILLS  "
+                    + " ".join(
+                        f"{name}={status}"
+                        for name, status in phase_skills.items()
+                    )
+                )
         else:
             lines.append("CHECKLIST  no active focus (nothing in flight)")
         for item in self.blocked_items():

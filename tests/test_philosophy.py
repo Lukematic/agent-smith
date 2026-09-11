@@ -431,6 +431,12 @@ effort: three days
 ## Questions
 Q1: Which approach do you prefer, big bang or strangler?
 Q2: What is the downtime budget for the migration window?
+
+## Required skills
+
+- research: awino-rpi
+- pair-plan: awino-rpi
+- plan: awino-rpi
 """
 
 
@@ -491,6 +497,7 @@ class TestPairPlanHonda:
         path = rpi_driver.project_root / state.pairing_artifact
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(no_effort, encoding="utf-8")
+        assert rpi_driver.check(state) == []
         rpi_driver.advance(state)
         state = rpi_driver.load(state.id)
         missing = rpi_driver.check(state)
@@ -536,6 +543,7 @@ class TestPairPlanHonda:
         state = _at_pair_plan(driver)
         driver.record_pair_answer(state, "Q1", "answer", "strangler")
         driver.record_pair_answer(state, "Q2", "default", "zero downtime assumed")
+        assert driver.check(state) == []
         assert driver.advance(state) == "plan"
         return driver.load(state.id)
 
