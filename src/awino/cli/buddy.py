@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -20,7 +21,15 @@ from pathlib import Path
 import typer
 import yaml
 
-from awino import heilmeier, loops, session_markers, skill_receipts, stance, working_memory
+from awino import (
+    heilmeier,
+    loops,
+    session_markers,
+    session_state,
+    skill_receipts,
+    stance,
+    working_memory,
+)
 from awino.cli import _echo, _paths, _workspace
 from awino.enforce import LOOPS, Ledger, LoopEvent, Run
 from awino.paths import Workspace, project_state_dir
@@ -697,6 +706,326 @@ def _entry_within_week(at: str) -> bool:
     return (datetime.now(UTC) - stamp).total_seconds() <= _MEMORY_WEEK_SECONDS
 
 
+# ── section 7: state hygiene ─────────────────────────────────────────────────
+#
+# "Clean folders" is the operator's tidiness duty. The state dir accumulates:
+# session files for sessions long over (state_root/session/), loop state
+# files the ledger trail never mentions (orphaned) or that fail to parse
+# (partial), temp/leftover files, and duplicate session-end markers. The
+# report flags each; --fix archives stale sessions (never deletes them --
+# nothing the ledger references may be destroyed) and tidies unambiguous
+# clutter. Anything judgmental becomes a PROMPT, never a silent delete.
+
+_SESSION_STALE_DAYS = 30
+_HYGIENE_ARCHIVE = "archive"
+
+_CLUTTER_EXACT_NAMES = frozenset({".DS_Store"})
+_CLUTTER_SUFFIXES = (".tmp", ".bak", ".swp", ".orig", ".pyc")
+
+
+@dataclass(frozen=True)
+class HygieneFinding:
+    kind: str  # stale_session | orphaned_loop | partial_loop | clutter | duplicate_marker
+    target: str  # session id, loop id, or file name: what the finding is about
+    path: str  # filesystem path ("; "-joined when several)
+    detail: str
+
+
+def _active_session_id(state_root: Path) -> str | None:
+    """The session the .active pointer names, or None when unreadable.
+
+    A diagnostic survives the state it diagnoses: a missing or corrupt
+    pointer reads as "no active session", never a crash.
+    """
+    try:
+        state = session_state.load(state_root)
+    except Exception:
+        return None
+    return state.session_id if state is not None else None
+
+
+def _session_groups(state_root: Path) -> dict[str, list[Path]]:
+    """session id -> its state/log files, excluding the .active pointer."""
+    session_dir = state_root / "session"
+    groups: dict[str, list[Path]] = {}
+    if not session_dir.is_dir():
+        return groups
+    for child in sorted(session_dir.iterdir(), key=lambda p: p.name):
+        if not child.is_file() or child.name == ".active":
+            continue
+        stem = child.name.rsplit(".", 1)[0] if "." in child.name else child.name
+        groups.setdefault(stem, []).append(child)
+    return groups
+
+
+def _stale_sessions(
+    state_root: Path, *, now: float | None = None
+) -> list[HygieneFinding]:
+    """Sessions neither active nor touched in _SESSION_STALE_DAYS."""
+    now_epoch = now if now is not None else datetime.now(UTC).timestamp()
+    cutoff = now_epoch - _SESSION_STALE_DAYS * 86400
+    active = _active_session_id(state_root)
+    out: list[HygieneFinding] = []
+    for session_id, files in _session_groups(state_root).items():
+        if session_id == active:
+            continue
+        try:
+            newest = max(path.stat().st_mtime for path in files)
+        except OSError:
+            continue
+        if newest < cutoff:
+            days = int((now_epoch - newest) // 86400)
+            out.append(
+                HygieneFinding(
+                    kind="stale_session",
+                    target=session_id,
+                    path="; ".join(str(path) for path in files),
+                    detail=(
+                        f"{len(files)} file(s), untouched for {days} days "
+                        f"(active session: {active or 'none'})"
+                    ),
+                )
+            )
+    return out
+
+
+def _loop_state_findings(
+    state_root: Path, events: list[LoopEvent]
+) -> list[HygieneFinding]:
+    """Loop state files the trail never mentions, or that fail to parse."""
+    out: list[HygieneFinding] = []
+    loops_dir = state_root / "loops"
+    if not loops_dir.is_dir():
+        return out
+    event_ids = {event.loop_id for event in events}
+    for child in sorted(loops_dir.iterdir(), key=lambda p: p.name):
+        if not child.is_file() or child.suffix != ".json":
+            continue
+        loop_id = child.stem
+        try:
+            state = loops.LoopState.from_dict(
+                json.loads(child.read_text(encoding="utf-8"))
+            )
+        except (OSError, ValueError, TypeError) as exc:
+            out.append(
+                HygieneFinding(
+                    kind="partial_loop",
+                    target=loop_id,
+                    path=str(child),
+                    detail=f"loop state does not parse: {exc}",
+                )
+            )
+            continue
+        if loop_id not in event_ids:
+            out.append(
+                HygieneFinding(
+                    kind="orphaned_loop",
+                    target=loop_id,
+                    path=str(child),
+                    detail="no events for this loop in loops.jsonl",
+                )
+            )
+            continue
+        try:
+            kind = loops.kind_of(loop_id)
+        except loops.LoopError:
+            continue
+        driver_cls = _DRIVERS.get(kind)
+        if driver_cls is None:
+            continue
+        if state.phase != "done" and state.phase not in driver_cls.phase_order:
+            out.append(
+                HygieneFinding(
+                    kind="partial_loop",
+                    target=loop_id,
+                    path=str(child),
+                    detail=f"invalid phase {state.phase!r}",
+                )
+            )
+    return out
+
+
+def _clutter_files(state_root: Path) -> list[Path]:
+    """Temp/leftover files under the state dir. The archive is not clutter."""
+    out: list[Path] = []
+    for child in sorted(state_root.rglob("*"), key=lambda p: str(p)):
+        if not child.is_file():
+            continue
+        if child.relative_to(state_root).parts[:1] == (_HYGIENE_ARCHIVE,):
+            continue
+        name = child.name
+        if (
+            name in _CLUTTER_EXACT_NAMES
+            or name.endswith(_CLUTTER_SUFFIXES)
+            or name.endswith("~")
+        ):
+            out.append(child)
+    return out
+
+
+def _ledger_text(ledger: Ledger) -> str:
+    """Every ledger-side text that could reference a state file by name."""
+    candidates: list[Path] = []
+    if ledger.base.is_dir():
+        candidates.extend(
+            child
+            for child in sorted(ledger.base.rglob("*"), key=lambda p: str(p))
+            if child.is_file() and child.suffix in {".json", ".jsonl", ".md"}
+        )
+    for name in (
+        "loops.jsonl",
+        "heilmeier.json",
+        "decisions.md",
+        "checklist.json",
+        "session_ends.jsonl",
+        "project.yaml",
+    ):
+        candidates.append(ledger.state_root / name)
+    loops_dir = ledger.state_root / "loops"
+    if loops_dir.is_dir():
+        candidates.extend(sorted(loops_dir.glob("*.json"), key=lambda p: p.name))
+    chunks: list[str] = []
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            chunks.append(path.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            continue
+    return "\n".join(chunks)
+
+
+def _referenced_by_ledger(ledger: Ledger, name: str) -> bool:
+    """Whether any ledger text mentions ``name``.
+
+    Substring, deliberately conservative: a temp file whose name appears in
+    the ledger is never deleted silently -- the human decides.
+    """
+    return name in _ledger_text(ledger)
+
+
+def _duplicate_markers(state_root: Path) -> list[HygieneFinding]:
+    """Exact-duplicate session-end marker lines."""
+    path = state_root / "session_ends.jsonl"
+    if not path.is_file():
+        return []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    seen: set[str] = set()
+    duplicates = 0
+    for line in lines:
+        if not line.strip():
+            continue
+        if line in seen:
+            duplicates += 1
+        else:
+            seen.add(line)
+    if not duplicates:
+        return []
+    return [
+        HygieneFinding(
+            kind="duplicate_marker",
+            target=path.name,
+            path=str(path),
+            detail=f"{duplicates} duplicate session-end marker line(s)",
+        )
+    ]
+
+
+def _hygiene_findings(
+    state_root: Path, ledger: Ledger, *, now: float | None = None
+) -> list[HygieneFinding]:
+    """Every hygiene finding, in fix order: sessions, loops, clutter, markers."""
+    findings = _stale_sessions(state_root, now=now)
+    findings.extend(_loop_state_findings(state_root, ledger.loop_events()))
+    for path in _clutter_files(state_root):
+        findings.append(
+            HygieneFinding(
+                kind="clutter",
+                target=path.name,
+                path=str(path),
+                detail=(
+                    "referenced by ledger data -- needs a human"
+                    if _referenced_by_ledger(ledger, path.name)
+                    else "unreferenced temp/leftover file"
+                ),
+            )
+        )
+    findings.extend(_duplicate_markers(state_root))
+    return findings
+
+
+def _report_hygiene(state_root: Path, ledger: Ledger) -> None:
+    _echo("STATE HYGIENE  (stale sessions archived, never deleted; clutter tidied)")
+    findings = _hygiene_findings(state_root, ledger)
+    if not findings:
+        _echo("  state dir is clean")
+    for finding in findings:
+        _echo(f"  {finding.kind.upper()}  {finding.target}: {finding.detail}")
+        _echo(f"    at {finding.path}")
+
+
+def _archive_stale_session(
+    state_root: Path, ledger: Ledger, finding: HygieneFinding
+) -> str:
+    """Move a stale session's files to archive/sessions/ with a ledger note.
+
+    Archive, never delete: the files survive the tidy, and the ledger note
+    records where they went. Returns the human summary line.
+    """
+    dest_dir = state_root / _HYGIENE_ARCHIVE / "sessions"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    moved = 0
+    for raw in finding.path.split("; "):
+        src = Path(raw)
+        if not src.is_file():
+            continue
+        dest = dest_dir / src.name
+        if dest.exists():
+            stamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+            dest = dest_dir / f"{src.stem}.{stamp}{src.suffix}"
+        shutil.move(str(src), str(dest))
+        moved += 1
+    ledger.record_loop_event(
+        LoopEvent(
+            loop_id="hygiene",
+            loop_kind="hygiene",
+            phase="",
+            kind="state_archived",
+            at=datetime.now(UTC).isoformat(),
+            detail=(
+                f"buddy --fix: archived stale session {finding.target} "
+                f"({moved} file(s)) to {_HYGIENE_ARCHIVE}/sessions/"
+            ),
+        )
+    )
+    return (
+        f"archived stale session {finding.target} ({moved} file(s)) "
+        f"to {_HYGIENE_ARCHIVE}/sessions/"
+    )
+
+
+def _dedupe_markers(path: Path) -> int:
+    """Drop exact-duplicate non-blank marker lines, keeping the first of each.
+
+    Returns the number of lines removed.
+    """
+    lines = path.read_text(encoding="utf-8").splitlines()
+    seen: set[str] = set()
+    kept: list[str] = []
+    for line in lines:
+        if line.strip():
+            if line in seen:
+                continue
+            seen.add(line)
+        kept.append(line)
+    removed = len(lines) - len(kept)
+    path.write_text("\n".join(kept) + ("\n" if kept else ""), encoding="utf-8")
+    return removed
+
+
 # ── the report ───────────────────────────────────────────────────────────────
 
 
@@ -824,6 +1153,10 @@ def _run_report() -> None:
     # 6. working memory: the checklist (now), facts/decisions (understanding),
     # and the user model (who). Buddy reads these as an auditor.
     _report_working_memory(workspace.state_root, ledger.loop_events())
+    _echo("")
+
+    # 7. state hygiene: stale sessions, orphaned/partial loop state, clutter.
+    _report_hygiene(workspace.state_root, ledger)
 
 
 def _backfill_unrecorded_decisions(
@@ -1296,6 +1629,58 @@ def _run_fix() -> None:
     calibration = working_memory.UserModel.calibration_line(model)
     if calibration:
         _echo(f"  user model: {calibration}")
+    _echo("")
+
+    # 7. state hygiene: archive stale sessions, tidy unambiguous clutter.
+    # Orphaned/partial loop state is judgmental -- a PROMPT, never a silent
+    # delete. Nothing the ledger references is deleted, ever.
+    _echo("STATE HYGIENE")
+    findings = _hygiene_findings(state_root, ledger)
+    if not findings:
+        _echo("  state dir is clean (no correction needed)")
+    for finding in findings:
+        if finding.kind == "stale_session":
+            if _referenced_by_ledger(ledger, finding.target):
+                _echo(
+                    f"  PROMPT  session {finding.target} is stale but the "
+                    "ledger references it -- archive it by hand: move "
+                    f"{finding.path} to "
+                    f"{state_root / _HYGIENE_ARCHIVE / 'sessions'}/"
+                )
+                need_human += 1
+                continue
+            _echo(f"  FIX {_archive_stale_session(state_root, ledger, finding)}")
+            applied += 1
+        elif finding.kind == "clutter":
+            if "referenced by ledger" in finding.detail:
+                _echo(
+                    f"  PROMPT  {finding.path} looks like clutter but is "
+                    "referenced by ledger data -- remove it by hand when sure"
+                )
+                need_human += 1
+                continue
+            try:
+                Path(finding.path).unlink()
+            except OSError as exc:
+                _echo(f"  could not remove {finding.path}: {exc}")
+                need_human += 1
+                continue
+            _echo(f"  FIX removed clutter {finding.path}")
+            applied += 1
+        elif finding.kind == "duplicate_marker":
+            removed = _dedupe_markers(Path(finding.path))
+            _echo(
+                f"  FIX removed {removed} duplicate session-end marker line(s) "
+                f"from {finding.path}"
+            )
+            applied += 1
+        else:  # orphaned_loop, partial_loop: judgmental, never silent
+            _echo(
+                f"  PROMPT  {finding.kind} {finding.target}: {finding.detail} -- "
+                "confirm the work is abandoned, then move "
+                f"{finding.path} to {_HYGIENE_ARCHIVE}/loops/ by hand"
+            )
+            need_human += 1
     _echo("")
 
     _echo(f"BUDDY-FIX done: {applied} correction(s) applied, {need_human} need a human")
