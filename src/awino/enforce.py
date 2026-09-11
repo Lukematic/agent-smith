@@ -1071,6 +1071,32 @@ class Ledger:
             events = [event for event in events if event.loop_id == loop_id]
         return events
 
+    def loop_trail_corruption(self) -> list[tuple[int, str]]:
+        """Corrupt lines in loops.jsonl as (1-based line number, preview).
+
+        ``loop_events()`` skips corrupt lines so one bad line never bricks
+        the trail; this is the other half -- it names exactly which lines
+        were skipped, so ``awino buddy`` reports the corruption precisely
+        instead of silently dropping history. Mirrors the skip logic in
+        ``loop_events()`` exactly: a line counted here is a line skipped
+        there.
+        """
+        path = self._loop_events_path()
+        if not path.is_file():
+            return []
+        bad: list[tuple[int, str]] = []
+        for lineno, line in enumerate(
+            path.read_text(encoding="utf-8").splitlines(), 1
+        ):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                LoopEvent(**json.loads(stripped))
+            except (ValueError, TypeError):
+                bad.append((lineno, stripped[:160]))
+        return bad
+
 
 @dataclass
 class Verdict:

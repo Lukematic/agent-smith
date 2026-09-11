@@ -18,7 +18,7 @@ from pathlib import Path
 
 import typer
 
-from awino import heilmeier, loops, think, working_memory
+from awino import heilmeier, loops, onboarding, think, working_memory
 from awino.cli import _echo, _ledger, _workspace
 from awino.enforce import LoopEvent
 from awino.paths import AwinoPaths
@@ -101,10 +101,24 @@ def _resolve_driver_and_state(
 
     The driver kind comes from the persisted loop id's prefix, so `next`,
     `status`, and `back` work for any loop kind without a --kind flag.
+
+    Missing state is never silently treated as a fresh project: when the
+    project was onboarded but its loop state is gone (deleted state
+    directory, wiped loops dir), the refusal says so and names the
+    recovery command instead of suggesting `loop run` as if nothing had
+    happened.
     """
     probe = _driver_for_kind("rpi")  # kinds share the loops dir; any probe reads current
     resolved = loop_id or probe.current_id()
     if not resolved:
+        if onboarding.path_for(probe.project_root).is_file():
+            _echo(
+                "REFUSED  this project was onboarded but its loop state is "
+                "gone (no current loop found) -- the state directory may "
+                "have been deleted; re-run `awino onboard` to restore it, "
+                "or start a fresh loop with `awino loop run rpi --task \"...\"`"
+            )
+            raise typer.Exit(2)
         _echo("NO_LOOP  create one first: awino loop run rpi --task \"...\"")
         raise typer.Exit(2)
     try:
@@ -113,6 +127,15 @@ def _resolve_driver_and_state(
         _echo(f"REFUSED  {exc}")
         raise typer.Exit(2) from None
     driver = _driver_for_kind(kind)
+    state_file = driver.loops_dir / f"{resolved}.json"
+    if not state_file.is_file():
+        _echo(
+            f"REFUSED  loop {resolved!r} is selected but its state file is "
+            f"missing ({state_file}) -- it was deleted or never finished "
+            "writing; start a fresh loop with `awino loop run ...`, or "
+            "re-run `awino onboard` if the whole state directory was removed"
+        )
+        raise typer.Exit(2)
     try:
         state = driver.load(resolved)
     except loops.LoopError as exc:

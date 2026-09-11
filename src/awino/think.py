@@ -456,6 +456,21 @@ def _validate_devil(_mode: Mode, text: str) -> list[str]:
     return missing
 
 
+# A "warning signs" section that says nothing is not a warning sign. The
+# engineered dodge is a failure reason like "Nothing could go wrong.
+# Warning signs: none" -- the marker is present, the substance is a
+# negation. The remainder after the marker may only be the negation itself
+# (optionally intensified); anything else counts as a real attempt.
+_VACUOUS_WARNING_RE = re.compile(
+    r"(?i)^(none|nothing|n/?a|nil|no(ne)?|not applicable|unknown|tbd"
+    r"|no warning signs?|no early warnings?)"
+    r"(\s+(whatsoever|at all|known|identified|yet))?[.,;!\s]*$"
+)
+_TRAILING_NEGATION_RE = re.compile(
+    r"(?i)\bno\s+(warning signs?|early warnings?)\s*[.,;!]*$"
+)
+
+
 def _validate_premortem(_mode: Mode, text: str) -> list[str]:
     missing, bodies = _require_sections(_mode, text)
     body = bodies.get("failure reasons", "")
@@ -468,6 +483,25 @@ def _validate_premortem(_mode: Mode, text: str) -> list[str]:
         if not _WARNING_SIGN_RE.search(entry):
             missing.append(
                 f"failure reason {i} ('{_entry_head(entry)}') has no warning signs"
+            )
+            continue
+        real_sign = False
+        for match in _WARNING_SIGN_RE.finditer(entry):
+            tail = re.sub(r"^[\s:—–-]+", "", entry[match.end() :].strip())
+            if _VACUOUS_WARNING_RE.match(tail):
+                continue  # this marker says nothing; maybe another one does
+            # A marker followed only by punctuation is a trailing negation
+            # ("...there are no warning signs."): the period is not substance.
+            tail_bare = re.sub(r"[.,;!\s]*$", "", tail)
+            if not tail_bare and _TRAILING_NEGATION_RE.search(entry):
+                continue  # "...no warning signs" as the entry's last words
+            real_sign = True
+            break
+        if not real_sign:
+            missing.append(
+                f"failure reason {i} ('{_entry_head(entry)}') names no real "
+                "warning signs: 'none' is not a warning sign -- say what you "
+                "would actually see going wrong"
             )
     return missing
 
@@ -541,6 +575,32 @@ _VALIDATORS = {
 }
 
 
+# Hostile character tricks: null bytes and explicit Unicode bidi controls
+# (overrides, embeddings, isolates) are never legitimate thinking output --
+# nulls signal binary/truncated content, and bidi controls can visually
+# reorder text so what was validated is not what a human reads. Plain
+# international text (CJK, Arabic, Hebrew, emoji) is unaffected: only the
+# explicit formatting controls are refused. Same policy as the artifact
+# guard in awino.loops; kept local so this module stays dependency-light.
+_BIDI_CONTROLS_RE = re.compile("[\u202a-\u202e\u2066-\u2069]")
+
+
+def _hostile_text_refusal(mode_name: str, text: str) -> str | None:
+    """Refuse hostile character tricks in a mode's output, naming the mode."""
+    if "\x00" in text:
+        return (
+            f"thinking output ({mode_name}) contains null bytes: thinking "
+            "output is UTF-8 text -- rewrite it as text and re-record"
+        )
+    if _BIDI_CONTROLS_RE.search(text):
+        return (
+            f"thinking output ({mode_name}) contains Unicode bidi control "
+            "characters: explicit bidi overrides/embeddings/isolates can "
+            "visually reorder text -- remove them and re-record"
+        )
+    return None
+
+
 def validate(mode_name: str, text: str) -> list[str]:
     """The structural rules a mode's output fails; empty means compliant.
 
@@ -552,6 +612,9 @@ def validate(mode_name: str, text: str) -> list[str]:
     drawn diagram of the variables and their relationships).
     """
     mode = by_name(mode_name)  # raises ValueError on unknown
+    hostile = _hostile_text_refusal(mode.name, text)
+    if hostile is not None:
+        return [hostile]
     return _VALIDATORS[mode.name](mode, text)
 
 

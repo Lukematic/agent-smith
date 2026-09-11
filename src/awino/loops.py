@@ -49,7 +49,14 @@ RESEARCH_MIN_CHARS = 200
 RALPH_ATTEMPT_MIN_CHARS = 50
 VERIFY_TIMEOUT_SECS = 300
 VERIFY_TAIL_CHARS = 2000
-FILE_LINE_RE = re.compile(r"\S+:\d+")
+# File:line references like 'src/awino/loops.py:42'. This must stay
+# LINEAR on hostile input: r"\S+:\d+" is O(n^2) on a long colon-free line
+# (a 10MB noise artifact hung validation for minutes), and even
+# r"[^\s:]+:\d+" is quadratic -- at every start position the greedy class
+# still walks the whole run looking for a colon that never comes. Anchoring
+# on a single char before the colon removes the nested quantifier, so each
+# position costs constant work.
+FILE_LINE_RE = re.compile(r"[^\s:]:\d")
 
 PHASE_ORDER = ("research", "pair-plan", "plan", "implement")
 
@@ -907,11 +914,17 @@ class ResearchPhase(Phase):
         return phase_prompt_text(driver.skill_md, "research")
 
     def validate(self, driver: LoopDriver, state: LoopState) -> list[str]:
-        path = driver.project_root / state.research_artifact
         rel = state.research_artifact
+        path, escape = _confined_artifact_path(driver.project_root, rel)
+        if escape is not None:
+            return [escape]
+        assert path is not None
         if not path.is_file():
             return [f"research artifact missing: {rel} -- write it, then run `awino loop next`"]
         text = path.read_text(encoding="utf-8", errors="replace")
+        hostile = _hostile_text_refusal(text, rel)
+        if hostile is not None:
+            return [hostile]
         if len(text) < RESEARCH_MIN_CHARS:
             return [
                 f"research artifact too short: {len(text)} chars "
@@ -952,6 +965,10 @@ def _validate_research_sections(text: str) -> list[str]:
                 f"research artifact section '{section}' comes after a proposed "
                 "solution -- the first-principles work must come first"
             )
+    # Hollow sections: a heading with no content is not the work. The empty
+    # message carries the section name, so the content checks below (which
+    # skip sections already named in `missing`) stay silent for hollow ones.
+    missing.extend(_empty_required_sections(text, RESEARCH_SECTIONS))
     if "assumptions challenged" not in "".join(missing):
         body = _section_text(text, RESEARCH_SECTIONS["assumptions challenged"])
         if not _ASSUMPTION_ITEM_RE.search(body) and "assum" not in body.lower():
@@ -1005,18 +1022,25 @@ class PairPlanPhase(Phase):
         return phase_prompt_text(driver.skill_md, "pair-plan")
 
     def validate(self, driver: LoopDriver, state: LoopState) -> list[str]:
-        path = driver.project_root / state.pairing_artifact
         rel = state.pairing_artifact
+        path, escape = _confined_artifact_path(driver.project_root, rel)
+        if escape is not None:
+            return [escape]
+        assert path is not None
         if not path.is_file():
             return [
                 f"pairing brief missing: {rel} -- write it, then run `awino loop next`"
             ]
         text = path.read_text(encoding="utf-8", errors="replace")
+        hostile = _hostile_text_refusal(text, rel)
+        if hostile is not None:
+            return [hostile]
         headings = [h.lower() for h in _HEADING_RE.findall(text)]
         missing: list[str] = []
         for section in PAIRING_SECTIONS:
             if not any(section in h for h in headings):
                 missing.append(f"pairing brief missing required section: '{section}'")
+        missing.extend(_empty_required_sections(text, PAIRING_SECTIONS))
         approaches_text = _section_text(text, ("candidate approaches",))
         approach_names = _APPROACH_HEADING_RE.findall(approaches_text)
         if len(approach_names) < 2:
@@ -1116,11 +1140,17 @@ class PlanPhase(Phase):
         return injected + base if injected else base
 
     def validate(self, driver: LoopDriver, state: LoopState) -> list[str]:
-        path = driver.project_root / state.plan_artifact
         rel = state.plan_artifact
+        path, escape = _confined_artifact_path(driver.project_root, rel)
+        if escape is not None:
+            return [escape]
+        assert path is not None
         if not path.is_file():
             return [f"plan artifact missing: {rel} -- write it, then run `awino loop next`"]
         text = path.read_text(encoding="utf-8", errors="replace")
+        hostile = _hostile_text_refusal(text, rel)
+        if hostile is not None:
+            return [hostile]
         headings = [h.lower() for h in _HEADING_RE.findall(text)]
         missing: list[str] = []
         for section, synonyms in PLAN_SECTIONS.items():
@@ -1131,9 +1161,24 @@ class PlanPhase(Phase):
                 continue
             if not any(any(s in h for s in synonyms) for h in headings):
                 missing.append(f"plan missing required section: '{section}'")
+        missing.extend(
+            _empty_required_sections(
+                text,
+                PLAN_SECTIONS
+                if state.pair_answers
+                else {
+                    k: v for k, v in PLAN_SECTIONS.items() if k != "decisions"
+                },
+            )
+        )
         scope_text = _section_text(text, ("scope",))
         for scope_path in _scope_paths(scope_text):
-            if not (driver.project_root / scope_path).exists():
+            if _claim_escapes_project(scope_path):
+                missing.append(
+                    f"scope path escapes the project: '{scope_path}' -- "
+                    "scope paths must be repo-relative"
+                )
+            elif not (driver.project_root / scope_path).exists():
                 missing.append(f"scope path does not exist in repo: '{scope_path}'")
         if any("decision" in h for h in headings):
             missing.extend(_validate_decision_trace(text, driver, state))
@@ -1458,6 +1503,113 @@ def _scope_paths(section_text: str) -> list[str]:
             paths.add(match.group(1).strip())
     return sorted(paths)
 
+
+# Explicit Unicode bidi controls: overrides, embeddings, and isolates. These
+# can visually reorder text so a human (or a careless reader) sees something
+# different from what the validator checked. Plain RTL script text (Arabic,
+# Hebrew) and emoji need none of these -- the Unicode bidi algorithm handles
+# them -- so refusing the controls never rejects legitimate international
+# prose.
+_BIDI_CONTROLS_RE = re.compile("[\u202a-\u202e\u2066-\u2069]")
+
+
+def _hostile_text_refusal(text: str, rel: str) -> str | None:
+    """Refuse hostile character tricks in artifact text, naming the artifact.
+
+    Null bytes signal binary content or a truncated write; explicit bidi
+    controls can visually reorder text to hide what was actually validated.
+    Either fails the artifact outright -- they are never legitimate content,
+    and no content check can be trusted on text that may not render as read.
+    """
+    if "\x00" in text:
+        return (
+            f"artifact {rel} contains null bytes: artifacts are UTF-8 text -- "
+            "rewrite it as text, then run `awino loop next`"
+        )
+    if _BIDI_CONTROLS_RE.search(text):
+        return (
+            f"artifact {rel} contains Unicode bidi control characters: "
+            "explicit bidi overrides/embeddings/isolates can visually reorder "
+            "text -- remove them, then run `awino loop next`"
+        )
+    return None
+
+
+def _confined_artifact_path(
+    project_root: Path, rel: str
+) -> tuple[Path | None, str | None]:
+    """The artifact path confined to the project.
+
+    Returns ``(path, None)`` when ``rel`` resolves inside the project root,
+    or ``(None, reason)`` when it escapes -- an absolute path, ``..``
+    segments that climb out, or a symlink pointing outside. A loop state
+    file is hand-editable, so the artifact path it names is untrusted input:
+    without this check a tampered state makes the validators read (and the
+    receipt gate hash) files outside the project.
+    """
+    candidate = project_root / rel
+    try:
+        inside = candidate.resolve().is_relative_to(project_root.resolve())
+    except OSError:
+        inside = False
+    if not inside:
+        return None, (
+            f"artifact path escapes the project: {rel!r} resolves outside "
+            "the project root -- artifact paths must be repo-relative"
+        )
+    return candidate, None
+
+
+def _claim_escapes_project(raw: str) -> bool:
+    """Whether a raw ownership/scope claim tries to leave the project.
+
+    Absolute paths and ``..`` segments that climb above the repo root are
+    escape attempts -- ``_normalize_path`` would silently fold them back
+    into the repo, laundering the traversal into a confusing "does not
+    exist" failure. ``src/../docs/x.md`` stays inside and is not flagged.
+    """
+    if raw.startswith("/"):
+        return True
+    depth = 0
+    for part in raw.split("/"):
+        if part in ("", "."):
+            continue
+        if part == "..":
+            if depth == 0:
+                return True
+            depth -= 1
+        else:
+            depth += 1
+    return False
+
+
+def _empty_required_sections(
+    text: str, sections: dict[str, tuple[str, ...]] | tuple[str, ...]
+) -> list[str]:
+    """Required sections whose heading is present but whose body is empty.
+
+    A document that "looks complete" -- every heading in place, nothing
+    under them -- is not a document. Each failure names the hollow section.
+    A heading that is absent entirely is the missing-section validator's
+    failure, not this one's.
+    """
+    names: dict[str, tuple[str, ...]] = (
+        sections if isinstance(sections, dict) else {s: (s,) for s in sections}
+    )
+    headings = [h.lower() for h in _HEADING_RE.findall(text)]
+    problems: list[str] = []
+    for section, synonyms in names.items():
+        if _section_text(text, synonyms).strip():
+            continue
+        if any(any(s in h for s in synonyms) for h in headings):
+            problems.append(
+                f"section '{section}' is present but empty: a heading with "
+                "no content does not satisfy the section -- write the "
+                "section, then run `awino loop next`"
+            )
+    return problems
+
+
 # ── Ralph phases ─────────────────────────────────────────────────────────────
 # The ralph skill's sections are named for the job, not numbered phases; the
 # mapping phase -> skill heading below is the only hand-maintained part.
@@ -1496,13 +1648,19 @@ class RalphAttemptPhase(Phase):
         return "".join(injected) + base
 
     def validate(self, driver: LoopDriver, state: LoopState) -> list[str]:
-        path = driver.project_root / state.ralph_artifact
         rel = state.ralph_artifact
+        path, escape = _confined_artifact_path(driver.project_root, rel)
+        if escape is not None:
+            return [escape]
+        assert path is not None
         if not path.is_file():
             return [
                 f"attempt artifact missing: {rel} -- write it, then run `awino loop next`"
             ]
         text = path.read_text(encoding="utf-8", errors="replace")
+        hostile = _hostile_text_refusal(text, rel)
+        if hostile is not None:
+            return [hostile]
         if len(text) < RALPH_ATTEMPT_MIN_CHARS:
             return [
                 f"attempt artifact too short: {len(text)} chars "
@@ -1622,10 +1780,18 @@ class RalphRetryPhase(Phase):
         # A retry that wrote nothing new is a retry in name only. The driver
         # requires the artifact to have grown since the last attempt -- crude,
         # but a retry that says nothing new never fixes anything.
-        path = driver.project_root / state.ralph_artifact
+        path, escape = _confined_artifact_path(
+            driver.project_root, state.ralph_artifact
+        )
+        if escape is not None:
+            return [escape]
+        assert path is not None
         if not path.is_file():
             return ["retry produced no attempt artifact"]
         text = path.read_text(encoding="utf-8", errors="replace")
+        hostile = _hostile_text_refusal(text, state.ralph_artifact)
+        if hostile is not None:
+            return [hostile]
         if state.verify_history:
             baseline = state.verify_history[-1].get("artifact_chars")
             if baseline is not None and len(text) <= baseline:
@@ -1654,6 +1820,10 @@ def _parse_workers(section_text: str) -> dict[str, dict]:
     workers. Shape, not substance: the driver checks ownership is
     non-overlapping and every claim refers to a real path -- the assign
     phase -- while the content of the assignment is the model's work.
+
+    ``raw_files`` preserves the claims before normalization so the assign
+    phase can name an escape attempt precisely instead of reporting the
+    normalized-away path as merely missing.
     """
     workers: dict[str, dict] = {}
     for part in re.split(r"(?m)^#{3,6}\s+", section_text)[1:]:
@@ -1661,18 +1831,21 @@ def _parse_workers(section_text: str) -> dict[str, dict]:
         name = name.strip()
         if not name:
             continue
-        workers[name] = {"files": _files_list(body), "body": body}
+        raw_files, files = _files_list(body)
+        workers[name] = {"files": files, "raw_files": raw_files, "body": body}
     return workers
 
 
-def _files_list(body: str) -> list[str]:
+def _files_list(body: str) -> tuple[list[str], list[str]]:
     """Repo-relative paths under a 'files:' (or 'files ::') line.
 
-    One path per line, comment-free; a line is skipped when it starts with a
-    bullet, a quote, or a 'file' keyword, which keeps prose like 'files are
-    in src/' out of the ownership check. Paths are normalized so
-    './src/x.py' and 'src/x.py' compare equal.
+    Returns (raw claims, normalized paths). One path per line,
+    comment-free; a line is skipped when it starts with a bullet, a quote,
+    or a 'file' keyword, which keeps prose like 'files are in src/' out of
+    the ownership check. Paths are normalized so './src/x.py' and 'src/x.py'
+    compare equal.
     """
+    raw_files: list[str] = []
     files: list[str] = []
     in_files = False
     for line in body.splitlines():
@@ -1689,8 +1862,9 @@ def _files_list(body: str) -> list[str]:
             continue
         if not re.fullmatch(r"[\w.\-/+]+", first):
             continue
+        raw_files.append(first)
         files.append(_normalize_path(first))
-    return files
+    return raw_files, files
 
 
 def _normalize_path(path: str) -> str:
@@ -1742,13 +1916,19 @@ class DelegateDecomposePhase(Phase):
         )
 
     def validate(self, driver: LoopDriver, state: LoopState) -> list[str]:
-        path = driver.project_root / state.decompose_artifact
         rel = state.decompose_artifact
+        path, escape = _confined_artifact_path(driver.project_root, rel)
+        if escape is not None:
+            return [escape]
+        assert path is not None
         if not path.is_file():
             return [
                 f"decompose artifact missing: {rel} -- write it, then run `awino loop next`"
             ]
         text = path.read_text(encoding="utf-8", errors="replace")
+        hostile = _hostile_text_refusal(text, rel)
+        if hostile is not None:
+            return [hostile]
         headings = [h.lower() for h in _HEADING_RE.findall(text)]
         missing: list[str] = []
         if not any("assign" in h for h in headings):
@@ -1769,6 +1949,13 @@ class DelegateDecomposePhase(Phase):
                 missing.append(
                     f"worker '{name}' claims no files: add 'files:' ownership"
                 )
+            for raw in info["raw_files"]:
+                if _claim_escapes_project(raw):
+                    missing.append(
+                        f"worker '{name}' claims path '{raw}' that escapes the "
+                        "project: file ownership is repo-relative -- a claim "
+                        "may not contain '..' climbing out or be absolute"
+                    )
         return missing
 
 
@@ -1790,15 +1977,34 @@ class DelegateAssignPhase(Phase):
         return injected + base
 
     def validate(self, driver: LoopDriver, state: LoopState) -> list[str]:
-        """Machine-check: no two workers may claim the same file, and every
-        claimed file must exist. Overlap is a merge conflict in writing, so
-        it fails here -- before any work starts -- rather than at review."""
-        path = driver.project_root / state.decompose_artifact
+        """Machine-check: no two workers may claim the same file, every
+        claimed file must exist inside the repo, and no claim may escape
+        the project (``..`` climbing out, absolute paths, or symlinks
+        pointing outside). Overlap is a merge conflict in writing, so it
+        fails here -- before any work starts -- rather than at review."""
+        path, escape = _confined_artifact_path(
+            driver.project_root, state.decompose_artifact
+        )
+        if escape is not None:
+            return [escape]
+        assert path is not None
         text = path.read_text(encoding="utf-8", errors="replace")
+        hostile = _hostile_text_refusal(text, state.decompose_artifact)
+        if hostile is not None:
+            return [hostile]
         workers = _parse_workers(
             _section_text(text, ("assign",))
         )
         missing: list[str] = []
+        root = driver.project_root.resolve()
+        for name in sorted(workers):
+            for raw in workers[name]["raw_files"]:
+                if _claim_escapes_project(raw):
+                    missing.append(
+                        f"worker '{name}' claims path '{raw}' that escapes the "
+                        "project: file ownership is repo-relative -- a claim "
+                        "may not contain '..' climbing out or be absolute"
+                    )
         claims: dict[str, str] = {}
         for name in sorted(workers):
             for claimed in workers[name]["files"]:
@@ -1812,10 +2018,22 @@ class DelegateAssignPhase(Phase):
                 else:
                     claims[claimed] = name
         for claimed in sorted(claims):
-            if not (driver.project_root / claimed).exists():
+            target = driver.project_root / claimed
+            if not target.exists():
                 missing.append(
                     f"claimed path does not exist in repo: '{claimed}' "
                     f"(claimed by {claims[claimed]})"
+                )
+                continue
+            try:
+                inside = target.resolve().is_relative_to(root)
+            except OSError:
+                inside = False
+            if not inside:
+                missing.append(
+                    f"claimed path '{claimed}' resolves outside the project "
+                    f"(claimed by {claims[claimed]}): ownership is "
+                    "repo-relative only -- no symlinks pointing out"
                 )
         return missing
 
@@ -1831,21 +2049,33 @@ class DelegateExecutePhase(Phase):
         )
 
     def validate(self, driver: LoopDriver, state: LoopState) -> list[str]:
-        path = driver.project_root / state.execute_artifact
         rel = state.execute_artifact
+        path, escape = _confined_artifact_path(driver.project_root, rel)
+        if escape is not None:
+            return [escape]
+        assert path is not None
         if not path.is_file():
             return [
                 f"execute artifact missing: {rel} -- write it, then run `awino loop next`"
             ]
         text = path.read_text(encoding="utf-8", errors="replace")
+        hostile = _hostile_text_refusal(text, rel)
+        if hostile is not None:
+            return [hostile]
         headings = [h.lower() for h in _HEADING_RE.findall(text)]
         missing: list[str] = []
+        results_text = _section_text(text, ("result",))
         if not any("result" in h for h in headings):
             missing.append(
                 "execute artifact has no '## Results' section "
                 "(one '### <worker>' block per worker)"
             )
-        for section in _parse_exec_sections(_section_text(text, ("result",))):
+        elif not _parse_exec_sections(results_text):
+            missing.append(
+                "execute artifact '## Results' section is present but empty: "
+                "add one '### <worker>' block per worker, each with a 'done:' claim"
+            )
+        for section in _parse_exec_sections(results_text):
             if not section["done"]:
                 missing.append(
                     f"worker '{section['worker']}' has no 'done:' claim: "
@@ -1869,8 +2099,16 @@ class DelegateVerifyPhase(Phase):
         command, or require the declared output file to exist and be
         non-empty. The claim is what the worker said; this is what the
         machine checks. A false 'done' fails and names the worker."""
-        path = driver.project_root / state.execute_artifact
+        path, escape = _confined_artifact_path(
+            driver.project_root, state.execute_artifact
+        )
+        if escape is not None:
+            return [escape]
+        assert path is not None
         text = path.read_text(encoding="utf-8", errors="replace")
+        hostile = _hostile_text_refusal(text, state.execute_artifact)
+        if hostile is not None:
+            return [hostile]
         missing: list[str] = []
         for section in _parse_exec_sections(_section_text(text, ("result",))):
             worker = section["worker"]
@@ -1908,6 +2146,17 @@ class DelegateVerifyPhase(Phase):
             return None
         if section["output"]:
             out_path = driver.project_root / _normalize_path(section["output"])
+            try:
+                inside = out_path.resolve().is_relative_to(
+                    driver.project_root.resolve()
+                )
+            except OSError:
+                inside = False
+            if not inside:
+                return (
+                    f"declared output file '{section['output']}' escapes the "
+                    "project: output files must be repo-relative"
+                )
             if not out_path.is_file():
                 return f"declared output file '{section['output']}' does not exist"
             try:
@@ -2037,7 +2286,17 @@ class LoopDriver(abc.ABC):
     # ── state ────────────────────────────────────────────────────────────────
 
     def _path(self, loop_id: str) -> Path:
-        return self.loops_dir / f"{loop_id}.json"
+        candidate = self.loops_dir / f"{loop_id}.json"
+        try:
+            inside = candidate.resolve().is_relative_to(self.loops_dir.resolve())
+        except OSError:
+            inside = False
+        if not inside:
+            raise LoopError(
+                f"bad loop id {loop_id!r}: it resolves outside the loops "
+                "directory -- loop ids are '<kind>-<stamp>-<rand>'"
+            )
+        return candidate
 
     def save(self, state: LoopState) -> None:
         self.loops_dir.mkdir(parents=True, exist_ok=True)
@@ -2047,10 +2306,42 @@ class LoopDriver(abc.ABC):
         (self.loops_dir / "current").write_text(state.id, encoding="utf-8")
 
     def load(self, loop_id: str) -> LoopState:
+        """Load a loop's persisted state, refusing -- loudly and precisely --
+        when the state file is missing, unreadable, or incomplete.
+
+        A kill mid-write leaves a truncated or partial state file; resuming
+        must say exactly that (and how to recover) rather than dying with a
+        bare TypeError/JSONDecodeError traceback.
+        """
         path = self._path(loop_id)
         if not path.is_file():
             raise LoopError(f"no loop {loop_id!r}")
-        return LoopState.from_dict(json.loads(path.read_text(encoding="utf-8")))
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise LoopError(
+                f"loop state for {loop_id!r} is unreadable: {exc} -- restore "
+                f"{path} from backup, or delete it and start over with "
+                "`awino loop run ...`"
+            ) from exc
+        try:
+            data = json.loads(raw)
+        except ValueError as exc:
+            raise LoopError(
+                f"loop state for {loop_id!r} is corrupt: {path} is not valid "
+                f"JSON ({exc}) -- the loop was likely killed mid-write; "
+                "restore it from backup, or delete it and start over with "
+                "`awino loop run ...`"
+            ) from exc
+        try:
+            return LoopState.from_dict(data)
+        except (TypeError, ValueError, KeyError, AttributeError) as exc:
+            raise LoopError(
+                f"loop state for {loop_id!r} is incomplete: {path} does not "
+                f"describe a full loop state ({exc}) -- the loop was likely "
+                "killed mid-write; restore it from backup, or delete it and "
+                "start over with `awino loop run ...`"
+            ) from exc
 
     def current_id(self) -> str | None:
         marker = self.loops_dir / "current"
@@ -2208,6 +2499,14 @@ class LoopDriver(abc.ABC):
                 "inputs changed since the receipt was written "
                 f"(receipt inputs_hash={receipt.inputs_hash[:12]}...)"
             )
+        if receipt.skill != skill or receipt.phase != phase_name:
+            return (
+                f"tampered skill receipt (phase '{phase_name}'): the receipt "
+                f"file names skill '{receipt.skill}' phase '{receipt.phase}' "
+                f"inside, but was read as skill '{skill}' phase "
+                f"'{phase_name}' -- delete it and re-run `awino loop check` "
+                "on the valid artifact"
+            )
         artifact_rel = self.phase_artifact(state, phase_name)
         if receipt.output_artifact != artifact_rel:
             return (
@@ -2215,7 +2514,15 @@ class LoopDriver(abc.ABC):
                 f"points at '{receipt.output_artifact}', not the phase's "
                 f"output artifact '{artifact_rel}'"
             )
-        artifact = self.project_root / receipt.output_artifact
+        artifact, escape = _confined_artifact_path(
+            self.project_root, receipt.output_artifact
+        )
+        if escape is not None:
+            return (
+                f"skill receipt for skill '{skill}' (phase '{phase_name}'): "
+                f"{escape}"
+            )
+        assert artifact is not None
         if not artifact.is_file():
             return (
                 f"skill receipt for skill '{skill}' (phase '{phase_name}') "
@@ -2608,7 +2915,18 @@ class LoopDriver(abc.ABC):
 
     def thinking_satisfied(self, state: LoopState) -> bool:
         """The ledger-enforced minimum bar: at least one thinking-mode run
-        on this loop, or an explicit human waiver."""
+        on this loop, or an explicit human waiver.
+
+        The run is read from the loop state, not cross-checked against a
+        ledger event -- deliberately. Both live in the same state directory
+        and are written by the same method (``record_thinking_run`` emits
+        the event, then saves the state), so a ledger cross-check would not
+        stop anyone who can already rewrite the state file, and it would
+        falsely refuse a legitimate loop whose trail was pruned while its
+        state survived. The guarantee here is against forgetting, not
+        against filesystem forgery: the gate asks every time, and the only
+        writer of ``thinking_runs`` records the run in both places at once.
+        """
         return bool(state.thinking_runs) or state.thinking_waiver is not None
 
     def record_thinking_run(

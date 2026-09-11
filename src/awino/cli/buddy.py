@@ -1165,11 +1165,58 @@ def _report_repo_hygiene(project_root: Path) -> None:
     _echo("")
 
 
+def _unknown_loop_verdicts(
+    state_root: Path, events: list[LoopEvent]
+) -> list[LoopEvent]:
+    """outcome_verdict events for loops that never existed on the trail.
+
+    A verdict is real when its loop has a state file or at least a
+    loop_started event; otherwise it is a hand-edited trail (or a deleted
+    loop), and neither buddy's scoreboard nor the brief may present it as a
+    deliverable. Each failure names the phantom loop id.
+    """
+    started = {event.loop_id for event in events if event.kind == "loop_started"}
+    out: list[LoopEvent] = []
+    for event in events:
+        if event.kind != "outcome_verdict":
+            continue
+        if event.loop_id in started:
+            continue
+        if (state_root / "loops" / f"{event.loop_id}.json").is_file():
+            continue
+        out.append(event)
+    return out
+
+
 def _run_report() -> None:
     workspace = _workspace()
     ledger = Ledger(workspace.state_root)
     _echo("BUDDY  mechanism effectiveness from real state")
     _echo(f"  project={workspace.project.name}  state={workspace.state_root}")
+    _echo("")
+
+    # -1. ledger integrity: corrupt trail lines are reported with file and
+    # line number, never silently skipped; verdicts for phantom loops are
+    # named, never counted.
+    _echo("LEDGER INTEGRITY  (corruption is reported, never silently skipped)")
+    corrupt = ledger.loop_trail_corruption()
+    if not corrupt:
+        _echo("  trail clean: every loops.jsonl line parses")
+    else:
+        trail = ledger._loop_events_path()
+        for lineno, preview in corrupt:
+            _echo(
+                f"  CORRUPT  {trail} line {lineno}: invalid loop event "
+                f"({preview}) -- restore the line from backup or delete it; "
+                "events on other lines are unaffected"
+            )
+    phantom = _unknown_loop_verdicts(workspace.state_root, ledger.loop_events())
+    for event in phantom:
+        _echo(
+            f"  PHANTOM  outcome_verdict for unknown loop {event.loop_id!r} "
+            f"({event.at}): no loop state and no loop_started event -- "
+            "not counted in outcome rates"
+        )
     _echo("")
 
     # 0. outcome rates (the headline: outcomes are the scoreboard)
