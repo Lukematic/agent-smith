@@ -81,7 +81,14 @@ try {
     # stores. Copy mode is slower on first run and works everywhere, which is the
     # right trade for an installer a stranger runs once.
     if (-not $env:UV_LINK_MODE) { $env:UV_LINK_MODE = 'copy' }
-    uv sync --all-groups 2>&1 | Out-Null
+    try {
+        uv sync --all-groups --frozen --offline 2>&1 | Out-Null
+    } catch {
+        uv sync --all-groups --frozen 2>&1 | Out-Null
+    }
+    if ($LASTEXITCODE -ne 0) {
+        uv sync --all-groups --frozen 2>&1 | Out-Null
+    }
     if ($LASTEXITCODE -ne 0) { throw "uv sync exited $LASTEXITCODE" }
     Write-Ok "dependencies installed into .venv"
 } catch {
