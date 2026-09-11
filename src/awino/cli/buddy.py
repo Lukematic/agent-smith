@@ -18,10 +18,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import typer
+import yaml
 
-from awino import session_markers, stance
+from awino import heilmeier, session_markers, stance
 from awino.cli import _echo, _workspace
 from awino.enforce import LOOPS, Ledger, LoopEvent, Run
+from awino.paths import project_state_dir
 
 # Honest marker detail prefix written by `buddy --fix` for a declared loop
 # that was never walked. The event kind stays "loop_started" (a real kind,
@@ -355,6 +357,29 @@ def _seeds_closed_since(project_root: Path, since_epoch: float) -> tuple[int | N
     return closed, None
 
 
+def _scaffold_goals(project_root: Path) -> list[str]:
+    """Stated goals to scaffold draft criteria from: the human's own words.
+
+    project.yaml `goals:` and open seed titles -- both human-authored. The
+    rendered MISSION.md is deliberately excluded: its headings are the
+    catechism's questions, not the human's goals, and scaffolding from them
+    would put the machine's own questions in the human's mouth.
+    """
+    goals: list[str] = []
+    project_yaml = project_state_dir(project_root) / "project.yaml"
+    if project_yaml.is_file():
+        try:
+            data = yaml.safe_load(project_yaml.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError):
+            data = None
+        if isinstance(data, dict) and isinstance(data.get("goals"), list):
+            goals.extend(
+                str(item).strip() for item in data["goals"] if str(item).strip()
+            )
+    goals.extend(_open_seed_titles(project_root))
+    return goals
+
+
 def _mission_freshness(
     project_root: Path, state_root: Path, now: float | None = None
 ) -> MissionFreshness:
@@ -464,6 +489,26 @@ def _run_report() -> None:
             _echo(f"  seeds closed since then: {fresh.seeds_closed_since}")
     for note in fresh.notes:
         _echo(f"  note: {note}")
+    _echo("")
+
+    # 5. mission criteria: the mission must be measurable -- objective plus
+    # success criteria -- or loop artifacts and verdicts judge against prose.
+    _echo(
+        "MISSION CRITERIA  (objective + success criteria: "
+        "how will we know we've reached the goal vs. not)"
+    )
+    cat = heilmeier.load(workspace.state_root)
+    if not cat.answers:
+        _echo("  no mission on file")
+    else:
+        problems = heilmeier.validate_mission(cat)
+        for problem in problems:
+            _echo(f"  MISSING  {problem}")
+        if not problems:
+            _echo(
+                f"  objective answered; "
+                f"{len(heilmeier.success_criteria(cat))} success criteria on file"
+            )
 
 
 # ── --fix: mechanical corrections ────────────────────────────────────────────
@@ -737,6 +782,68 @@ def _run_fix() -> None:
             applied += 1
     else:
         _echo("  no stale-mission evidence (no correction needed)")
+    _echo("")
+
+    # 5. mission criteria: scaffold missing sections from the project's
+    # stated goals, marked as draft for human review -- never presented as
+    # final. A scaffolded draft has no wired verify commands, so the mission
+    # stays invalid until the human finalizes it.
+    _echo("MISSION CRITERIA")
+    cat = heilmeier.load(state_root)
+    missing = heilmeier.missing_mission_fields(cat)
+    if not missing:
+        _echo("  objective and success criteria on file (no correction needed)")
+    else:
+        goals = _scaffold_goals(project_root)
+        if not goals:
+            _echo(
+                "  no stated goals to scaffold from; the mission still lacks: "
+                + ", ".join(missing)
+            )
+            _echo(
+                '  ACTION  write the mission by hand: '
+                'awino mission --set "objective=<one sentence>"'
+            )
+            # No count change: the freshness section already asked the human.
+        else:
+            if "objective" in missing:
+                cat.answers["objective"] = goals[0]
+                cat.source["objective"] = (
+                    "draft: scaffolded by buddy --fix from stated goals; "
+                    "human review required"
+                )
+                _echo(
+                    f"  FIX scaffolded draft objective from stated goal: "
+                    f"'{goals[0]}' (marked for human review)"
+                )
+            if "success_criteria" in missing:
+                drafted = [
+                    f"[DRAFT -- human review required] {goal} -- replace "
+                    "this line with the claim and the command that verifies "
+                    "it, then delete this marker"
+                    for goal in goals[:3]
+                ]
+                existing = cat.answers.get("exams", "").strip()
+                cat.answers["exams"] = (
+                    (existing + "\n" if existing else "") + "\n".join(drafted)
+                )
+                cat.source["exams"] = (
+                    "draft: scaffolded by buddy --fix from stated goals; "
+                    "human review required"
+                )
+                _echo(
+                    f"  FIX scaffolded draft success criteria from "
+                    f"{min(len(goals), 3)} stated goal(s) (marked for human "
+                    "review; still not measurable until a human wires commands)"
+                )
+            heilmeier.save(state_root, cat)
+            applied += 1
+            if "success_criteria" in missing:
+                _echo(
+                    '  ACTION  finalize the mission: '
+                    'awino mission --set "exams=<claim> -> <verify command>"'
+                )
+                need_human += 1
     _echo("")
 
     _echo(f"BUDDY-FIX done: {applied} correction(s) applied, {need_human} need a human")

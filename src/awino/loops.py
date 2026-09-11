@@ -39,7 +39,7 @@ from typing import ClassVar
 
 import yaml
 
-from awino import seeds
+from awino import heilmeier, seeds
 from awino.enforce import Ledger, LoopEvent
 from awino.paths import project_state_dir
 
@@ -73,11 +73,41 @@ PLAN_SECTIONS: dict[str, tuple[str, ...]] = {
 # Required pairing-brief sections (lowercase, matched by containment like PLAN_SECTIONS).
 PAIRING_SECTIONS = ("sub-problems", "candidate approaches", "questions")
 
+# Required research sections (lowercase, matched by containment like
+# PLAN_SECTIONS). First principles, enforced: the artifact must show its work
+# -- a problem breakdown, assumptions challenged (named explicitly), and
+# angles considered -- before any solution. The driver checks the shape of
+# the work, not its quality.
+RESEARCH_SECTIONS: dict[str, tuple[str, ...]] = {
+    "problem breakdown": ("problem breakdown", "breakdown"),
+    "assumptions challenged": ("assumptions challenged", "assumptions"),
+    "angles considered": ("angles considered", "angles"),
+}
+# Headings that read as a proposed solution. Research documents what exists;
+# the required first-principles sections must come before any of these --
+# an artifact that jumps straight to a solution fails with the missing part
+# named.
+_SOLUTION_HEADING_RE = re.compile(r"(?i)\b(solution|proposal|proposed|recommendation)\b")
+# An explicitly named assumption: a list item, or prose using the word.
+_ASSUMPTION_ITEM_RE = re.compile(r"(?m)^\s*(?:[-*+]|\d+[.)])\s+\S")
+
 _HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.MULTILINE)
 
 # A trade-off marker is a proxy, not a judgment: the driver checks the shape
 # of deliberation (did the brief spell out costs), not its quality.
 _TRADEOFF_RE = re.compile(r"trade-?off|pro:|con:", re.IGNORECASE)
+# A level-of-effort marker is a proxy, not a judgment: the driver checks the
+# shape of deliberation (did the brief say what each approach costs), not its
+# quality. "effort: low" or "level of effort: two days" both count.
+_EFFORT_RE = re.compile(r"(?im)^\s*(?:level of )?effort\s*:\s*(.+?)\s*$")
+# The Honda marker: the approach that delivers exactly what was asked, no
+# more, is labeled the default recommendation. Bigger alternates stay labeled
+# recommendations -- options, never the plan.
+_DEFAULT_RECOMMENDATION_RE = re.compile(r"(?i)\bdefault\s+recommendation\b")
+# A plan decision that chooses an approach must record whether it followed
+# the default recommendation or overrode it, with a reason.
+_FOLLOW_DEFAULT_RE = re.compile(r"(?i)\bfollow(?:ed|ing)? the default recommendation\b")
+_OVERRIDE_DEFAULT_RE = re.compile(r"(?i)\boverr(?:ode|iding|idden) the default recommendation\b")
 # Pairing questions are one per line in Qn: format.
 _QUESTION_RE = re.compile(r"(?m)^\s*(Q\d+)\s*:\s*(.+?)\s*$")
 _APPROACH_HEADING_RE = re.compile(r"(?m)^#{3,6}\s+(.+?)\s*$")
@@ -155,6 +185,17 @@ def _mission_goal_texts(project_root: Path) -> list[str]:
     return []
 
 
+def mission_goal_texts(project_root: Path) -> list[str]:
+    """Stated mission goals for the project, in order (MISSION.md headings
+    and list items first, project.yaml `goals:` as fallback).
+
+    Shared helper for the buddy scaffold and the drift check: the goals the
+    human has already stated, never invented ones. Empty when nothing is
+    stated.
+    """
+    return _mission_goal_texts(project_root)
+
+
 def _goal_item_text(item: object) -> str:
     """One goals: list item as text. Strings pass through; mappings use their
     text/title/goal field rather than their repr."""
@@ -196,6 +237,42 @@ def _goal_hit(goal: str, artifact_text: str) -> bool:
     the alignment check, so the 'unaddressed' list agrees with the pass/fail."""
     keywords = _mission_keywords([goal])
     return any(keyword in artifact_text for keyword in keywords)
+
+
+def mission_success_criteria(project_root: Path) -> list[str]:
+    """The mission's success criteria: one measurable statement per exam line.
+
+    These are what loop artifacts and outcome verdicts are judged against --
+    not keyword drift, the criteria themselves. Empty when the mission has
+    none on file: A.W.I.N.O. never invents criteria.
+    """
+    return heilmeier.success_criteria(
+        heilmeier.load(project_state_dir(project_root))
+    )
+
+
+def evaluate_success_criteria(
+    criteria: list[str], artifact_text: str
+) -> list[tuple[str, str]]:
+    """Judge each success criterion against an artifact: met / unmet / unjudgeable.
+
+    Deterministic keyword matching, the same heuristic as the drift check: a
+    criterion is met when the artifact mentions its keywords, unmet when it
+    does not, unjudgeable when the criterion yields no keywords to match on.
+    The driver checks the shape of the judgment, not its quality -- the final
+    call on met vs unmet stays human, at the outcome verdict.
+    """
+    judged: list[tuple[str, str]] = []
+    lowered = artifact_text.lower()
+    for criterion in criteria:
+        keywords = _mission_keywords([criterion])
+        if not keywords:
+            judged.append((criterion, "unjudgeable"))
+        elif any(keyword in lowered for keyword in keywords):
+            judged.append((criterion, "met"))
+        else:
+            judged.append((criterion, "unmet"))
+    return judged
 
 
 class LoopError(RuntimeError):
@@ -332,6 +409,11 @@ class LoopState:
     plan_artifact: str = ""
     gate_run_id: str | None = None
     handoff: dict | None = None
+    # Hash of the mission's objective + success criteria at loop start. At
+    # loop close the driver compares the live hash: changed criteria mean the
+    # mission moved under the work, so the human updates the mission first
+    # rather than the verdict judging against stale criteria.
+    criteria_hash: str | None = None
     # Ralph
     ralph_artifact: str = ""
     check_command: str = ""
@@ -391,7 +473,45 @@ class ResearchPhase(Phase):
                 "research artifact contains no file:line references "
                 "(e.g. 'src/awino/loops.py:42')"
             ]
-        return []
+        return _validate_research_sections(text)
+
+
+def _validate_research_sections(text: str) -> list[str]:
+    """First-principles shape check: problem breakdown, assumptions
+    challenged (named explicitly), and angles considered -- before any
+    solution. Each failure names the missing part, never just "incomplete".
+    """
+    headings = [h.lower() for h in _HEADING_RE.findall(text)]
+    solution_idx: int | None = None
+    for i, heading in enumerate(headings):
+        if _SOLUTION_HEADING_RE.search(heading):
+            solution_idx = i
+            break
+    missing: list[str] = []
+    for section, synonyms in RESEARCH_SECTIONS.items():
+        idx = next(
+            (i for i, h in enumerate(headings) if any(s in h for s in synonyms)),
+            None,
+        )
+        if idx is None:
+            missing.append(
+                f"research artifact missing required section: '{section}' -- "
+                "show the first-principles work before any solution"
+            )
+        elif solution_idx is not None and idx > solution_idx:
+            missing.append(
+                f"research artifact section '{section}' comes after a proposed "
+                "solution -- the first-principles work must come first"
+            )
+    if "assumptions challenged" not in "".join(missing):
+        body = _section_text(text, RESEARCH_SECTIONS["assumptions challenged"])
+        if not _ASSUMPTION_ITEM_RE.search(body) and "assum" not in body.lower():
+            missing.append(
+                "research artifact section 'assumptions challenged' names no "
+                "assumption explicitly: list each assumption you started with "
+                "and what the code actually showed"
+            )
+    return missing
 
 
 class PairPlanPhase(Phase):
@@ -423,12 +543,31 @@ class PairPlanPhase(Phase):
                 "(each as a '###' subheading)"
             )
         else:
+            defaults: list[str] = []
             for name, body in _split_approach_blocks(approaches_text):
                 if not _TRADEOFF_RE.search(body):
                     missing.append(
                         f"approach '{name}' has no trade-off marker: add 'trade-off', "
                         "'pro:' or 'con:' spelling out what it costs"
                     )
+                if not _EFFORT_RE.search(body):
+                    missing.append(
+                        f"approach '{name}' has no level-of-effort marker: add "
+                        "'effort: <estimate>' so the human can compare cost"
+                    )
+                if _DEFAULT_RECOMMENDATION_RE.search(body):
+                    defaults.append(name)
+            if not defaults:
+                missing.append(
+                    "no approach is marked as the default recommendation: mark "
+                    "the one that delivers exactly what was asked -- no more -- "
+                    "with 'default recommendation' (the Honda, not the Bugatti)"
+                )
+            elif len(defaults) > 1:
+                missing.append(
+                    "multiple approaches marked as the default recommendation "
+                    f"({', '.join(defaults)}): exactly one approach may be the default"
+                )
         questions_text = _section_text(text, ("questions",))
         if not _QUESTION_RE.findall(questions_text):
             missing.append(
@@ -497,6 +636,10 @@ def _validate_decision_trace(
     when it cites a Q id asked in the pairing brief; otherwise it must be
     marked `default:` with a reason. Untraced decisions are guesses the
     pairing phase exists to prevent.
+
+    Honda first: a decision that chooses a candidate approach must also say
+    whether it followed the default recommendation or overrode it, with a
+    reason -- the plan records which was chosen and why.
     """
     entries = _decision_entries(_section_text(plan_text, ("decisions",)))
     if not entries:
@@ -506,6 +649,7 @@ def _validate_decision_trace(
         ]
     brief_qids = [qid for qid, _ in driver.pairing_questions(state)]
     known = ", ".join(brief_qids) if brief_qids else "(none recorded)"
+    approach_names = [name for name, _, _ in driver.pairing_approaches(state)]
     missing: list[str] = []
     for entry in entries:
         head = entry.splitlines()[0][:60]
@@ -516,21 +660,40 @@ def _validate_decision_trace(
                 f"decision '{head}' references unknown question '{unknown[0]}' "
                 f"(questions asked: {known})"
             )
-        elif refs:
+            continue
+        mentioned = [n for n in approach_names if n.lower() in entry.lower()]
+        if mentioned:
+            marker = _FOLLOW_DEFAULT_RE.search(entry) or _OVERRIDE_DEFAULT_RE.search(
+                entry
+            )
+            if marker is None:
+                missing.append(
+                    f"decision '{head}' chooses an approach ('{mentioned[0]}') "
+                    "but does not say whether it followed or overrode the "
+                    "default recommendation: add 'followed the default "
+                    "recommendation because ...' or 'overrode the default "
+                    "recommendation because ...'"
+                )
+            elif len(entry[marker.end() :].strip()) < 3:
+                missing.append(
+                    f"decision '{head}' notes the default recommendation but "
+                    "gives no reason: say why it was followed or overridden"
+                )
+            continue
+        if refs:
             continue  # traced to a recorded pairing question
+        default = re.search(r"default\s*:\s*(.+)", entry, re.IGNORECASE | re.DOTALL)
+        if default and default.group(1).strip():
+            continue  # explicitly defaulted with a reason
+        if default:
+            missing.append(
+                f"decision '{head}' is marked default but gives no reason"
+            )
         else:
-            default = re.search(r"default\s*:\s*(.+)", entry, re.IGNORECASE | re.DOTALL)
-            if default and default.group(1).strip():
-                continue  # explicitly defaulted with a reason
-            if default:
-                missing.append(
-                    f"decision '{head}' is marked default but gives no reason"
-                )
-            else:
-                missing.append(
-                    f"decision '{head}' does not trace to any recorded question "
-                    "(cite Q1, Q2, ... or mark 'default:' with a reason)"
-                )
+            missing.append(
+                f"decision '{head}' does not trace to any recorded question "
+                "(cite Q1, Q2, ... or mark 'default:' with a reason)"
+            )
     return missing
 
 
@@ -1153,6 +1316,11 @@ class LoopDriver(abc.ABC):
         # mission goals the artifact did not address, or None. The CLI prints
         # these as the human's drift notice. Transient; reset on every check().
         self.last_drift: list[str] | None = None
+        # Set by check() alongside last_drift: the success criteria judged
+        # against the just-validated artifact as (criterion, met|unmet|
+        # unjudgeable), or None when the mission has no criteria on file.
+        # The CLI prints these as the named criteria check result.
+        self.last_criteria: list[tuple[str, str]] | None = None
         # Set by _complete()/escalate(): the human-facing seed note, or "".
         self.completion_seed_note: str = ""
 
@@ -1236,6 +1404,9 @@ class LoopDriver(abc.ABC):
         if seed_id is not None:
             state.seed_id = self._resolve_seed(seed_id)
         self._declare_artifacts(state, stamp, topic)
+        state.criteria_hash = heilmeier.criteria_hash(
+            heilmeier.load(project_state_dir(self.project_root))
+        )
         self.save(state)
         detail = f"task: {task}"
         if state.seed_id is not None:
@@ -1297,17 +1468,63 @@ class LoopDriver(abc.ABC):
         flagged, never blocking.
         """
         self.last_drift = None
+        self.last_criteria = None
         missing = self.validate_current(state)
         if missing:
             self.record_failure(state, missing)
         elif state.phase in self.artifact_phases and self.record_artifact_validated(state):
             self.last_drift = self._check_mission_alignment(state)
+            self.last_criteria = self._check_success_criteria(state)
+        if not missing:
+            # Phase-boundary mission revisit: the work stands, so record the
+            # live criteria hash. `loop close` compares this against the live
+            # hash and prompts instead of judging stale criteria.
+            state.criteria_hash = heilmeier.criteria_hash(
+                heilmeier.load(project_state_dir(self.project_root))
+            )
+            self.save(state)
         return missing
 
     def artifact_path(self, _state: LoopState) -> str | None:
         """The artifact this loop's current phase produces, or None when the
         phase is a machine check (verify, assign, controller-verify,
         implement)."""
+        return None
+
+    def phase_artifact(self, _state: LoopState, _phase_name: str) -> str | None:
+        """The artifact file a named phase produces, or None. Drivers
+        override; the base driver has no artifacts."""
+        return None
+
+    def has_validated_artifacts(self, state: LoopState) -> bool:
+        """Whether any artifact on this loop was validated against criteria.
+
+        Reads the loop's own trail. Without a validated artifact nothing was
+        ever judged against the recorded criteria hash, so there is no stale
+        judgment to guard at close -- the verdict's live evaluation is the
+        first examination.
+        """
+        if self.ledger is None:
+            return False
+        return any(
+            event.kind == "artifact_validated"
+            for event in self.ledger.loop_events(state.id)
+        )
+
+    def judged_artifact(self, state: LoopState) -> str | None:
+        """The artifact the outcome verdict is judged against: the last
+        artifact-producing phase's file that exists on disk.
+
+        For RPI that is the plan; for Ralph the attempt; for Delegate the
+        execute artifact. The verdict measures the work's latest state, not
+        whichever phase happens to be current.
+        """
+        for phase_name in reversed(self.phase_order):
+            if phase_name not in self.artifact_phases:
+                continue
+            rel = self.phase_artifact(state, phase_name)
+            if rel and (self.project_root / rel).is_file():
+                return rel
         return None
 
     def prompt_block(
@@ -1519,8 +1736,48 @@ class LoopDriver(abc.ABC):
         )
         return unaddressed
 
+    def _check_success_criteria(
+        self, state: LoopState
+    ) -> list[tuple[str, str]] | None:
+        """Evaluate the just-validated artifact against the mission's success
+        criteria -- not keyword drift, the criteria themselves.
+
+        A named check result, never a blocker: the ledger gets a
+        `success_criteria_evaluated` event recording which criteria the
+        artifact met, missed, or could not be judged against, and the CLI
+        prints the judgment for the operator. No criteria on file means no
+        event and no output: A.W.I.N.O. never invents criteria to judge by.
+        """
+        criteria = mission_success_criteria(self.project_root)
+        if not criteria:
+            return None
+        artifact = self.artifact_path(state)
+        if not artifact:
+            return None
+        path = self.project_root / artifact
+        if not path.is_file():
+            return None
+        judged = evaluate_success_criteria(
+            criteria, path.read_text(encoding="utf-8", errors="replace")
+        )
+        self._emit(
+            state,
+            "success_criteria_evaluated",
+            detail="; ".join(f"{status}: {criterion}" for criterion, status in judged),
+        )
+        return judged
+
     # ── pair-planning hooks (neutral defaults; RPI overrides) ─────────────
     def pairing_questions(self, _state: LoopState) -> list[tuple[str, str]]:
+        return []
+
+    def pairing_approaches(self, _state: LoopState) -> list[tuple[str, str, str]]:
+        """(name, effort, role) per candidate approach from the pairing brief.
+
+        Role is "default" for the approach marked as the default
+        recommendation (the Honda: exactly what was asked), "alternate" for
+        the rest. The base driver has no pairing brief, so it reports none.
+        """
         return []
 
     def unanswered_questions(self, _state: LoopState) -> list[str]:
@@ -1640,7 +1897,7 @@ class RpiDriver(LoopDriver):
     }
     check_whys: ClassVar[dict[str, str]] = {
         "research": "research without file:line evidence is vibes; the check asks for receipts",
-        "pair-plan": "a brief without trade-offs or questions is a plan wearing a disguise",
+        "pair-plan": "a brief without trade-offs, effort markers, or questions is a plan wearing a disguise",
         "plan": "an untraced decision is a guess the pairing phase exists to prevent",
     }
 
@@ -1653,11 +1910,14 @@ class RpiDriver(LoopDriver):
         state.plan_artifact = f"thoughts/plans/{stamp}-{topic}.md"
 
     def artifact_path(self, state: LoopState) -> str | None:
+        return self.phase_artifact(state, state.phase)
+
+    def phase_artifact(self, state: LoopState, phase_name: str) -> str | None:
         return {
             "research": state.research_artifact,
             "pair-plan": state.pairing_artifact,
             "plan": state.plan_artifact,
-        }.get(state.phase)
+        }.get(phase_name)
 
     def _pairing_brief_exists(self, state: LoopState) -> bool:
         """Pair-planning is engaged by writing the pairing brief. If the
@@ -1690,6 +1950,35 @@ class RpiDriver(LoopDriver):
             key=lambda item: _qid_key(item[0]),
         )
 
+    def pairing_approaches(self, state: LoopState) -> list[tuple[str, str, str]]:
+        """(name, effort, role) per candidate approach in the pairing brief.
+
+        Role is "default" for the approach marked as the default
+        recommendation -- the Honda, the one that delivers exactly what was
+        asked -- and "alternate" for the rest. Alternates are labeled
+        recommendations with effort estimates: options, never the plan.
+        """
+        if not state.pairing_artifact:
+            return []
+        path = self.project_root / state.pairing_artifact
+        if not path.is_file():
+            return []
+        text = path.read_text(encoding="utf-8", errors="replace")
+        approaches: list[tuple[str, str, str]] = []
+        for name, body in _split_approach_blocks(
+            _section_text(text, ("candidate approaches",))
+        ):
+            effort = _EFFORT_RE.search(body)
+            role = (
+                "default"
+                if _DEFAULT_RECOMMENDATION_RE.search(body)
+                else "alternate"
+            )
+            approaches.append(
+                (name, effort.group(1).strip() if effort else "unstated", role)
+            )
+        return approaches
+
     def unanswered_questions(self, state: LoopState) -> list[str]:
         asked = [qid for qid, _ in self.pairing_questions(state)]
         return [qid for qid in asked if qid not in state.pair_answers]
@@ -1719,9 +2008,26 @@ class RpiDriver(LoopDriver):
         return "\n".join(lines)
 
     def describe_pairing(self, state: LoopState) -> list[str]:
-        """Status lines for the pair-plan phase: what's asked, what's
-        answered, what's still open."""
+        """Status lines for the pair-plan phase: the Honda presented as the
+        default recommendation, alternates as labeled recommendations with
+        effort, then what's asked, what's answered, what's still open."""
         lines: list[str] = []
+        approaches = self.pairing_approaches(state)
+        if approaches:
+            lines.append(
+                "APPROACHES  the default recommendation is the Honda -- exactly "
+                "what was asked; alternates are recommendations, never the plan"
+            )
+            for name, effort, role in approaches:
+                if role == "default":
+                    lines.append(
+                        f"  - {name} [DEFAULT RECOMMENDATION -- delivers exactly "
+                        f"what was asked] (effort: {effort})"
+                    )
+                else:
+                    lines.append(
+                        f"  - {name} [recommendation] (effort: {effort})"
+                    )
         for qid, question in self.pairing_questions(state):
             record = state.pair_answers.get(qid)
             if record is None:
@@ -1920,7 +2226,10 @@ class RalphDriver(LoopDriver):
         """Ralph has no advance gates: verify routing happens inside advance()."""
 
     def artifact_path(self, state: LoopState) -> str | None:
-        if state.phase in ("attempt", "retry"):
+        return self.phase_artifact(state, state.phase)
+
+    def phase_artifact(self, state: LoopState, phase_name: str) -> str | None:
+        if phase_name in ("attempt", "retry"):
             return state.ralph_artifact
         return None
 
@@ -2116,10 +2425,13 @@ class DelegateDriver(LoopDriver):
         """Delegate has no advance gates: controller verification is a phase."""
 
     def artifact_path(self, state: LoopState) -> str | None:
+        return self.phase_artifact(state, state.phase)
+
+    def phase_artifact(self, state: LoopState, phase_name: str) -> str | None:
         return {
             "decompose": state.decompose_artifact,
             "execute": state.execute_artifact,
-        }.get(state.phase)
+        }.get(phase_name)
 
     def _complete(self, state: LoopState) -> str:
         state.phase = "done"

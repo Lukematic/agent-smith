@@ -72,9 +72,29 @@ Entry point through to effect.
 ## Existing conventions to imitate
 Patterns found elsewhere in this repo.
 
+## Problem breakdown
+The problem decomposed into its distinct sub-problems. First principles:
+state the problem in pieces before touching any angle on the whole.
+
+## Assumptions challenged
+Each assumption the work started with, named explicitly, and what the code
+actually showed about it. An assumption left unnamed is not an assumption
+challenged — the driver checks that the section names them.
+
+## Angles considered
+At least two different angles on the problem (other repos' conventions, the
+inverse framing, what the code does not do). When stuck, reframe the problem
+from a different angle; this section is where the reframes are recorded.
+
 ## Open questions
 Things the code does not answer. Do not guess.
 ```
+
+The three first-principles sections are required **before** any proposed
+solution: the document breaks the problem down, challenges its assumptions,
+and records the angles considered first. The driver rejects an artifact that
+jumps to a solution (a "Solution"/"Proposal" heading) without them, naming
+the missing part.
 
 **Missing-input protocol.** If research needs an input, category, or capability
 that appears absent (an empty output directory, a category with no prior run,
@@ -114,19 +134,28 @@ The distinct pieces of the work, one per line.
 ## Candidate approaches
 Two or three options, each as a `###` subheading, each with its trade-offs
 spelled out. Mark trade-offs explicitly — the word "trade-off" (or "pro:" /
-"con:") must appear under every approach. The driver checks for the marker,
-not the insight.
+"con:") must appear under every approach. Mark the level of effort explicitly
+too — an `effort: <estimate>` line under every approach, so the human can
+compare what each costs. The driver checks for the markers, not the insight.
+
+**Honda first:** exactly one approach is marked as the `default
+recommendation` — the Honda, the one that delivers exactly what was asked,
+no more. The other approaches stay labeled recommendations: options with
+effort estimates, never the plan. Never build the Bugatti unasked.
 
 ### A: <name>
 What it is. trade-off: what it costs and what it buys.
+effort: <rough estimate, e.g. hours or days>
 
 ### B: <name>
-What it is. trade-off: what it costs and what it buys.
+**Default recommendation.** What it is. trade-off: what it costs and what it
+buys.
+effort: <rough estimate>
 
 ## Questions
 Explicit questions needing human input, one per line in `Qn:` format:
 
-Q1: which approach?
+Q1: which approach — A, B, or something else?
 Q2: who approves the plan?
 ```
 
@@ -145,7 +174,12 @@ both answers.
 Read the research document (Phase 1) and the pairing brief (Phase 2) first — the recorded human
 decisions are injected into your prompt as "Human decisions so far", and your
 plan's `## Decisions` section must trace every decision to a pairing question
-(`Q1`) or mark it `default:` with a reason. Then, in order:
+(`Q1`) or mark it `default:` with a reason. **Honda first:** a decision that
+chooses a candidate approach must also say whether it followed the default
+recommendation or overrode it, with a reason — e.g. "chose B: followed the
+default recommendation because the asked-for change needs nothing from A's
+extras", or "chose A: overrode the default recommendation because <reason>".
+Then, in order:
 
 1. **Ask clarifying questions.** Full removal or deprecation? How should config
    cleanup behave? Where do the tests live? Do not guess where a question exists.
@@ -166,6 +200,8 @@ thoughts/research/...
 
 One row per pairing question, referencing its `Qn:` id — the driver validates
 the trace, so a decision that answers no asked question fails validation.
+When a row chooses a candidate approach, its rationale must say whether it
+followed or overrode the default recommendation, and why.
 
 ## Phase 1 — <name>
 - [ ] Exact file path — exact change

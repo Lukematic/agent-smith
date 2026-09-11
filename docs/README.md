@@ -18,6 +18,7 @@ Long-form, task-oriented documentation for A.W.I.N.O.
 | Document | Topic |
 | --- | --- |
 | [Mission](MISSION.md) | Product mission and naming rationale |
+| [Philosophy](PHILOSOPHY.md) | Owner's working philosophy and how the product enforces it |
 | [Installation](install.md) | Installer behavior and harness destinations |
 | [Architecture](architecture.md) | System layers and boundaries |
 | [Deployment](deployment.md) | Global and project-local deployment |

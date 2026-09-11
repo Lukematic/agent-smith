@@ -42,6 +42,21 @@ login -> validate -> session.
 ## Existing conventions to imitate
 Use the existing session store.
 
+## Problem breakdown
+1. Where tokens live and how they are read (src/auth.py:1-200).
+2. How the session store is written during a migration window.
+3. What "done" means for each phase of the cutover.
+
+## Assumptions challenged
+- "Migration requires downtime": challenged — src/auth.py:42 shows token
+  validation is stateless, so a flag-gated path needs no outage.
+- "The session store holds tokens": challenged — it holds sessions keyed by
+  token hash, so both paths can coexist during the window.
+
+## Angles considered
+- The inverse: leave auth.py untouched and migrate callers instead.
+- Conventions from src/session.py, which already does flag-gated rollouts.
+
 ## Open questions
 None.
 """
@@ -58,11 +73,14 @@ BRIEF_OK = """# Pairing brief: auth migration
 Replace everything at once.
 trade-off: risky but fast.
 pro: one deploy. con: downtime risk.
+effort: one day
 
 ### Strangler
-Migrate incrementally behind a flag.
+Default recommendation: migrates incrementally behind a flag — exactly what
+was asked, no more.
 trade-off: slower but safe.
 pro: zero downtime. con: two code paths for a while.
+effort: three days
 
 ## Questions
 Q1: Which approach do you prefer, big bang or strangler?
@@ -92,7 +110,8 @@ Revert the flag and redeploy.
 - tokens validate after migration
 
 ## Decisions
-- Chose the strangler approach (Q1) because downtime is unacceptable.
+- Chose the strangler approach (Q1); followed the default recommendation
+  because downtime is unacceptable and strangler is exactly what was asked.
 - Downtime budget is zero (Q2), so the flag stays until verified.
 """
 

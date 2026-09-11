@@ -21,6 +21,7 @@ research questions those gaps suggest. Derived, labeled, never asserted as fact.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass, field
@@ -77,6 +78,10 @@ class Catechism:
 
     def _exam_lines(self) -> list[str]:
         return [ln.strip() for ln in self.answers.get("exams", "").splitlines() if ln.strip()]
+
+    def exam_lines(self) -> list[str]:
+        """Every exam line: each one is a success-criterion statement."""
+        return self._exam_lines()
 
     def exam_commands(self) -> list[str]:
         return [m.group(2).strip() for ln in self._exam_lines() if (m := _EXAM_ARROW.match(ln))]
@@ -181,3 +186,83 @@ def render(state_root: Path, cat: Catechism, *, open_seeds: list[str]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
+
+
+# ── measurable missions ──────────────────────────────────────────────────────
+# The owner's rule: every mission states how we'll know we've reached the goal
+# vs. not. The two required fields are `objective` (Q1, no jargon) and
+# `success_criteria` (the exams answers: explicit, measurable statements).
+# "Measurable" is enforced, not wished for: at least one exam line must wire
+# a verification command ('claim -> command'), because a mission's final exam
+# is a command the ledger can run, not a sentence.
+
+REQUIRED_MISSION_FIELDS: tuple[str, str] = ("objective", "success_criteria")
+
+
+def success_criteria(cat: Catechism) -> list[str]:
+    """The mission's success criteria: one statement per exam line.
+
+    These are what loop artifacts and outcome verdicts are judged against.
+    Empty when the mission has none on file -- A.W.I.N.O. never invents them.
+    """
+    return cat.exam_lines()
+
+
+def missing_mission_fields(cat: Catechism) -> list[str]:
+    """Required mission fields without a usable answer.
+
+    `objective` is missing when Q1 is unanswered. `success_criteria` is
+    missing when no exam line wires a verification command: prose-only exams
+    cannot be measured, so they do not count.
+    """
+    missing: list[str] = []
+    if not cat.answers.get("objective", "").strip():
+        missing.append("objective")
+    if not cat.exam_commands():
+        missing.append("success_criteria")
+    return missing
+
+
+def validate_mission(cat: Catechism) -> list[str]:
+    """Helpful errors for a mission that lacks its required fields.
+
+    Each error names exactly the field that is missing and the concrete
+    command that supplies it. Empty means the mission is measurable.
+    """
+    out: list[str] = []
+    if not cat.answers.get("objective", "").strip():
+        out.append(
+            "mission is missing required field 'objective': answer Q1 -- "
+            "what are you trying to do? No jargon. "
+            'Fix with: awino mission --set "objective=<one sentence>"'
+        )
+    if not cat.exam_commands():
+        if not cat.exam_lines():
+            out.append(
+                "mission is missing required field 'success_criteria': how "
+                "will we know we've reached the goal vs. not? Answer the "
+                "'exams' question with measurable lines. "
+                'Fix with: awino mission --set "exams=<claim> -> <verify command>"'
+            )
+        else:
+            out.append(
+                "mission field 'success_criteria' is not measurable: every "
+                "exam is prose with no verification command. Wire at least "
+                "one 'claim -> command' line so success is a command, not a "
+                "sentence."
+            )
+    return out
+
+
+def criteria_hash(cat: Catechism) -> str:
+    """Hash of the mission's objective + success criteria.
+
+    The loop driver records this at loop start and compares it at close: if
+    the criteria changed mid-work, the verdict must prompt the human to
+    update the mission first rather than judging against stale criteria --
+    missions are living.
+    """
+    payload = cat.answers.get("objective", "").strip() + "\n" + "\n".join(
+        success_criteria(cat)
+    )
+    return hashlib.sha256(payload.strip().encode("utf-8")).hexdigest()

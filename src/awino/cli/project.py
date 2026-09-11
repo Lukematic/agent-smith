@@ -561,6 +561,14 @@ def mission_command(
             _echo(f"QUESTION  [{gap.key}] {gap.text}")
             _echo(f'          answer with: awino mission --set "{gap.key}=<your answer>"')
         else:
+            # All eight answered is not enough: the mission must be
+            # measurable -- objective plus success criteria -- before it
+            # counts as complete.
+            problems = heilmeier.validate_mission(cat)
+            if problems:
+                for problem in problems:
+                    _echo(f"REFUSED  {problem}")
+                raise typer.Exit(2)
             _echo("COMPLETE  all eight answered; exam commands are gate-ready")
         return
 

@@ -18,7 +18,7 @@ from pathlib import Path
 
 import typer
 
-from awino import loops
+from awino import heilmeier, loops
 from awino.cli import _echo, _ledger, _workspace
 from awino.enforce import LoopEvent
 from awino.paths import AwinoPaths
@@ -254,6 +254,11 @@ def loop_next(
                 _echo(f"  - {item}")
             _echo(f"Fix the artifact, then rerun `awino loop next --id {state.id}`.")
             raise typer.Exit(1)
+
+    if driver.last_criteria:
+        _echo("CRITERIA  success criteria vs this artifact:")
+        for criterion, status in driver.last_criteria:
+            _echo(f"  [{status}] {criterion}")
 
     try:
         new_phase = driver.advance(state)
@@ -505,6 +510,50 @@ def _verdict_seed_context(
     )
 
 
+def _verdict_criteria_lines(
+    driver: loops.LoopDriver,
+    state: loops.LoopState,
+    project_root: Path,
+    criteria: list[str],
+) -> tuple[list[str], list[str]]:
+    """Judge the outcome against the mission's success criteria.
+
+    Returns (ledger detail parts, CLI lines): which criteria were met, unmet,
+    or unjudgeable against the loop's latest artifact. No criteria on file
+    means the verdict judges the goal statement only -- never invented ones.
+    """
+    if not criteria:
+        return (
+            ["criteria_unjudgeable: no success criteria on file"],
+            ["CRITERIA  none on file: the verdict judges the goal statement only"],
+        )
+    artifact_rel = driver.judged_artifact(state)
+    if artifact_rel is None:
+        judged = [(criterion, "unjudgeable") for criterion in criteria]
+        note = "no artifact on disk to judge"
+    else:
+        text = (project_root / artifact_rel).read_text(
+            encoding="utf-8", errors="replace"
+        )
+        judged = loops.evaluate_success_criteria(criteria, text)
+        note = f"judged against {artifact_rel}"
+    met = [c for c, status in judged if status == "met"]
+    unmet = [c for c, status in judged if status == "unmet"]
+    unjudgeable = [c for c, status in judged if status == "unjudgeable"]
+    detail = [
+        f"criteria_met: {'; '.join(met) or '(none)'}",
+        f"criteria_unmet: {'; '.join(unmet) or '(none)'}",
+        f"criteria_unjudgeable: {'; '.join(unjudgeable) or '(none)'}",
+    ]
+    lines = [
+        f"CRITERIA  {note}: {len(met)} met, {len(unmet)} unmet, "
+        f"{len(unjudgeable)} unjudgeable"
+    ]
+    for criterion, status in judged:
+        lines.append(f"  [{status}] {criterion}")
+    return detail, lines
+
+
 @loop_app.command("close")
 def loop_close(
     loop_id: str = typer.Option(None, "--id", help="Loop id; defaults to the current one"),
@@ -553,6 +602,42 @@ def loop_close(
         )
         raise typer.Exit(2)
 
+    # Mission is living: if the success criteria changed since this loop's
+    # work was last examined against them, prompt the human to update the
+    # mission and re-examine first -- the verdict must judge live criteria,
+    # not stale ones. Recovery: update the mission, run `awino loop next`
+    # (which re-validates and re-syncs), then close.
+    live_hash = heilmeier.criteria_hash(heilmeier.load(workspace.state_root))
+    if (
+        state.criteria_hash
+        and live_hash != state.criteria_hash
+        and driver.has_validated_artifacts(state)
+    ):
+        _echo(
+            "PROMPT  the mission's success criteria changed since this loop's "
+            "work was last examined;"
+        )
+        _echo(
+            "        update the mission first -- the verdict must judge live "
+            "criteria, not stale ones:"
+        )
+        _echo('        awino mission --set "exams=<claim> -> <verify command>"')
+        _echo(
+            "        then re-examine the work: "
+            f"awino loop next --id {state.id}"
+        )
+        _echo(
+            f"REFUSED  stale success criteria; no verdict recorded for loop {state.id}"
+        )
+        raise typer.Exit(2)
+
+    criteria_detail, criteria_lines = _verdict_criteria_lines(
+        driver,
+        state,
+        workspace.project.root,
+        loops.mission_success_criteria(workspace.project.root),
+    )
+
     detail = "; ".join(
         [
             f"verdict: {verdict}",
@@ -561,6 +646,7 @@ def loop_close(
             f"seed: {state.seed_id if state.seed_id else 'none'}",
             f"goal: {goal}",
             f"seed_status: {seed_status}",
+            *criteria_detail,
             *([f"note: {note.strip()}"] if note.strip() else []),
         ]
     )
@@ -590,5 +676,7 @@ def loop_close(
     _echo(f"VERDICT  {verdict}")
     if note.strip():
         _echo(f"note: {note.strip()}")
+    for line in criteria_lines:
+        _echo(line)
     _echo(f"seed: {seed_status}")
     _echo(f"next: {next_action}")

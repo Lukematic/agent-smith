@@ -39,6 +39,21 @@ login -> validate -> session.
 ## Existing conventions to imitate
 Use the existing session store.
 
+## Problem breakdown
+1. Where tokens live and how they are read (src/auth.py:1-200).
+2. How the session store behaves during a migration window.
+3. What "done" means for each phase of the cutover.
+
+## Assumptions challenged
+- "Migration requires downtime": challenged — src/auth.py:42 shows token
+  validation is stateless, so a flag-gated path needs no outage.
+- "The session store holds tokens": challenged — it holds sessions keyed by
+  token hash, so both paths can coexist.
+
+## Angles considered
+- The inverse: leave auth.py untouched and migrate callers instead.
+- Conventions from the existing flag-gated rollout in the session store.
+
 ## Open questions
 None.
 """

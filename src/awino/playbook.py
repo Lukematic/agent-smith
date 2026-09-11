@@ -17,6 +17,10 @@ Two steps carry the teaching methods the human asked for, wired to real work:
 
 `mission-refresh` regenerates MISSION.md from current answers and open Seeds,
 which is what makes the Heilmeier document live rather than touched-once.
+
+`mission-brief` revisits the live mission at session start -- objective plus
+success criteria, with whether the mission is measurable -- so the session's
+work stays measured against it from the first minute, not just at loop close.
 """
 
 from __future__ import annotations
@@ -30,7 +34,7 @@ from awino.enforce import Ledger
 from awino.paths import project_state_dir
 
 DEFAULT_PLAYBOOK: dict[str, list[str]] = {
-    "session-start": ["start", "mission-gap", "next-seed"],
+    "session-start": ["start", "mission-brief", "mission-gap", "next-seed"],
     "task-close": ["walkthrough", "grill-offer", "mission-refresh"],
     "session-end": ["summary", "lesson-check", "mission-refresh"],
 }
@@ -42,6 +46,7 @@ StepFn = Callable[["Context"], list[str]]
 # against the real catalog, so a step cannot claim a skill that does not exist.
 STEP_SKILLS: dict[str, str] = {
     "start": "direct",
+    "mission-brief": "direct",
     "mission-gap": "awino-discover",
     "next-seed": "direct",
     "walkthrough": "awino-consult",
@@ -163,6 +168,36 @@ def _step_mission_gap(ctx: Context) -> list[str]:
     return out
 
 
+def _step_mission_brief(ctx: Context) -> list[str]:
+    """Revisit the live mission at session start: objective, success
+    criteria, and whether the mission is measurable.
+
+    Compact -- one line per fact -- so the operator sees the goal and how
+    it's measured before anything else runs. A session that cannot say how
+    it will know it reached the goal is asked to fix the mission first.
+    """
+    cat = heilmeier.load(ctx.state_root)
+    objective = cat.answers.get("objective", "").strip()
+    criteria = heilmeier.success_criteria(cat)
+    out = ["MISSION  (revisiting the live mission before work starts)"]
+    out.append(f"  objective: {objective or '(none on file)'}")
+    if criteria:
+        out.append(f"  success criteria ({len(criteria)}):")
+        out += [f"    - {criterion}" for criterion in criteria]
+    else:
+        out.append("  success criteria: (none -- the mission is not measurable yet)")
+    missing = heilmeier.missing_mission_fields(cat)
+    if missing:
+        out.append(f"  measurable: no (missing: {', '.join(missing)})")
+        out.append(
+            '  fix: awino mission --set "objective=<one sentence>"; '
+            'awino mission --set "exams=<claim> -> <verify command>"'
+        )
+    else:
+        out.append("  measurable: yes")
+    return out
+
+
 def _step_next_seed(ctx: Context) -> list[str]:
     return [f"next: {ctx.open_seeds[0]}"] if ctx.open_seeds else ["next: no open seeds"]
 
@@ -210,6 +245,7 @@ def _step_lesson_check(ctx: Context) -> list[str]:
 
 STEPS: dict[str, StepFn] = {
     "start": _step_start,
+    "mission-brief": _step_mission_brief,
     "mission-gap": _step_mission_gap,
     "next-seed": _step_next_seed,
     "walkthrough": _step_walkthrough,

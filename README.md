@@ -174,6 +174,7 @@ The generated editor modes are: 🧭 A.W.I.N.O., 🧭 A.W.I.N.O. Consult,
 | [User guide](docs/user-guide.md) | Installation, paired work, Seeds, gates, updates, and troubleshooting |
 | [Agent and harness guide](docs/agent-guide.md) | Startup, routing, plans, checkpoints, verification, and status protocol |
 | [Mission](docs/MISSION.md) | Product mission and naming rationale |
+| [Philosophy](docs/PHILOSOPHY.md) | Owner's working philosophy and how the product enforces it |
 | [Installation](docs/install.md) | Detailed installer and harness destinations |
 | [Architecture](docs/architecture.md) | Internal layers and design boundaries |
 | [Deployment](docs/deployment.md) | Global and project-local deployment choices |

@@ -46,6 +46,22 @@ run rpi -> next -> approve -> next -> handoff to the gate ledger.
 ## Existing conventions to imitate
 _gate.py_ helpers _echo/_workspace are reused by loopctl.
 
+## Problem breakdown
+1. How the driver sequences phases (src/awino/loops.py:100).
+2. Where validation lives and what shape it checks.
+3. How the CLI wires the driver to typer commands (src/awino/cli/loopctl.py:1).
+
+## Assumptions challenged
+- "Validation is per-phase prose": challenged — src/awino/loops.py:140 shows
+  each phase has a validator returning exactly-what-is-missing lists.
+- "State is kept in memory": challenged — LoopState persists via the loop
+  ledger on disk, so the CLI is stateless across invocations.
+
+## Angles considered
+- The inverse: a single validator for all phases instead of per-phase ones.
+- Conventions from src/awino/enforce.py, which already emits named events
+  the driver reuses for phase transitions.
+
 ## Open questions
 None; the ledger layout was read from src/awino/enforce.py:381.
 """
