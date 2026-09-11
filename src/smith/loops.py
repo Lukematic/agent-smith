@@ -23,11 +23,18 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
+from smith.enforce import Ledger, LoopEvent
+
 MAX_ATTEMPTS = 3
 RESEARCH_MIN_CHARS = 200
 FILE_LINE_RE = re.compile(r"\S+:\d+")
 
 PHASE_ORDER = ("research", "plan", "implement")
+
+# Phases that produce a machine-checkable artifact file. The implement phase
+# verifies a handoff to the gate ledger, not an artifact, so it emits no
+# artifact_validated / artifact_rejected events.
+ARTIFACT_PHASES = ("research", "plan")
 
 # Required plan headings (lowercase). Each maps to accepted synonyms; a heading
 # matches when it contains a synonym case-insensitively.
@@ -242,6 +249,7 @@ class LoopDriver(abc.ABC):
         loops_dir: Path,
         skill_md: Path | None = None,
         open_rpi_run=None,
+        ledger: Ledger | None = None,
     ) -> None:
         self.project_root = project_root
         self.loops_dir = loops_dir
@@ -251,6 +259,10 @@ class LoopDriver(abc.ABC):
         # one. The model does the implementing; the machine only checks the
         # handoff point exists.
         self.open_rpi_run = open_rpi_run
+        # The ledger's loop-event trail (<state_root>/loops.jsonl) is the
+        # audit trail; the driver's JSON state stays the working state.
+        # None means no trail (older tests, or callers without a ledger).
+        self.ledger = ledger
 
     @abc.abstractmethod
     def phases(self) -> list[Phase]:
@@ -286,6 +298,26 @@ class LoopDriver(abc.ABC):
             return marker.read_text(encoding="utf-8").strip() or None
         return None
 
+    # ── ledger audit trail ─────────────────────────────────────────────────
+
+    def _emit(
+        self, state: LoopState, kind: str, phase: str | None = None, detail: str = ""
+    ) -> None:
+        """Record one loop event. A no-op when the driver has no ledger, so
+        driver-only tests stay deterministic and event-free."""
+        if self.ledger is None:
+            return
+        self.ledger.record_loop_event(
+            LoopEvent(
+                loop_id=state.id,
+                loop_kind=self.loop_kind,
+                phase=phase if phase is not None else state.phase,
+                kind=kind,
+                at=datetime.now(UTC).isoformat(),
+                detail=detail,
+            )
+        )
+
     # ── lifecycle ────────────────────────────────────────────────────────────
 
     def new(self, task: str, topic: str | None = None) -> LoopState:
@@ -310,6 +342,8 @@ class LoopDriver(abc.ABC):
             plan_artifact=f"thoughts/plans/{stamp}-{topic}.md",
         )
         self.save(state)
+        self._emit(state, "loop_started", detail=f"task: {task}")
+        self._emit(state, "phase_started", detail="initial phase")
         return state
 
     def validate_current(self, state: LoopState) -> list[str]:
@@ -317,15 +351,73 @@ class LoopDriver(abc.ABC):
             return []
         return self._phase(state.phase).validate(self, state)
 
-    def record_failure(self, state: LoopState) -> None:
+    def check(self, state: LoopState) -> list[str]:
+        """Validate the current phase and record the outcome in the trail.
+
+        Returns the exactly-what-is-missing list; empty means pass. Artifact
+        events fire only for phases that produce artifacts (research, plan).
+        """
+        missing = self.validate_current(state)
+        if missing:
+            self.record_failure(state, missing)
+        elif state.phase in ARTIFACT_PHASES:
+            self.record_artifact_validated(state)
+        return missing
+
+    def record_artifact_validated(self, state: LoopState) -> None:
+        """Emit artifact_validated for a phase that produced a valid artifact.
+
+        Emits once per phase entry: re-checking an already-validated artifact
+        (e.g. the `next` after `approve`) records no new fact. A rejection or
+        a `back` re-entry re-arms it, since the artifact may have changed.
+        """
+        if self._phase_already_validated(state):
+            return
+        artifact = (
+            state.research_artifact if state.phase == "research" else state.plan_artifact
+        )
+        self._emit(
+            state,
+            "artifact_validated",
+            detail=f"{state.phase} artifact passed validation: {artifact}",
+        )
+
+    def _phase_already_validated(self, state: LoopState) -> bool:
+        """Whether the current phase entry already has a validated artifact.
+
+        Reads the loop's own trail: the phase counts as validated when its
+        latest phase-scoped outcome is artifact_validated. A rejection or a
+        re-entry resets it.
+        """
+        if self.ledger is None:
+            return False
+        validated = False
+        for event in self.ledger.loop_events(state.id):
+            if event.phase != state.phase:
+                continue
+            if event.kind in ("phase_started", "phase_reentered", "artifact_rejected"):
+                validated = False
+            elif event.kind == "artifact_validated":
+                validated = True
+        return validated
+
+    def record_failure(self, state: LoopState, missing: list[str] | None = None) -> None:
         """Count a failed validation; the third failure locks the loop.
 
         A phase that cannot pass three times is not converging -- escalate to
-        a human instead of looping forever.
+        a human instead of looping forever. The rejection is recorded in the
+        ledger trail with the specific reasons in detail.
         """
         state.attempts[state.phase] = state.attempts.get(state.phase, 0) + 1
         if state.attempts[state.phase] >= MAX_ATTEMPTS:
             state.locked = True
+        if state.phase in ARTIFACT_PHASES:
+            detail = (
+                "; ".join(missing)
+                if missing
+                else "validation failed (reasons not passed to record_failure)"
+            )
+            self._emit(state, "artifact_rejected", detail=detail)
         self.save(state)
 
     def approve_plan(self, state: LoopState, by: str, reason: str) -> None:
@@ -336,6 +428,12 @@ class LoopDriver(abc.ABC):
                 "reason": reason,
                 "at": datetime.now(UTC).isoformat(),
             }
+        )
+        self._emit(
+            state,
+            "approval_granted",
+            phase="plan",
+            detail=f"by={by}" + (f" reason={reason}" if reason else ""),
         )
         self.save(state)
 
@@ -375,10 +473,59 @@ class LoopDriver(abc.ABC):
                 ),
             }
             state.phase = "done"
+            self._emit(
+                state,
+                "loop_closed",
+                phase="implement",
+                detail=f"handoff to gate run {run_id}; close with `awino gate close --run {run_id}`",
+            )
         else:
+            previous = state.phase
             state.phase = PHASE_ORDER[PHASE_ORDER.index(state.phase) + 1]
+            self._emit(
+                state, "phase_started", detail=f"advanced from '{previous}'"
+            )
         self.save(state)
         return state.phase
+
+    def reenter_phase(
+        self, state: LoopState, phase: str, reason: str = ""
+    ) -> LoopState:
+        """Re-enter an earlier phase: it becomes current with a fresh attempt count.
+
+        The phase's artifact file is kept on disk but must re-validate on the
+        next `awino loop next`. Re-entry is a human intervention, so it also
+        clears a three-strikes lock. Approvals are left untouched.
+        """
+        if phase not in PHASE_ORDER:
+            raise LoopError(
+                f"unknown phase {phase!r}; one of {', '.join(PHASE_ORDER)}"
+            )
+        if state.phase == "done":
+            raise LoopError(
+                "loop is done; the gate ledger owns what remains -- "
+                "start a new loop instead"
+            )
+        target = PHASE_ORDER.index(phase)
+        current = PHASE_ORDER.index(state.phase)
+        if target >= current:
+            raise LoopError(
+                f"cannot go back to {phase!r}: the current phase is "
+                f"{state.phase!r}; `back` only re-enters earlier phases"
+            )
+        previous = state.phase
+        state.phase = phase
+        state.attempts[phase] = 0
+        state.locked = False
+        note = reason.strip() or "(no reason given)"
+        self._emit(
+            state,
+            "phase_reentered",
+            detail=f"re-entered {phase!r} from {previous!r}: {note}",
+        )
+        self._emit(state, "phase_started", detail=f"re-entry of {phase!r}")
+        self.save(state)
+        return state
 
 
 class RpiDriver(LoopDriver):

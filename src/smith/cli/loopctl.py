@@ -1,4 +1,4 @@
-"""owns: loop run rpi, loop next, loop status, loop approve
+"""owns: loop run rpi, loop next, loop status, loop approve, loop back
 
 The RPI loop CLI: the machine drives phases, the model thinks inside them.
 Every command here is deterministic -- the model calls these rather than
@@ -63,6 +63,7 @@ def _driver() -> loops.RpiDriver:
         loops_dir=_loops_dir(),
         skill_md=_skill_md(),
         open_rpi_run=_open_rpi_run,
+        ledger=_ledger(),
     )
 
 
@@ -133,9 +134,8 @@ def loop_next(
         _echo("REFUSED  loop is already done; the gate ledger owns what remains")
         raise typer.Exit(1)
 
-    missing = driver.validate_current(state)
+    missing = driver.check(state)
     if missing:
-        driver.record_failure(state)
         attempts = state.attempts.get(state.phase, 0)
         if state.locked:
             _echo(
@@ -190,6 +190,38 @@ def loop_status(
     _echo(f"locked: {'yes' if state.locked else 'no'}")
     if state.gate_run_id:
         _echo(f"gate_run: {state.gate_run_id}")
+
+
+@loop_app.command("back")
+def loop_back(
+    phase: str = typer.Argument(..., help="Earlier phase to re-enter: research or plan"),
+    reason: str = typer.Option("", "--reason", help="Why the phase is being re-entered"),
+    loop_id: str = typer.Option(None, "--id", help="Loop id; defaults to the current one"),
+) -> None:
+    """Re-enter an earlier phase: it becomes current with a fresh attempt count.
+
+    The phase's artifact file is kept but must re-validate on the next
+    `awino loop next`. The phase's prompt block prints again so the model can
+    redo the thinking.
+    """
+    driver = _driver()
+    state = _resolve_loop(driver, loop_id)
+    was_locked = state.locked
+    try:
+        driver.reenter_phase(state, phase, reason)
+    except loops.LoopError as exc:
+        _echo(f"REFUSED  {exc}")
+        raise typer.Exit(1) from None
+    _echo(f"REENTERED  phase={state.phase}")
+    _echo(
+        f"attempts for '{state.phase}' reset to 0: "
+        "three-strikes gets a fresh count on re-entry"
+    )
+    if was_locked:
+        _echo("UNLOCKED  re-entry is a human intervention; the lock is cleared")
+    if reason.strip():
+        _echo(f"reason: {reason.strip()}")
+    _print_phase_start(driver, state)
 
 
 @loop_app.command("approve")

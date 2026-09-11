@@ -16,8 +16,9 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from smith import stance
 from smith.cli import buddy
-from smith.enforce import Ledger, TaskClass
+from smith.enforce import Ledger, LoopEvent, TaskClass
 
 EXPECTED_STANCES = {
     "advisor",
@@ -61,7 +62,68 @@ def test_stance_self_test_each_sample_fires_its_stance() -> None:
             )
 
 
-# ── (b) loop honesty counts ──────────────────────────────────────────────────
+# ── (b) loop honesty: event trail first, run heuristic as fallback ──────────
+
+
+def _record_loop_event(
+    ledger: Ledger,
+    loop_id: str,
+    loop_kind: str,
+    kind: str,
+    phase: str = "research",
+    detail: str = "",
+) -> None:
+    ledger.record_loop_event(
+        LoopEvent(
+            loop_id=loop_id,
+            loop_kind=loop_kind,
+            phase=phase,
+            kind=kind,
+            at=datetime.now(UTC).isoformat(),
+            detail=detail,
+        )
+    )
+
+
+@pytest.fixture()
+def ledger_with_loop_events(tmp_path: Path) -> Ledger:
+    ledger = _make_ledger(tmp_path)
+    # rpi loop A: walked -- artifact validated, advanced to plan
+    _record_loop_event(ledger, "rpi-a", "rpi", "loop_started")
+    _record_loop_event(ledger, "rpi-a", "rpi", "phase_started", "research")
+    _record_loop_event(ledger, "rpi-a", "rpi", "artifact_validated", "research")
+    _record_loop_event(ledger, "rpi-a", "rpi", "phase_started", "plan")
+    # rpi loop B: started but never walked
+    _record_loop_event(ledger, "rpi-b", "rpi", "loop_started")
+    _record_loop_event(ledger, "rpi-b", "rpi", "phase_started", "research")
+    # ralph loop C: walked by advancing past its first phase, no validation
+    _record_loop_event(ledger, "ralph-c", "ralph", "loop_started")
+    _record_loop_event(ledger, "ralph-c", "ralph", "phase_started", "research")
+    _record_loop_event(ledger, "ralph-c", "ralph", "phase_started", "plan")
+    return ledger
+
+
+def test_loop_honesty_reads_loop_events(ledger_with_loop_events: Ledger) -> None:
+    honesty, source = buddy._loop_honesty(ledger_with_loop_events)
+    assert honesty == {"rpi": (2, 1), "ralph": (1, 1)}
+    assert "loop ledger events" in source
+
+
+def test_loop_honesty_falls_back_to_run_heuristic(
+    ledger_with_runs: Ledger,
+) -> None:
+    # Runs that predate the event trail keep the old checkpoints/skill-used
+    # heuristic, and the report says so.
+    honesty, source = buddy._loop_honesty(ledger_with_runs)
+    assert honesty["rpi"] == (3, 2)
+    assert honesty["direct"] == (2, 0)
+    assert "predates loop events" in source
+
+
+def test_loop_honesty_empty_ledger(tmp_path: Path) -> None:
+    honesty, source = buddy._loop_honesty(_make_ledger(tmp_path))
+    assert honesty == {}
+    assert source  # a source is always named, even with nothing to count
 
 
 @pytest.fixture()
@@ -81,16 +143,6 @@ def ledger_with_runs(tmp_path: Path) -> Ledger:
     ledger.note_skill(direct_loaded.run_id, "awino-debug", state="loaded", reason="peek")
     ledger.open(TaskClass.BUGFIX, "bare direct run", loop="direct")
     return ledger
-
-
-def test_loop_honesty_counts_match_fixture(ledger_with_runs: Ledger) -> None:
-    honesty = buddy._loop_honesty(ledger_with_runs)
-    assert honesty["rpi"] == (3, 2)
-    assert honesty["direct"] == (2, 0)
-
-
-def test_loop_honesty_empty_ledger(tmp_path: Path) -> None:
-    assert buddy._loop_honesty(_make_ledger(tmp_path)) == {}
 
 
 # ── (c) playbook event counts ────────────────────────────────────────────────
@@ -206,6 +258,42 @@ def test_buddy_command_exits_zero_with_all_sections(
         assert header in result.output, f"missing section header: {header}"
     assert "declared rpi: 1, with phase evidence: 1" in result.output
     assert "task-close: 1" in result.output
+    assert "source: run checkpoints/skill-used (predates loop events)" in result.output
+
+
+def test_buddy_command_reads_loop_events_when_present(
+    cli_runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    ledger = _make_ledger(tmp_path)
+    at = datetime.now(UTC).isoformat()
+    ledger.record_loop_event(
+        LoopEvent(
+            loop_id="rpi-1",
+            loop_kind="rpi",
+            phase="research",
+            kind="loop_started",
+            at=at,
+            detail="",
+        )
+    )
+    ledger.record_loop_event(
+        LoopEvent(
+            loop_id="rpi-1",
+            loop_kind="rpi",
+            phase="research",
+            kind="phase_started",
+            at=at,
+            detail="",
+        )
+    )
+    _write_mission_and_seeds(tmp_path, time.time() - 86400)
+    result = cli_runner.invoke(buddy.buddy_app, [])
+    assert result.exit_code == 0, result.output
+    # Started but never validated or advanced: declared 1, walked 0.
+    assert "declared rpi: 1, with phase evidence: 0" in result.output
+    assert "gap: 1 run(s) declared a loop with no phase evidence" in result.output
+    assert "source: loop ledger events (loops.jsonl)" in result.output
 
 
 def test_buddy_command_handles_missing_state(
@@ -217,3 +305,169 @@ def test_buddy_command_handles_missing_state(
     for header in SECTION_HEADERS:
         assert header in result.output
     assert "none found" in result.output
+
+
+# ── (f) --fix: mechanical corrections, same section order as the report ─────
+
+
+def test_fix_refreshes_stale_mission(
+    cli_runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    mission_epoch = time.time() - 5 * 86400
+    _write_mission_and_seeds(tmp_path, mission_epoch)
+    mission = tmp_path / ".smith" / "MISSION.md"
+    old_text = mission.read_text(encoding="utf-8")
+    old_mtime = mission.stat().st_mtime
+    result = cli_runner.invoke(buddy.buddy_app, ["--fix"])
+    assert result.exit_code == 0, result.output
+    assert "FIX mission refreshed:" in result.output
+    assert mission.read_text(encoding="utf-8") != old_text
+    assert mission.stat().st_mtime > old_mtime
+    assert "BUDDY-FIX done: 2 correction(s) applied, 0 need a human" in result.output
+
+
+def test_fix_marks_unwalked_loop_and_prints_exact_redo(
+    cli_runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    ledger = _make_ledger(tmp_path)
+    at = datetime.now(UTC).isoformat()
+    # loop_started carries the original task in its detail, as the driver writes
+    ledger.record_loop_event(
+        LoopEvent(
+            loop_id="rpi-9",
+            loop_kind="rpi",
+            phase="research",
+            kind="loop_started",
+            at=at,
+            detail="task: fix the loader",
+        )
+    )
+    ledger.record_loop_event(
+        LoopEvent(
+            loop_id="rpi-9",
+            loop_kind="rpi",
+            phase="research",
+            kind="phase_started",
+            at=at,
+            detail="initial phase",
+        )
+    )
+    # never-walked loop with no recorded task: objective unknowable
+    ledger.record_loop_event(
+        LoopEvent(
+            loop_id="rpi-10",
+            loop_kind="rpi",
+            phase="research",
+            kind="loop_started",
+            at=at,
+            detail="",
+        )
+    )
+    result = cli_runner.invoke(buddy.buddy_app, ["--fix"])
+    assert result.exit_code == 0, result.output
+    markers = [
+        event
+        for event in ledger.loop_events("rpi-9")
+        if event.detail.startswith(buddy._UNWALKED_MARKER)
+    ]
+    assert len(markers) == 1
+    assert markers[0].kind == "loop_started"  # a real kind, never a new one
+    assert markers[0].phase == ""
+    assert 'awino loop run rpi --task "fix the loader"' in result.output
+    assert 'awino loop run rpi --task "..."' in result.output
+    assert 'fill in the original task where "..." stands' in result.output
+    # idempotent: a second --fix records no further marker ...
+    again = cli_runner.invoke(buddy.buddy_app, ["--fix"])
+    assert again.exit_code == 0, again.output
+    markers_again = [
+        event
+        for event in ledger.loop_events("rpi-9")
+        if event.detail.startswith(buddy._UNWALKED_MARKER)
+    ]
+    assert len(markers_again) == 1
+    # ... and the marker never inflates the honesty counts of a later report
+    report = cli_runner.invoke(buddy.buddy_app, [])
+    assert report.exit_code == 0, report.output
+    assert "declared rpi: 2, with phase evidence: 0" in report.output
+
+
+def test_fix_stance_miss_prints_sample_and_exact_pattern(
+    cli_runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    _make_ledger(tmp_path)
+    fake_miss = [buddy.StanceProbe("steel-man", "challenge this", None)]
+    monkeypatch.setattr(buddy, "_stance_self_test", lambda: fake_miss)
+    result = cli_runner.invoke(buddy.buddy_app, ["--fix"])
+    assert result.exit_code == 0, result.output
+    pattern = dict(stance._RULES)["steel-man"].pattern
+    assert (
+        f"  MISS steel-man <- 'challenge this' : expected pattern r'{pattern}'"
+        in result.output
+    )
+    assert (
+        "ACTION  update the steel-man regex in src/smith/stance.py _RULES"
+        in result.output
+    )
+    assert "BUDDY-FIX done: 1 correction(s) applied, 2 need a human" in result.output
+
+
+def test_fix_all_passing_stance_self_test_says_so(
+    cli_runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    _make_ledger(tmp_path)
+    result = cli_runner.invoke(buddy.buddy_app, ["--fix"])
+    assert result.exit_code == 0, result.output
+    assert "all 14 samples fired their stance (no correction needed)" in result.output
+    assert "  MISS " not in result.output
+
+
+def test_fix_session_end_runs_catch_up_once(
+    cli_runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    state_root = tmp_path / ".smith"
+    state_root.mkdir(parents=True, exist_ok=True)
+    (state_root / "MISSION.md").write_text("# Mission\n", encoding="utf-8")
+    result = cli_runner.invoke(buddy.buddy_app, ["--fix"])
+    assert result.exit_code == 0, result.output
+    # the session-end order's real steps ran, each line prefixed FIX
+    assert "  FIX [summary] skill=direct" in result.output
+    assert "  FIX [lesson-check] skill=awino-memory" in result.output
+    assert "  FIX [mission-refresh] skill=awino-discover" in result.output
+    assert "BUDDY-FIX done: 1 correction(s) applied, 0 need a human" in result.output
+
+
+def test_fix_missing_mission_prints_concrete_human_action(
+    cli_runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    _make_ledger(tmp_path)
+    result = cli_runner.invoke(buddy.buddy_app, ["--fix"])
+    assert result.exit_code == 0, result.output
+    assert (
+        '  ACTION  write the mission line: awino mission --set "objective=<one sentence>"'
+        in result.output
+    )
+    assert "BUDDY-FIX done: 1 correction(s) applied, 1 need a human" in result.output
+
+
+def test_fix_run_level_gap_prints_redo_without_fake_marker(
+    cli_runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Runs that predate the loop event trail: no loop id exists, so --fix must
+    # not invent a loop_started marker; the redo command is the human action.
+    monkeypatch.chdir(tmp_path)
+    ledger = _make_ledger(tmp_path)
+    run = ledger.open(TaskClass.BUGFIX, "bare rpi run", loop="rpi")
+    result = cli_runner.invoke(buddy.buddy_app, ["--fix"])
+    assert result.exit_code == 0, result.output
+    assert (
+        f'  ACTION  re-run the rpi loop by hand: awino loop run rpi --task "{run.objective}"'
+        in result.output
+    )
+    assert ledger.loop_events() == []
+    assert "no ledger marker recorded" in result.output

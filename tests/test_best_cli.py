@@ -33,8 +33,17 @@ def _project(tmp_path: Path) -> Path:
 
 def test_plain_best_labels_each_step_with_its_skill(tmp_path: Path) -> None:
     result = _cli(["best"], cwd=_project(tmp_path))
+    assert result.returncode == 0, result.stdout + result.stderr
     assert "[mission-gap] skill=awino-discover" in result.stdout
     assert "[next-seed] skill=direct" in result.stdout
+
+
+def test_plain_best_ends_with_the_buddy_report(tmp_path: Path) -> None:
+    # `awino best` with no args runs the whole chain: start (doctor --fast,
+    # orientation), session-start playbook, then the buddy report.
+    result = _cli(["best"], cwd=_project(tmp_path))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "BUDDY  mechanism effectiveness from real state" in result.stdout
 
 
 def test_best_with_a_request_routes_and_walks_to_budget(tmp_path: Path) -> None:

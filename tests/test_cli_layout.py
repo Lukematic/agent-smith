@@ -78,6 +78,7 @@ PRE_SPLIT_COMMANDS = frozenset(
         "link",
         "buddy check",
         "loop approve",
+        "loop back",
         "loop next",
         "loop run rpi",
         "loop status",
@@ -207,8 +208,8 @@ class TestCommandSurfaceIsUnchanged:
         )
 
     def test_command_count_is_exactly_the_registered_set(self) -> None:
-        assert len(PRE_SPLIT_COMMANDS) == 94
-        assert len(_registered(cli.app)) == 94
+        assert len(PRE_SPLIT_COMMANDS) == 95
+        assert len(_registered(cli.app)) == 95
 
     def test_public_entry_points_survive(self) -> None:
         assert isinstance(cli.app, typer.Typer)

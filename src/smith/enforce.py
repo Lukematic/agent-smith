@@ -360,6 +360,38 @@ class LedgerError(RuntimeError):
     """Raised when the ledger is asked to do something the contract forbids."""
 
 
+# Kinds of loop-driver audit events. A loop is not a run, so these live in
+# <state_root>/loops.jsonl rather than in per-run dirs.
+LOOP_EVENT_KINDS: tuple[str, ...] = (
+    "loop_started",
+    "phase_started",
+    "artifact_validated",
+    "artifact_rejected",
+    "approval_granted",
+    "phase_reentered",
+    "loop_closed",
+)
+
+
+@dataclass(frozen=True)
+class LoopEvent:
+    """One entry in the loop audit trail.
+
+    The loop driver's working state stays in .smith/loops/<id>.json; this is
+    the append-only trail of what actually happened, which is what
+    ``awino buddy`` reads for loop honesty. ``detail`` is free text, e.g.
+    the name of a missing plan section on artifact_rejected, or the reason
+    for a phase_reentered.
+    """
+
+    loop_id: str
+    loop_kind: str  # e.g. "rpi"
+    phase: str  # the phase the event concerns: "research", "plan", "implement"
+    kind: str  # one of LOOP_EVENT_KINDS
+    at: str  # ISO-8601 timestamp
+    detail: str = ""
+
+
 class Ledger:
     """Append-only run store for one project.
 
@@ -969,6 +1001,53 @@ class Ledger:
         run.provenance = record
         self.save(run)
         return record
+
+    # ── loop events: the audit trail for loop drivers ──────────────────────
+    #
+    # A loop is not a run: it may never open a gate run (it can be refused at
+    # plan approval, or locked on three strikes), so its trail cannot live in
+    # per-run dirs. loops.jsonl sits at the ledger level, one JSON object per
+    # line, oldest first.
+
+    def _loop_events_path(self) -> Path:
+        return self.state_root / "loops.jsonl"
+
+    def record_loop_event(self, event: LoopEvent) -> LoopEvent:
+        """Append one loop event to the ledger-level trail."""
+        if event.kind not in LOOP_EVENT_KINDS:
+            raise LedgerError(
+                f"unknown loop event kind {event.kind!r}; "
+                f"one of {', '.join(LOOP_EVENT_KINDS)}"
+            )
+        if not event.at:
+            event = replace(event, at=datetime.now(UTC).isoformat())
+        self.state_root.mkdir(parents=True, exist_ok=True)
+        with self._loop_events_path().open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(asdict(event), sort_keys=True) + "\n")
+        return event
+
+    def loop_events(self, loop_id: str | None = None) -> list[LoopEvent]:
+        """The loop audit trail, oldest first.
+
+        A state root without loops.jsonl reads as empty: loops that ran before
+        the trail existed leave no events, and the caller falls back to the
+        run-level heuristic. Corrupt lines are skipped, not fatal.
+        """
+        path = self._loop_events_path()
+        if not path.is_file():
+            return []
+        events: list[LoopEvent] = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                events.append(LoopEvent(**json.loads(line)))
+            except (ValueError, TypeError):
+                continue
+        if loop_id is not None:
+            events = [event for event in events if event.loop_id == loop_id]
+        return events
 
 
 @dataclass

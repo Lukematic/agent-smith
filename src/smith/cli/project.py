@@ -1114,8 +1114,10 @@ def best_command(
     """The one door.
 
     `awino best "<words>"` starts a trip and walks the machine as far as it can
-    on its own: locate, route, ladder, budget. `awino best` alone shows where the
-    sitting stands and, if a trip is open, keeps walking it. It stops only where
+    on its own: locate, route, ladder, budget. `awino best` alone runs the whole
+    startup chain in order - start (doctor --fast, orientation), the
+    session-start playbook, then the buddy report - so the human gets the full
+    picture without remembering subcommands. It stops only where
     a human is genuinely needed - approve the cost, answer a question, decide at a
     stop, or do the work at EXECUTE - and tells you the one flag to pass back.
     --end runs the session-end order.
@@ -1146,6 +1148,12 @@ def best_command(
             open_seeds=open_titles,
         ):
             _echo(line)
+        _echo("")
+        # The chain ends with the buddy report (read-only): the human sees
+        # mechanism effectiveness without remembering another subcommand.
+        from smith.cli.buddy import buddy_check as _buddy_check
+
+        _buddy_check(fix=False)
         _echo("")
         from smith import machine as _m
 

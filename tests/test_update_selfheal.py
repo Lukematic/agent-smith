@@ -16,6 +16,9 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from smith import cli
+from smith.enforce import Ledger, TaskClass
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 SMITH_HOME_MARKERS = ("plugin.json", "knowledge")
 
@@ -159,3 +162,88 @@ class TestUpdatePrintsOneSummaryEndingWithVersion:
         assert result.exit_code == 0, result.output
         lines = [line for line in result.output.splitlines() if line.strip()]
         assert lines[-1].startswith("VERSION")
+
+
+class TestStaleInstallUpgradesEndToEnd:
+    """A stale install upgrades cleanly with project state intact.
+
+    The owner points agents at the repo URL, so a clone that fell behind must
+    fast-forward through the real ``awino update-preflight`` + ``awino update``
+    path - file:// upstream, no network - while .smith state (project.yaml,
+    memory, ledger runs) survives byte-identical.
+    """
+
+    def _origin_from_checkout(self, tmp_path: Path) -> tuple[Path, str, str]:
+        """Bare origin cloned from this checkout, with its full history."""
+        origin = tmp_path / "origin.git"
+        subprocess.run(
+            ["git", "clone", "--bare", str(REPO_ROOT), str(origin)],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        new_sha = _git(REPO_ROOT, "rev-parse", "HEAD").stdout.strip()
+        old_sha = _git(REPO_ROOT, "rev-parse", "HEAD~5").stdout.strip()
+        assert new_sha and old_sha and new_sha != old_sha
+        return origin, new_sha, old_sha
+
+    def test_stale_clone_fast_forwards_and_project_state_survives(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        origin, new_sha, old_sha = self._origin_from_checkout(tmp_path)
+
+        install = tmp_path / "install"
+        _git(tmp_path, "clone", f"file://{origin}", str(install))
+        _git(install, "config", "user.email", "test@example.com")
+        _git(install, "config", "user.name", "test")
+        # Simulate the stale install: same tracking branch, wound back 5
+        # commits. A detached checkout would have no @{u}, which preflight
+        # rightly refuses - a real stale install sits behind on its branch.
+        _git(install, "reset", "--hard", old_sha)
+        assert _git(install, "rev-parse", "HEAD").stdout.strip() == old_sha
+        assert _git(install, "status", "--porcelain").stdout.strip() == ""
+
+        project = tmp_path / "target-project"
+        project.mkdir()
+        (project / ".git").mkdir()
+        smith_dir = project / ".smith"
+        (smith_dir / "memory").mkdir(parents=True)
+        project_yaml = smith_dir / "project.yaml"
+        project_yaml.write_text(
+            "mission: upgrade probe\nupgrade_marker: STALE-STATE-KEPT-4242\n",
+            encoding="utf-8",
+        )
+        lesson = smith_dir / "memory" / "lessons.md"
+        lesson.write_text(
+            "- [2026-09-11] stale installs must upgrade cleanly\n", encoding="utf-8"
+        )
+        run = Ledger(smith_dir).open(
+            TaskClass.RESEARCH, objective="probe run that must survive upgrade"
+        )
+
+        before_yaml = project_yaml.read_bytes()
+        before_lesson = lesson.read_bytes()
+
+        monkeypatch.setattr(Path, "home", lambda: tmp_path / "no-claude-here")
+        monkeypatch.setenv("AWINO_HOME", str(install))
+        monkeypatch.setenv("AWINO_PROJECT", str(project))
+        monkeypatch.chdir(project)
+
+        preflight = CliRunner().invoke(cli.app, ["update-preflight"])
+        assert preflight.exit_code == 0, preflight.output
+        assert "BACKUP" in preflight.output
+        assert "UPDATED" in preflight.output
+
+        updated = CliRunner().invoke(cli.app, ["update"])
+        assert updated.exit_code == 0, updated.output
+        assert "UPDATED" in updated.output
+
+        # The engine fast-forwarded to the newer commit.
+        assert _git(install, "rev-parse", "HEAD").stdout.strip() == new_sha
+        # Project state is byte-identical, marker value included.
+        assert project_yaml.read_bytes() == before_yaml
+        assert b"STALE-STATE-KEPT-4242" in project_yaml.read_bytes()
+        assert lesson.read_bytes() == before_lesson
+        # The ledger run still loads.
+        loaded = Ledger(smith_dir).load(run.run_id)
+        assert loaded.objective == "probe run that must survive upgrade"

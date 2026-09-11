@@ -11,6 +11,7 @@ tracker. When a data source does not exist it prints "none found" or
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -20,7 +21,14 @@ import typer
 
 from smith import stance
 from smith.cli import _echo, _workspace
-from smith.enforce import LOOPS, Ledger, Run
+from smith.enforce import LOOPS, Ledger, LoopEvent, Run
+
+# Honest marker detail prefix written by `buddy --fix` for a declared loop
+# that was never walked. The event kind stays "loop_started" (a real kind,
+# never a new one); the detail carries the note. Loop honesty skips events
+# whose detail starts with this prefix: audit notes are not declarations, so
+# a marker never inflates a later report's declared counts.
+_UNWALKED_MARKER = "buddy --fix: declared but never walked"
 
 buddy_app = typer.Typer(
     # NOTE: deliberately not no_args_is_help=True. Typer intercepts a no-arg
@@ -92,24 +100,75 @@ def _iter_runs(ledger: Ledger) -> list[Run]:
     return runs
 
 
-def _loop_honesty(ledger: Ledger) -> dict[str, tuple[int, int]]:
+def _run_walked(run: Run) -> bool:
+    """Phase evidence on a run: a checkpoint, or a skill actually used."""
+    return bool(run.checkpoints) or any(
+        event.state == "used" for event in run.skill_events
+    )
+
+
+def _loop_honesty_from_runs(ledger: Ledger) -> dict[str, tuple[int, int]]:
     """declared loop label -> (declared count, count with phase evidence).
 
     Phase evidence is checkpoints or skill-used records on the run: the
     traces a loop actually walked phases leaves behind, as opposed to the
-    label chosen at ``gate open``.
+    label chosen at ``gate open``. Only for runs that predate loop events;
+    the loop ledger trail is authoritative when it exists.
     """
     declared: dict[str, int] = {}
     evidenced: dict[str, int] = {}
     for run in _iter_runs(ledger):
         loop = run.loop or "direct"
         declared[loop] = declared.get(loop, 0) + 1
-        walked = bool(run.checkpoints) or any(
-            event.state == "used" for event in run.skill_events
-        )
-        if walked:
+        if _run_walked(run):
             evidenced[loop] = evidenced.get(loop, 0) + 1
     return {loop: (declared[loop], evidenced.get(loop, 0)) for loop in declared}
+
+
+def _loop_honesty_from_events(events: list[LoopEvent]) -> dict[str, tuple[int, int]]:
+    """declared loop kind -> (declared count, count with phase evidence).
+
+    Declared counts come from loop_started events per kind. A loop counts as
+    walked when it has an artifact_validated event, or a phase_started event
+    for a phase beyond the first one the loop entered: both prove the driver
+    actually moved, not just that the loop was started.
+    """
+    started: dict[str, list[str]] = {}
+    walked: dict[str, set[str]] = {}
+    first_phase: dict[str, str] = {}
+    for event in events:
+        if event.detail.startswith(_UNWALKED_MARKER):
+            continue  # audit notes from a previous --fix, not loop declarations
+        if event.kind == "loop_started":
+            ids = started.setdefault(event.loop_kind, [])
+            if event.loop_id not in ids:
+                ids.append(event.loop_id)
+        elif event.kind == "artifact_validated":
+            walked.setdefault(event.loop_kind, set()).add(event.loop_id)
+        elif event.kind == "phase_started":
+            if event.loop_id not in first_phase:
+                first_phase[event.loop_id] = event.phase
+            elif event.phase != first_phase[event.loop_id]:
+                walked.setdefault(event.loop_kind, set()).add(event.loop_id)
+    return {
+        kind: (len(ids), len(walked.get(kind, ())))
+        for kind, ids in started.items()
+    }
+
+
+def _loop_honesty(ledger: Ledger) -> tuple[dict[str, tuple[int, int]], str]:
+    """Loop honesty plus a label naming which source the numbers came from.
+
+    The loop event trail (loops.jsonl) is authoritative when it exists; runs
+    that predate it fall back to the run-level heuristic.
+    """
+    events = ledger.loop_events()
+    if events:
+        return _loop_honesty_from_events(events), "loop ledger events (loops.jsonl)"
+    return (
+        _loop_honesty_from_runs(ledger),
+        "run checkpoints/skill-used (predates loop events)",
+    )
 
 
 # ── section 3: playbook events ───────────────────────────────────────────────
@@ -291,10 +350,11 @@ def _run_report() -> None:
     _echo("")
 
     # 2. loop honesty
-    _echo("LOOP HONESTY  (declared loop label vs phase evidence: checkpoints or skill-used records)")
-    honesty = _loop_honesty(ledger)
+    _echo("LOOP HONESTY  (declared loop label vs phase evidence)")
+    honesty, source = _loop_honesty(ledger)
+    _echo(f"  source: {source}")
     if not honesty:
-        _echo(f"  none found (no runs in {ledger.base})")
+        _echo("  none found (no runs, no loop events)")
     else:
         order = [loop for loop in LOOPS if loop in honesty] + sorted(
             set(honesty) - set(LOOPS)
@@ -333,14 +393,282 @@ def _run_report() -> None:
         _echo(f"  note: {note}")
 
 
+# ── --fix: mechanical corrections ────────────────────────────────────────────
+#
+# The report above is read-only. --fix is the only mutating path: for each
+# failing check it applies the correction that needs no judgment, and prints
+# exactly one concrete human action where no safe mechanical fix exists.
+
+_FIX_HELP = "Apply the mechanical correction for each failing check."
+
+# stance name -> the exact regex string from src/smith/stance.py _RULES.
+# Advisor has no entry: it is the default when no rule fires.
+_STANCE_PATTERNS: dict[str, str] = {
+    name: pattern.pattern for name, pattern in stance._RULES
+}
+
+# The loop driver records the original task on loop_started as "task: ...".
+_TASK_IN_DETAIL = re.compile(r"^task:\s*(.+)$", re.S)
+
+
+def _objective_from_detail(detail: str) -> str | None:
+    """The original task from a loop_started detail, if the driver recorded one."""
+    match = _TASK_IN_DETAIL.match(detail or "")
+    if not match:
+        return None
+    return match.group(1).strip() or None
+
+
+def _unwalked_from_events(
+    events: list[LoopEvent],
+) -> dict[str, list[tuple[str, str | None]]]:
+    """loop_kind -> [(loop_id, objective)] for loops declared but never walked.
+
+    Mirrors _loop_honesty_from_events, but keeps the loop ids and the original
+    objective (from the loop_started detail) so --fix can mark each one and
+    print its exact redo command.
+    """
+    started: dict[str, list[tuple[str, str | None]]] = {}
+    walked: dict[str, set[str]] = {}
+    first_phase: dict[str, str] = {}
+    for event in events:
+        if event.detail.startswith(_UNWALKED_MARKER):
+            continue  # audit notes from a previous --fix, not loop declarations
+        if event.kind == "loop_started":
+            ids = started.setdefault(event.loop_kind, [])
+            if all(loop_id != event.loop_id for loop_id, _ in ids):
+                ids.append((event.loop_id, _objective_from_detail(event.detail)))
+        elif event.kind == "artifact_validated":
+            walked.setdefault(event.loop_kind, set()).add(event.loop_id)
+        elif event.kind == "phase_started":
+            if event.loop_id not in first_phase:
+                first_phase[event.loop_id] = event.phase
+            elif event.phase != first_phase[event.loop_id]:
+                walked.setdefault(event.loop_kind, set()).add(event.loop_id)
+    return {
+        kind: [
+            (loop_id, objective)
+            for loop_id, objective in ids
+            if loop_id not in walked.get(kind, set())
+        ]
+        for kind, ids in started.items()
+    }
+
+
+def _mark_unwalked(ledger: Ledger, loop_id: str, loop_kind: str, source: str) -> bool:
+    """Record the honest marker for a never-walked loop.
+
+    The marker reuses the loop's own id and the real "loop_started" kind, so
+    honesty counting (which dedups loop_started by loop id, and skips
+    _UNWALKED_MARKER details) is unchanged by it. Returns True when a new
+    marker was written, False when one already existed: --fix is idempotent.
+    """
+    for event in ledger.loop_events(loop_id):
+        if event.detail.startswith(_UNWALKED_MARKER):
+            return False
+    ledger.record_loop_event(
+        LoopEvent(
+            loop_id=loop_id,
+            loop_kind=loop_kind,
+            phase="",
+            kind="loop_started",
+            at=datetime.now(UTC).isoformat(),
+            detail=(
+                f"{_UNWALKED_MARKER}: declared via {source} "
+                "with no phase evidence; not walked"
+            ),
+        )
+    )
+    return True
+
+
+def _redo_command(loop_kind: str, objective: str | None) -> str:
+    """The exact re-run command for a never-walked loop.
+
+    `awino loop run rpi` is the only hand starter in the codebase
+    (src/smith/cli/loopctl.py); anything else restarts through the one door.
+    """
+    task = (objective if objective else "...").replace('"', '\\"')
+    if loop_kind == "rpi":
+        return f'awino loop run rpi --task "{task}"'
+    return f'awino best "{task}"'
+
+
+def _open_seed_titles(project_root: Path) -> list[str]:
+    """Open seed titles, built exactly the way `awino best --end` builds them."""
+    from smith import seeds
+
+    tracker = seeds.Seeds(project_root)
+    return [i.title for i in tracker.list_open()] if tracker.state()[0].usable else []
+
+
+def _run_fix() -> None:
+    from smith import playbook
+
+    workspace = _workspace()
+    project_root = workspace.project.root
+    state_root = workspace.state_root
+    ledger = Ledger(state_root)
+    applied = 0
+    need_human = 0
+
+    # Read-only pass first: every diagnosis is computed before anything is
+    # mutated, in the same section order as the report.
+    probes = _stance_self_test()
+    events = ledger.loop_events()
+    if events:
+        unwalked = _unwalked_from_events(events)
+        honesty_source = "loop ledger events (loops.jsonl)"
+        gap_runs: list[Run] = []
+    else:
+        unwalked = {}
+        honesty_source = "run checkpoints/skill-used (predates loop events)"
+        gap_runs = [run for run in _iter_runs(ledger) if not _run_walked(run)]
+    playbook_events = _playbook_events(ledger)
+    fresh = _mission_freshness(project_root, state_root)
+    open_titles = _open_seed_titles(project_root)
+
+    _echo("BUDDY-FIX  mechanical corrections, in report section order")
+    _echo(f"  project={workspace.project.name}  state={state_root}")
+    _echo("")
+
+    # 1. stance self-test: the code fix stays human, so print the exact
+    # failing sample and the exact pattern it was expected to match.
+    _echo("STANCE SELF-TEST")
+    misses = [probe for probe in probes if (probe.fired or "advisor") != probe.expected]
+    if not misses:
+        _echo(f"  all {len(probes)} samples fired their stance (no correction needed)")
+    for probe in misses:
+        regex = _STANCE_PATTERNS.get(probe.expected)
+        if regex is None:
+            expectation = (
+                "no pattern fires "
+                "(advisor is the default when no _RULES entry matches)"
+            )
+        else:
+            expectation = f"expected pattern r'{regex}' (src/smith/stance.py _RULES)"
+        _echo(f"  MISS {probe.expected} <- {probe.sample!r} : {expectation}")
+        _echo(
+            f"  ACTION  update the {probe.expected} regex in src/smith/stance.py "
+            f"_RULES to match {probe.sample!r}"
+        )
+        need_human += 1
+    _echo("")
+
+    # 2. loop honesty: mark each never-walked loop honestly in the ledger,
+    # then print its exact redo command.
+    _echo("LOOP HONESTY")
+    if events:
+        order = [loop for loop in LOOPS if loop in unwalked] + sorted(
+            set(unwalked) - set(LOOPS)
+        )
+        if not any(unwalked.values()):
+            _echo("  no declared-but-unwalked loops (no correction needed)")
+        for loop_kind in order:
+            for loop_id, objective in unwalked[loop_kind]:
+                if _mark_unwalked(ledger, loop_id, loop_kind, honesty_source):
+                    _echo(f"  FIX recorded honest marker for loop {loop_id}")
+                    applied += 1
+                else:
+                    _echo(f"  already marked: loop {loop_id} (skipped)")
+                _echo(f"  REDO  {_redo_command(loop_kind, objective)}")
+                if objective is None:
+                    _echo('  note: fill in the original task where "..." stands')
+    else:
+        # Run-level data carries no loop id, so a loop_started marker would be
+        # fake data in the authoritative trail: no marker, just the redo.
+        if not gap_runs:
+            _echo("  no declared-but-unwalked runs (no correction needed)")
+        for run in gap_runs:
+            loop_kind = run.loop or "direct"
+            _echo(
+                f"  ACTION  re-run the {loop_kind} loop by hand: "
+                f"{_redo_command(loop_kind, run.objective)}"
+            )
+            _echo(
+                "  note: no ledger marker recorded "
+                "(run-level data has no loop id; a marker would be fake)"
+            )
+            need_human += 1
+    _echo("")
+
+    # 3. playbook events: session-end never fires on its own, so run the
+    # session-end order once now. One-shot catch-up, no looping.
+    _echo("PLAYBOOK EVENTS")
+    if playbook_events.session_end is None:
+        try:
+            lines = playbook.run_event(
+                "session-end",
+                state_root,
+                project_root,
+                ledger=ledger,
+                open_seeds=open_titles,
+            )
+        except Exception as exc:
+            _echo(f"  session-end catch-up failed: {exc}")
+            _echo("  ACTION  run the session-end order by hand: awino best --end")
+            need_human += 1
+        else:
+            for line in lines:
+                _echo(f"  FIX {line}")
+            applied += 1
+    else:
+        _echo("  session-end is measured; no catch-up needed")
+    _echo("")
+
+    # 4. mission freshness: refresh the same way the playbook does.
+    _echo("MISSION FRESHNESS")
+    if fresh.mission_path is None:
+        _echo(
+            "  ACTION  write the mission line: "
+            'awino mission --set "objective=<one sentence>"'
+        )
+        need_human += 1
+    elif fresh.seeds_closed_since is not None and fresh.seeds_closed_since > 0:
+        try:
+            ctx = playbook.Context(state_root, project_root, ledger, open_titles)
+            step_out = playbook._step_mission_refresh(ctx)
+        except Exception as exc:
+            _echo(f"  mission refresh failed: {exc}")
+            _echo(
+                "  ACTION  refresh by hand: "
+                'awino mission --set "objective=<one sentence>"'
+            )
+            need_human += 1
+        else:
+            rendered = (
+                step_out[0].removeprefix("MISSION.md refreshed: ").strip()
+                if step_out
+                else str(state_root / "MISSION.md")
+            )
+            _echo(f"  FIX mission refreshed: {rendered}")
+            applied += 1
+    else:
+        _echo("  no stale-mission evidence (no correction needed)")
+    _echo("")
+
+    _echo(f"BUDDY-FIX done: {applied} correction(s) applied, {need_human} need a human")
+
+
 @buddy_app.command("check")
-def buddy_check() -> None:
+def buddy_check(
+    fix: bool = typer.Option(False, "--fix", help=_FIX_HELP),
+) -> None:
     """Print the mechanism-effectiveness report from real project state."""
-    _run_report()
+    if fix:
+        _run_fix()
+    else:
+        _run_report()
 
 
 @buddy_app.callback(invoke_without_command=True)
-def buddy_default(ctx: typer.Context) -> None:
+def buddy_default(
+    ctx: typer.Context,
+    fix: bool = typer.Option(False, "--fix", help=_FIX_HELP),
+) -> None:
     """Bare `awino buddy` runs the check: the diagnostic is the default."""
     if ctx.invoked_subcommand is None:
-        _run_report()
+        if fix:
+            _run_fix()
+        else:
+            _run_report()
