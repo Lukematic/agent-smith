@@ -33,9 +33,7 @@ def proof_export(
 ) -> None:
     """Assemble the FAIR proof pack from live project state."""
     workspace = _workspace()
-    brief_lines = brief_mod._compile_brief(
-        workspace.state_root, workspace.project.root, workspace
-    )
+    brief_lines = brief_mod._compile_brief(workspace.state_root, workspace.project.root, workspace)
     brief_text = "\n".join(brief_lines) + "\n"
     try:
         from awino.cli import _version
@@ -47,9 +45,7 @@ def proof_export(
     out_dir = (
         Path(out).expanduser()
         if out
-        else workspace.state_root
-        / "proof"
-        / datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        else workspace.state_root / "proof" / datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     )
     proof_lib.write_pack(pack, out_dir, generator=generator)
     _echo(f"PROOF_EXPORT  {out_dir}  ({len(pack)} artifacts + index.json)")

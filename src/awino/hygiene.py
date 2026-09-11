@@ -106,9 +106,7 @@ def ruff_diagnostics(root: Path, *, timeout: float = 120.0) -> list[dict] | None
     return data if isinstance(data, list) else None
 
 
-def dead_code_from_ruff(
-    diagnostics: list[dict], root: Path
-) -> list[HygieneFinding]:
+def dead_code_from_ruff(diagnostics: list[dict], root: Path) -> list[HygieneFinding]:
     """Turn ruff JSON diagnostics into dead-code findings."""
     findings: list[HygieneFinding] = []
     for item in diagnostics:
@@ -122,9 +120,7 @@ def dead_code_from_ruff(
             rel = filename
         row = location.get("row", "?")
         message = str(item.get("message", "unused import")).strip()
-        findings.append(
-            HygieneFinding("dead_code", f"{rel}:{row}", message)
-        )
+        findings.append(HygieneFinding("dead_code", f"{rel}:{row}", message))
     return findings
 
 
@@ -181,9 +177,7 @@ def _function_ranges(path: Path) -> list[tuple[str, int, int]]:
     return out
 
 
-def dead_from_coverage(
-    data: dict, root: Path
-) -> list[HygieneFinding]:
+def dead_from_coverage(data: dict, root: Path) -> list[HygieneFinding]:
     """Flag modules/functions with zero executed statements.
 
     ``data`` is parsed ``coverage json`` output. A module whose statements
@@ -333,9 +327,7 @@ def doc_mentions(docs_dir: Path) -> set[str]:
     return mentions
 
 
-def undocumented_commands(
-    commands: list[str], mentions: set[str]
-) -> list[str]:
+def undocumented_commands(commands: list[str], mentions: set[str]) -> list[str]:
     """Registered commands that no doc mention names."""
     missing: list[str] = []
     for command in commands:
@@ -449,9 +441,7 @@ def parse_commands_reference(docs_dir: Path) -> dict[str, str]:
     return recorded
 
 
-def reference_drift(
-    entries: list[tuple[str, str]], docs_dir: Path
-) -> list[HygieneFinding]:
+def reference_drift(entries: list[tuple[str, str]], docs_dir: Path) -> list[HygieneFinding]:
     """Commands whose live help text differs from the generated reference."""
     recorded = parse_commands_reference(docs_dir)
     if not recorded:
@@ -472,9 +462,7 @@ def reference_drift(
     return findings
 
 
-def write_commands_reference(
-    docs_dir: Path, entries: list[tuple[str, str]]
-) -> Path:
+def write_commands_reference(docs_dir: Path, entries: list[tuple[str, str]]) -> Path:
     """Regenerate docs/commands.md from live --help output."""
     docs_dir.mkdir(parents=True, exist_ok=True)
     path = docs_dir / COMMANDS_REFERENCE

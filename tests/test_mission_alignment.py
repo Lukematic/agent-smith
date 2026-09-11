@@ -88,9 +88,7 @@ def driver(project: Path, tmp_path: Path) -> loops.RpiDriver:
 
 
 @pytest.fixture()
-def event_driver(
-    project: Path, tmp_path: Path, loop_ledger: Ledger
-) -> loops.RpiDriver:
+def event_driver(project: Path, tmp_path: Path, loop_ledger: Ledger) -> loops.RpiDriver:
     return loops.RpiDriver(
         project_root=project,
         loops_dir=tmp_path / "loops",
@@ -164,9 +162,7 @@ class TestMissionSources:
     def test_mission_md_takes_precedence_over_yaml(self, project: Path) -> None:
         _write_mission_md(project, "# Mission\n\n## From markdown\n")
         state_dir = project / ".awino"
-        (state_dir / "project.yaml").write_text(
-            "goals:\n  - From yaml\n", encoding="utf-8"
-        )
+        (state_dir / "project.yaml").write_text("goals:\n  - From yaml\n", encoding="utf-8")
         goals = loops._mission_goal_texts(project)
         assert goals == ["From markdown"]
 
@@ -224,7 +220,8 @@ class TestDriftFlaggedNotBlocking:
         )
         state = event_driver.new("migrate auth")
         _write_research(
-            event_driver, state,
+            event_driver,
+            state,
             RESEARCH_OK + "\nThis authenticates users securely per the mission.\n",
         )
         assert event_driver.check(state) == []
@@ -232,9 +229,7 @@ class TestDriftFlaggedNotBlocking:
         kinds = [e.kind for e in loop_ledger.loop_events(state.id)]
         assert "mission_drift_flagged" not in kinds
 
-    def test_drift_does_not_block_advance(
-        self, event_driver: loops.RpiDriver
-    ) -> None:
+    def test_drift_does_not_block_advance(self, event_driver: loops.RpiDriver) -> None:
         _write_mission_md(
             event_driver.project_root,
             "# Mission\n\n## Authenticate users securely\n",
@@ -269,7 +264,6 @@ class TestDriftFlaggedNotBlocking:
         assert event_driver.check(state) == []
         assert event_driver.check(state) == []  # re-check: already validated
         flagged = [
-            e for e in loop_ledger.loop_events(state.id)
-            if e.kind == "mission_drift_flagged"
+            e for e in loop_ledger.loop_events(state.id) if e.kind == "mission_drift_flagged"
         ]
         assert len(flagged) == 1

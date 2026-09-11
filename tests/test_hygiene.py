@@ -137,9 +137,7 @@ def test_hygiene_flags_clutter_and_duplicate_markers(messy_state: Path) -> None:
     assert any(f.kind == "duplicate_marker" for f in findings)
 
 
-def test_buddy_report_has_hygiene_section(
-    messy_state: Path, cli_runner: CliRunner
-) -> None:
+def test_buddy_report_has_hygiene_section(messy_state: Path, cli_runner: CliRunner) -> None:
     result = cli_runner.invoke(buddy.buddy_app, [])
     assert result.exit_code == 0, result.output
     assert "STATE HYGIENE" in result.output
@@ -177,18 +175,12 @@ def test_fix_archives_stale_session_with_ledger_note(
     # Not deleted: the files survive under archive/.
     assert not (messy_state / "session" / "old-session.json").exists()
     # The ledger note records what happened and where it went.
-    notes = [
-        event
-        for event in Ledger(messy_state).loop_events()
-        if event.kind == "state_archived"
-    ]
+    notes = [event for event in Ledger(messy_state).loop_events() if event.kind == "state_archived"]
     assert len(notes) == 1
     assert "old-session" in notes[0].detail
     assert "archive/sessions/" in notes[0].detail
     # The active session is untouched, pointer intact.
-    assert (messy_state / "session" / ".active").read_text(
-        encoding="utf-8"
-    ) == "new-session"
+    assert (messy_state / "session" / ".active").read_text(encoding="utf-8") == "new-session"
 
 
 def test_fix_tidies_unambiguous_clutter_but_not_referenced(
@@ -215,20 +207,14 @@ def test_fix_dedupes_markers_and_prompts_on_loop_state(
     assert "PROMPT" in result.output and "partial_loop" in result.output
 
 
-def test_fix_second_run_is_quiet(
-    messy_state: Path, cli_runner: CliRunner
-) -> None:
+def test_fix_second_run_is_quiet(messy_state: Path, cli_runner: CliRunner) -> None:
     first = cli_runner.invoke(buddy.buddy_app, ["--fix"])
     assert first.exit_code == 0, first.output
     second = cli_runner.invoke(buddy.buddy_app, ["--fix"])
     assert second.exit_code == 0, second.output
     assert "FIX archived stale session" not in second.output
     # The ledger note is recorded once, not once per run.
-    notes = [
-        event
-        for event in Ledger(messy_state).loop_events()
-        if event.kind == "state_archived"
-    ]
+    notes = [event for event in Ledger(messy_state).loop_events() if event.kind == "state_archived"]
     assert len(notes) == 1
 
 
@@ -315,9 +301,7 @@ def test_dead_doc_refs_accepts_real_command_groups() -> None:
 def test_write_commands_reference_marks_draft(tmp_path: Path) -> None:
     docs = tmp_path / "docs"
     docs.mkdir()
-    path = hygiene.write_commands_reference(
-        docs, [("ask", "Check a question"), ("ghost", "")]
-    )
+    path = hygiene.write_commands_reference(docs, [("ask", "Check a question"), ("ghost", "")])
     assert path == docs / "commands.md"
     text = path.read_text(encoding="utf-8")
     assert "Do not edit by hand" in text
@@ -408,9 +392,7 @@ def test_every_shipped_skill_has_purpose_and_when_to_use() -> None:
     catalog = _real_catalog()
     assert len(catalog.skills) >= 16
     undocumented = [
-        skill.name
-        for skill in catalog.skills
-        if not skill_catalog.describe(skill).documented
+        skill.name for skill in catalog.skills if not skill_catalog.describe(skill).documented
     ]
     assert undocumented == [], f"skills missing purpose/when-to-use: {undocumented}"
     for skill in catalog.skills:

@@ -147,9 +147,7 @@ class Checklist:
 
     # -- phase-boundary hooks (called by the loop drivers) ----------------
 
-    def note_loop_created(
-        self, loop_id: str, kind: str, task: str, phase: str
-    ) -> str:
+    def note_loop_created(self, loop_id: str, kind: str, task: str, phase: str) -> str:
         """A new loop starts doing its first phase. Returns the item id."""
         data = self._load()
         item = self._item(data, loop_id)
@@ -187,9 +185,7 @@ class Checklist:
         item = self._item(data, loop_id)
         if item is None:
             return
-        self._move(
-            data, item, "doing", f"advanced: {old_phase} -> {new_phase}", phase=new_phase
-        )
+        self._move(data, item, "doing", f"advanced: {old_phase} -> {new_phase}", phase=new_phase)
         # Entering a new phase: no receipt status is known for it yet. The
         # previous phase's statuses stay under "skills_by_phase".
         item["skills"] = {}
@@ -210,9 +206,7 @@ class Checklist:
         item = self._item(data, loop_id)
         if item is None:
             return
-        self._move(
-            data, item, "doing", note or "re-entered an earlier phase", phase=phase
-        )
+        self._move(data, item, "doing", note or "re-entered an earlier phase", phase=phase)
         self._save(data)
 
     def note_done(self, loop_id: str, note: str) -> None:
@@ -246,9 +240,7 @@ class Checklist:
         self._move(data, item, "done", detail, phase="done")
         self._save(data)
 
-    def note_skill_status(
-        self, loop_id: str, phase: str, statuses: dict[str, str]
-    ) -> None:
+    def note_skill_status(self, loop_id: str, phase: str, statuses: dict[str, str]) -> None:
         """Record per-skill receipt status for a phase.
 
         statuses maps skill name -> "received" | "missing" | "invalid".
@@ -323,19 +315,14 @@ class Checklist:
             if phase_skills:
                 lines.append(
                     "SKILLS  "
-                    + " ".join(
-                        f"{name}={status}"
-                        for name, status in phase_skills.items()
-                    )
+                    + " ".join(f"{name}={status}" for name, status in phase_skills.items())
                 )
         else:
             lines.append("CHECKLIST  no active focus (nothing in flight)")
         for item in self.blocked_items():
             blocker = item.get("blocker") or "(no reason recorded)"
             lines.append(f"BLOCKED  {item['id']}: {item['loop_id']} -- {blocker}")
-        open_count = sum(
-            1 for i in data["items"] if i.get("status") in ("open", "doing")
-        )
+        open_count = sum(1 for i in data["items"] if i.get("status") in ("open", "doing"))
         lines.append(
             f"  {open_count} in flight, "
             f"{sum(1 for i in data['items'] if i.get('status') == 'done')} done"
@@ -363,9 +350,7 @@ class Checklist:
         moves.sort(key=lambda m: m["at"])
         return moves
 
-    def moves_summary_lines(
-        self, since_iso: str | None, limit: int = 10
-    ) -> list[str]:
+    def moves_summary_lines(self, since_iso: str | None, limit: int = 10) -> list[str]:
         """Session-end summary: what moved this session."""
         moves = self.moves_since(since_iso)
         if not moves:
@@ -373,8 +358,7 @@ class Checklist:
         lines = ["CHECKLIST  what moved this session:"]
         for move in moves[:limit]:
             lines.append(
-                f"  MOVED  {move['item']}: {move['from']} -> {move['to']} "
-                f"-- {move['note']}"
+                f"  MOVED  {move['item']}: {move['from']} -> {move['to']} -- {move['note']}"
             )
         if len(moves) > limit:
             lines.append(f"  ... and {len(moves) - limit} more")
@@ -400,9 +384,7 @@ def _current_session_id(state_root: Path) -> str:
 
 FACTS_FILENAME = "facts.md"
 
-_FACT_HEADER_RE = re.compile(
-    r"^##\s+(F-\d+)\s+—\s+(\d{4}-\d{2}-\d{2})(.*?)$", re.MULTILINE
-)
+_FACT_HEADER_RE = re.compile(r"^##\s+(F-\d+)\s+—\s+(\d{4}-\d{2}-\d{2})(.*?)$", re.MULTILINE)
 
 
 class Fact:
@@ -535,9 +517,7 @@ DECISIONS_FILENAME = "decisions.md"
 #: the human -- the why is judgment, never invented.
 WHY_MISSING = "(why not recorded)"
 
-_DECISION_HEADER_RE = re.compile(
-    r"^##\s+(D-\d+)\s+—\s+(\d{4}-\d{2}-\d{2})(.*?)$", re.MULTILINE
-)
+_DECISION_HEADER_RE = re.compile(r"^##\s+(D-\d+)\s+—\s+(\d{4}-\d{2}-\d{2})(.*?)$", re.MULTILINE)
 _FIELD_RE = re.compile(r"^(decision|why|source|key|at):\s*(.*?)\s*$", re.MULTILINE)
 
 
@@ -663,8 +643,7 @@ class Decisions:
                 current = self._read()
                 old_header = f"## {previous.id} — {previous.date}"
                 marked = (
-                    f"## {previous.id} — {previous.date} "
-                    f"— SUPERSEDED by {new_id} on {_today()}"
+                    f"## {previous.id} — {previous.date} — SUPERSEDED by {new_id} on {_today()}"
                 )
                 current = current.replace(old_header, marked, 1)
                 self._write(current)
@@ -678,9 +657,7 @@ class Decisions:
             f"\n## {new_id} — {_today()}{superseded_note}\n"
             f"decision: {decision}\n"
             f"why: {why}\n"
-            f"source: {source.strip()}\n"
-            + (f"key: {key}\n" if key else "")
-            + f"at: {_now_iso()}\n"
+            f"source: {source.strip()}\n" + (f"key: {key}\n" if key else "") + f"at: {_now_iso()}\n"
         )
         self._write(current)
         return new_id
@@ -724,9 +701,25 @@ class Decisions:
 
 _PRECEDENT_STOPWORDS = frozenset(
     {
-        "with", "from", "this", "that", "were", "have", "your", "they",
-        "their", "which", "what", "will", "over", "under", "than", "then",
-        "into", "when", "loop",
+        "with",
+        "from",
+        "this",
+        "that",
+        "were",
+        "have",
+        "your",
+        "they",
+        "their",
+        "which",
+        "what",
+        "will",
+        "over",
+        "under",
+        "than",
+        "then",
+        "into",
+        "when",
+        "loop",
     }
 )
 
@@ -744,11 +737,7 @@ class Precedent:
 
 def _precedent_keywords(text: str) -> frozenset[str]:
     words = re.findall(r"[a-z0-9]+", text.lower())
-    return frozenset(
-        word
-        for word in words
-        if len(word) >= 4 and word not in _PRECEDENT_STOPWORDS
-    )
+    return frozenset(word for word in words if len(word) >= 4 and word not in _PRECEDENT_STOPWORDS)
 
 
 def _decision_area(key: str | None) -> str | None:
@@ -824,13 +813,9 @@ def find_precedents(
                 # key prefix ("<kind>-<id>"); a keyless entry carries no kind
                 # context, so it cannot match.
                 past_loop = _decision_loop_id(entry.key)
-                if past_loop is None or not past_loop.startswith(
-                    loop_kind + "-"
-                ):
+                if past_loop is None or not past_loop.startswith(loop_kind + "-"):
                     continue
-            shared = wanted & _precedent_keywords(
-                f"{entry.decision} {entry.why}"
-            )
+            shared = wanted & _precedent_keywords(f"{entry.decision} {entry.why}")
             if len(shared) < 2:
                 continue
             candidates.append((len(shared), entry, shared))
@@ -866,10 +851,7 @@ def format_precedent(precedent: Precedent) -> str:
     """One human line: "last time you chose X over Y because Z; outcome was
     <verdict>." Omits the outcome clause when the past loop never closed
     with a verdict -- no invented outcomes."""
-    line = (
-        f"last time you chose {precedent.decision} "
-        f"because {precedent.why}"
-    )
+    line = f"last time you chose {precedent.decision} because {precedent.why}"
     if precedent.outcome is not None:
         line += f"; outcome was {precedent.outcome}"
     return line.rstrip(". ") + "."
@@ -903,17 +885,11 @@ RULES = (
     "RULE-STANCE-DIRECT",  # correction says "be direct" -> preferred_stance=expert
 )
 
-_CHALLENGE_WANT_RE = re.compile(
-    r"good challenge|challenge accepted|push ?back more|be blunt", re.I
-)
-_CHALLENGE_AVOID_RE = re.compile(
-    r"stop challenging|don't push back|too confrontational", re.I
-)
+_CHALLENGE_WANT_RE = re.compile(r"good challenge|challenge accepted|push ?back more|be blunt", re.I)
+_CHALLENGE_AVOID_RE = re.compile(r"stop challenging|don't push back|too confrontational", re.I)
 _OPTIONS_FEW_RE = re.compile(r"fewer options|too many options", re.I)
 _OPTIONS_MANY_RE = re.compile(r"more options|show me (the )?alternatives", re.I)
-_STANCE_DIRECT_RE = re.compile(
-    r"be (more )?direct|just tell me straight|no sugarcoat", re.I
-)
+_STANCE_DIRECT_RE = re.compile(r"be (more )?direct|just tell me straight|no sugarcoat", re.I)
 _VERBOSE_RE = re.compile(r"too verbose", re.I)
 _TERSE_RE = re.compile(r"too terse|more detail", re.I)
 
@@ -962,10 +938,7 @@ class UserModel:
     def save(cls, profile: dict) -> Path:
         path = cls.path()
         path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            key: profile.get(key, default)
-            for key, default in _PROFILE_DEFAULTS.items()
-        }
+        payload = {key: profile.get(key, default) for key, default in _PROFILE_DEFAULTS.items()}
         path.write_text(
             yaml.safe_dump(payload, sort_keys=True, allow_unicode=True),
             encoding="utf-8",
@@ -974,9 +947,7 @@ class UserModel:
         return path
 
     @staticmethod
-    def _apply(
-        profile: dict, field: str, value: object, rule: str, evidence: str
-    ) -> bool:
+    def _apply(profile: dict, field: str, value: object, rule: str, evidence: str) -> bool:
         """Apply one rule's update. Returns True when the profile changed."""
         if field in profile.get("explicit", []):
             profile.setdefault("learned", []).append(

@@ -62,7 +62,7 @@ def _challenge_gate_or_refuse(skip_challenge: bool, skip_reason: str) -> None:
             "Run one first, e.g. `awino think devil --record <file>` "
             "(devil, blindspot, premortem, uncomfortable, or "
             "assumption-destroyer), or skip consciously with "
-            "`--skip-challenge --skip-reason \"...\"`."
+            '`--skip-challenge --skip-reason "..."`.'
         )
         raise typer.Exit(1)
     _echo(f"CHALLENGE  satisfied by recorded thinking: {mode}")
@@ -110,7 +110,9 @@ def _driver_for_kind(kind: str) -> loops.LoopDriver:
     """Build the driver for a loop kind. RPI gets the open-run handoff hook;
     all kinds share the loops dir, the ledger, and their skill document."""
     if kind not in _LOOP_KINDS:
-        raise loops.LoopError(f"unknown loop kind {kind!r}: expected one of {', '.join(_LOOP_KINDS)}")
+        raise loops.LoopError(
+            f"unknown loop kind {kind!r}: expected one of {', '.join(_LOOP_KINDS)}"
+        )
     workspace = _workspace()
     common = {
         "project_root": workspace.project.root,
@@ -149,10 +151,10 @@ def _resolve_driver_and_state(
                 "REFUSED  this project was onboarded but its loop state is "
                 "gone (no current loop found) -- the state directory may "
                 "have been deleted; re-run `awino onboard` to restore it, "
-                "or start a fresh loop with `awino loop run rpi --task \"...\"`"
+                'or start a fresh loop with `awino loop run rpi --task "..."`'
             )
             raise typer.Exit(2)
-        _echo("NO_LOOP  create one first: awino loop run rpi --task \"...\"")
+        _echo('NO_LOOP  create one first: awino loop run rpi --task "..."')
         raise typer.Exit(2)
     try:
         kind = loops.kind_of(resolved)
@@ -185,10 +187,7 @@ def _terse_narration() -> bool:
     Calibration degrades to normal when the profile is unreadable.
     """
     try:
-        return (
-            working_memory.UserModel.narration(working_memory.UserModel.load())
-            == "terse"
-        )
+        return working_memory.UserModel.narration(working_memory.UserModel.load()) == "terse"
     except Exception:
         return False
 
@@ -233,9 +232,7 @@ def _print_phase_start(driver: loops.LoopDriver, state: loops.LoopState) -> None
             )
 
 
-def _print_run_opened(
-    driver: loops.LoopDriver, state: loops.LoopState, first_phase: str
-) -> None:
+def _print_run_opened(driver: loops.LoopDriver, state: loops.LoopState, first_phase: str) -> None:
     phase = next(p for p in driver.phases() if p.name == first_phase)
     _echo(f"LOOP  {state.id}")
     _echo(f"task: {state.task}")
@@ -261,7 +258,9 @@ def _print_run_opened(
 def loop_run_rpi(
     task: str = typer.Option(..., "--task", help="One sentence describing the change"),
     topic: str = typer.Option(None, "--topic", help="Slug for the artifact filenames"),
-    seed: str = typer.Option(None, "--seed", help="Seed ID to link; the loop never closes it itself"),
+    seed: str = typer.Option(
+        None, "--seed", help="Seed ID to link; the loop never closes it itself"
+    ),
 ) -> None:
     """Start an RPI loop and print the phase-1 (research) prompt block."""
     driver = _driver_for_kind("rpi")
@@ -277,7 +276,9 @@ def loop_run_rpi(
 def loop_run_ralph(
     task: str = typer.Option(..., "--task", help="One sentence describing the task"),
     topic: str = typer.Option(None, "--topic", help="Slug for the artifact filenames"),
-    seed: str = typer.Option(None, "--seed", help="Seed ID to link; closed only on verified success"),
+    seed: str = typer.Option(
+        None, "--seed", help="Seed ID to link; closed only on verified success"
+    ),
     check: str = typer.Option(..., "--check", help="Verification command; exit 0 means done"),
     skip_challenge: bool = typer.Option(
         False,
@@ -312,7 +313,9 @@ def loop_run_ralph(
 def loop_run_delegate(
     task: str = typer.Option(..., "--task", help="One sentence describing the work to split"),
     topic: str = typer.Option(None, "--topic", help="Slug for the artifact filenames"),
-    seed: str = typer.Option(None, "--seed", help="Seed ID to link; closed only on verified success"),
+    seed: str = typer.Option(
+        None, "--seed", help="Seed ID to link; closed only on verified success"
+    ),
     skip_challenge: bool = typer.Option(
         False,
         "--skip-challenge",
@@ -353,10 +356,7 @@ def loop_next(
     """
     driver, state = _resolve_driver_and_state(loop_id)
     if state.locked:
-        _echo(
-            f"REFUSED  LOOP_LOCKED  loop {state.id} is locked; "
-            f"{driver.lock_next(state)}"
-        )
+        _echo(f"REFUSED  LOOP_LOCKED  loop {state.id} is locked; {driver.lock_next(state)}")
         raise typer.Exit(1)
     if state.phase == "done":
         _echo(f"REFUSED  loop is already done; {driver.done_note}")
@@ -373,7 +373,9 @@ def loop_next(
                 )
                 _echo(driver.lock_next(state))
                 raise typer.Exit(1)
-            _echo(f"VALIDATION_FAILED  phase={state.phase}  attempt={attempts}/{loops.MAX_ATTEMPTS}")
+            _echo(
+                f"VALIDATION_FAILED  phase={state.phase}  attempt={attempts}/{loops.MAX_ATTEMPTS}"
+            )
             for item in missing:
                 _echo(f"  - {item}")
             _echo(f"Fix the artifact, then rerun `awino loop next --id {state.id}`.")
@@ -397,7 +399,7 @@ def loop_next(
                     _echo(f"  {qid}: {question}")
             _echo(
                 f"Answer with: awino loop answer --question {exc.unanswered[0]} "
-                f"--answer \"...\" --id {state.id}"
+                f'--answer "..." --id {state.id}'
             )
         raise typer.Exit(1) from None
     except loops.ComprehensionRequired as exc:
@@ -467,10 +469,7 @@ def loop_status(
             _echo(line)
         comp = state.comprehension or {}
         if comp.get("explanation") or comp.get("probes") or comp.get("suggestions"):
-            _echo(
-                "COMPREHENSION_RECORD  paste at the end of the plan's "
-                "decisions section:"
-            )
+            _echo("COMPREHENSION_RECORD  paste at the end of the plan's decisions section:")
             for line in driver.comprehension_record_block(state).splitlines():
                 _echo(f"  {line}")
     if state.seed_id:
@@ -512,10 +511,7 @@ def loop_back(
         _echo(f"REFUSED  {exc}")
         raise typer.Exit(1) from None
     _echo(f"REENTERED  phase={state.phase}")
-    _echo(
-        f"attempts for '{state.phase}' reset to 0: "
-        "three-strikes gets a fresh count on re-entry"
-    )
+    _echo(f"attempts for '{state.phase}' reset to 0: three-strikes gets a fresh count on re-entry")
     if was_locked:
         _echo("UNLOCKED  re-entry is a human intervention; the lock is cleared")
     if reason.strip():
@@ -628,10 +624,7 @@ def loop_answer(
     remaining = driver.unanswered_questions(state)
     if remaining:
         _echo(f"REMAINING  {', '.join(remaining)}")
-        _echo(
-            f"Next: awino loop answer --question {remaining[0]} "
-            f"--answer \"...\" --id {state.id}"
-        )
+        _echo(f'Next: awino loop answer --question {remaining[0]} --answer "..." --id {state.id}')
     else:
         _echo(f"All questions answered. Advance with: awino loop next --id {state.id}")
 
@@ -661,10 +654,7 @@ def loop_default(
     remaining = driver.unanswered_questions(state)
     if remaining:
         _echo(f"REMAINING  {', '.join(remaining)}")
-        _echo(
-            f"Next: awino loop answer --question {remaining[0]} "
-            f"--answer \"...\" --id {state.id}"
-        )
+        _echo(f'Next: awino loop answer --question {remaining[0]} --answer "..." --id {state.id}')
     else:
         _echo(f"All questions answered. Advance with: awino loop next --id {state.id}")
 
@@ -696,18 +686,12 @@ def loop_think(
     """
     driver, state = _resolve_driver_and_state(loop_id)
     if not isinstance(driver, loops.RpiDriver):
-        _echo(
-            f"REFUSED  loop {state.id} is not an RPI loop; "
-            "thinking runs attach to RPI plans"
-        )
+        _echo(f"REFUSED  loop {state.id} is not an RPI loop; thinking runs attach to RPI plans")
         raise typer.Exit(1)
     try:
         item = think.by_name(mode)
     except ValueError:
-        _echo(
-            f"REFUSED  unknown thinking mode {mode!r}: "
-            f"one of {', '.join(think.MODE_NAMES)}"
-        )
+        _echo(f"REFUSED  unknown thinking mode {mode!r}: one of {', '.join(think.MODE_NAMES)}")
         raise typer.Exit(2) from None
     if record is None:
         _echo(f"THINK  {item.name}")
@@ -716,10 +700,7 @@ def loop_think(
         _echo(item.prompt)
         _echo("")
         _echo(f"REQUIRED SECTIONS  {', '.join(name for name, _ in item.sections)}")
-        _echo(
-            f"RECORD  awino loop think --mode {item.name} "
-            f"--record <file> --id {state.id}"
-        )
+        _echo(f"RECORD  awino loop think --mode {item.name} --record <file> --id {state.id}")
         return
     try:
         text = Path(record).read_text(encoding="utf-8")
@@ -764,10 +745,7 @@ def loop_explain(
     """
     driver, state = _resolve_driver_and_state(loop_id)
     if not isinstance(driver, loops.RpiDriver):
-        _echo(
-            f"REFUSED  loop {state.id} is not an RPI loop; "
-            "explanations only apply to RPI plans"
-        )
+        _echo(f"REFUSED  loop {state.id} is not an RPI loop; explanations only apply to RPI plans")
         raise typer.Exit(1)
     try:
         driver.record_explanation(state, text, by=by)
@@ -800,10 +778,7 @@ def loop_probe_answer(
     """
     driver, state = _resolve_driver_and_state(loop_id)
     if not isinstance(driver, loops.RpiDriver):
-        _echo(
-            f"REFUSED  loop {state.id} is not an RPI loop; "
-            "probes only apply to RPI plans"
-        )
+        _echo(f"REFUSED  loop {state.id} is not an RPI loop; probes only apply to RPI plans")
         raise typer.Exit(1)
     try:
         driver.record_probe_answer(state, question, answer, by=by)
@@ -834,10 +809,7 @@ def loop_suggest(
     """
     driver, state = _resolve_driver_and_state(loop_id)
     if not isinstance(driver, loops.RpiDriver):
-        _echo(
-            f"REFUSED  loop {state.id} is not an RPI loop; "
-            "suggestions only apply to RPI plans"
-        )
+        _echo(f"REFUSED  loop {state.id} is not an RPI loop; suggestions only apply to RPI plans")
         raise typer.Exit(1)
     suggestions = driver.plan_suggestions(state)
     if not suggestions:
@@ -852,7 +824,7 @@ def loop_suggest(
             _echo("      accepting this revises the plan (approval clears, plan re-validates)")
     _echo(
         "Decide with: awino loop suggest-answer --suggestion S1 "
-        f"--verdict accepted|rejected --reason \"...\" --id {state.id}"
+        f'--verdict accepted|rejected --reason "..." --id {state.id}'
     )
 
 
@@ -872,10 +844,7 @@ def loop_suggest_answer(
     """
     driver, state = _resolve_driver_and_state(loop_id)
     if not isinstance(driver, loops.RpiDriver):
-        _echo(
-            f"REFUSED  loop {state.id} is not an RPI loop; "
-            "suggestions only apply to RPI plans"
-        )
+        _echo(f"REFUSED  loop {state.id} is not an RPI loop; suggestions only apply to RPI plans")
         raise typer.Exit(1)
     try:
         decided = driver.record_suggestion_decision(state, suggestion, verdict, reason, by=by)
@@ -936,7 +905,7 @@ def loop_confirm_problem(
         raise typer.Exit(1)
     if (reframed is None) == (not confirmed):
         _echo(
-            "REFUSED  exactly one of --reframed \"...\" / --confirmed: "
+            'REFUSED  exactly one of --reframed "..." / --confirmed: '
             "answer the question -- which problem do we solve?"
         )
         raise typer.Exit(2)
@@ -975,13 +944,9 @@ def _verdict_seed_context(
     open -- are untouched.
     """
     seed_id = state.seed_id
-    recorded = (
-        "nothing follows: the verdict is recorded; "
-        "`awino buddy` reports outcome rates"
-    )
+    recorded = "nothing follows: the verdict is recorded; `awino buddy` reports outcome rates"
     by_hand = (
-        "check the seeds tracker by hand, then close the seed by hand "
-        "when the work is truly done"
+        "check the seeds tracker by hand, then close the seed by hand when the work is truly done"
     )
     if not seed_id:
         return None, "n/a: no seed attached", recorded
@@ -1010,8 +975,7 @@ def _verdict_seed_context(
     if state.locked:
         return (
             title,
-            "still open: escalation leaves the seed open because the work "
-            "is unverified",
+            "still open: escalation leaves the seed open because the work is unverified",
             driver.seed_open_note(state),
         )
     if state.phase != "done":
@@ -1019,8 +983,7 @@ def _verdict_seed_context(
             title,
             "still open: the loop has not completed, and a seed closes only "
             "on successful verification",
-            "finish the loop, or close the seed by hand when the work is "
-            "truly done",
+            "finish the loop, or close the seed by hand when the work is truly done",
         )
     # Ralph/Delegate completed with the seed still open: verified success
     # should have closed it, so closure failed or the seed was reopened.
@@ -1053,9 +1016,7 @@ def _verdict_criteria_lines(
         judged = [(criterion, "unjudgeable") for criterion in criteria]
         note = "no artifact on disk to judge"
     else:
-        text = (project_root / artifact_rel).read_text(
-            encoding="utf-8", errors="replace"
-        )
+        text = (project_root / artifact_rel).read_text(encoding="utf-8", errors="replace")
         judged = loops.evaluate_success_criteria(criteria, text)
         note = f"judged against {artifact_rel}"
     met = [c for c, status in judged if status == "met"]
@@ -1067,8 +1028,7 @@ def _verdict_criteria_lines(
         f"criteria_unjudgeable: {'; '.join(unjudgeable) or '(none)'}",
     ]
     lines = [
-        f"CRITERIA  {note}: {len(met)} met, {len(unmet)} unmet, "
-        f"{len(unjudgeable)} unjudgeable"
+        f"CRITERIA  {note}: {len(met)} met, {len(unmet)} unmet, {len(unjudgeable)} unjudgeable"
     ]
     for criterion, status in judged:
         lines.append(f"  [{status}] {criterion}")
@@ -1078,9 +1038,7 @@ def _verdict_criteria_lines(
 @loop_app.command("close")
 def loop_close(
     loop_id: str = typer.Option(None, "--id", help="Loop id; defaults to the current one"),
-    verdict: str = typer.Option(
-        None, "--verdict", help="Outcome verdict: yes, partial, or no"
-    ),
+    verdict: str = typer.Option(None, "--verdict", help="Outcome verdict: yes, partial, or no"),
     note: str = typer.Option("", "--note", help="Short note on the outcome"),
 ) -> None:
     """Record the outcome verdict for a loop: did it accomplish the goal?
@@ -1110,17 +1068,11 @@ def loop_close(
         _echo("  seed: none")
 
     if verdict is None:
-        _echo(
-            "REFUSED  missing --verdict: rerun with "
-            f"--verdict yes|partial|no --id {state.id}"
-        )
+        _echo(f"REFUSED  missing --verdict: rerun with --verdict yes|partial|no --id {state.id}")
         raise typer.Exit(2)
     verdict = verdict.strip().lower()
     if verdict not in _VERDICTS:
-        _echo(
-            f"REFUSED  bad --verdict {verdict!r}: expected one of "
-            f"{', '.join(_VERDICTS)}"
-        )
+        _echo(f"REFUSED  bad --verdict {verdict!r}: expected one of {', '.join(_VERDICTS)}")
         raise typer.Exit(2)
 
     # Mission is living: if the success criteria changed since this loop's
@@ -1143,13 +1095,8 @@ def loop_close(
             "criteria, not stale ones:"
         )
         _echo('        awino mission --set "exams=<claim> -> <verify command>"')
-        _echo(
-            "        then re-examine the work: "
-            f"awino loop next --id {state.id}"
-        )
-        _echo(
-            f"REFUSED  stale success criteria; no verdict recorded for loop {state.id}"
-        )
+        _echo(f"        then re-examine the work: awino loop next --id {state.id}")
+        _echo(f"REFUSED  stale success criteria; no verdict recorded for loop {state.id}")
         raise typer.Exit(2)
 
     criteria_detail, criteria_lines = _verdict_criteria_lines(
@@ -1188,9 +1135,7 @@ def loop_close(
         working_memory.UserModel.save(model)
         _echo("USER_MODEL  updated from this verdict (see ~/.awino/profile.yaml)")
     # The verdict is also the loop's closing boundary for the checklist.
-    working_memory.Checklist(workspace.state_root).note_verdict(
-        state.id, verdict, note.strip()
-    )
+    working_memory.Checklist(workspace.state_root).note_verdict(state.id, verdict, note.strip())
     if not _terse_narration():
         _echo(
             "PURPOSE  record the loop's outcome; `awino buddy` reports outcome "

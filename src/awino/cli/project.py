@@ -173,7 +173,9 @@ def ask_command(
 @app.command("note")
 def note_command(
     text: str = typer.Argument(..., help="What the human said, corrected, or asked"),
-    kind: str = typer.Option("correction", "--as", help="user_turn, agent_question, correction, or fact"),
+    kind: str = typer.Option(
+        "correction", "--as", help="user_turn, agent_question, correction, or fact"
+    ),
     run_id: str | None = typer.Option(None, "--run", help="Link to the active run, if any"),
 ) -> None:
     """Record one session-scoped ask/instruction/correction/fact.
@@ -1074,7 +1076,9 @@ def stance_command(
         None, "--for", help="Print the stance this message calls for, and why"
     ),
     verify_name: str = typer.Option(
-        None, "--verify", help="Check an agent response against a stance's rules, or a thinking mode's structure"
+        None,
+        "--verify",
+        help="Check an agent response against a stance's rules, or a thinking mode's structure",
     ),
     response_path: str = typer.Option(
         None, "--response", help="File containing the agent response to check with --verify"
@@ -1125,9 +1129,7 @@ def stance_command(
     # stance default itself stays the project's explicit choice.
     from awino import working_memory
 
-    calibration = working_memory.UserModel.calibration_line(
-        working_memory.UserModel.load()
-    )
+    calibration = working_memory.UserModel.calibration_line(working_memory.UserModel.load())
     if calibration:
         _echo(f"STANCE_USER_MODEL  {calibration}")
     for item in stance.STANCES:
@@ -1189,9 +1191,7 @@ def _run_session_end_order() -> None:
     _echo(f"SESSION_END_MARKED  {marker}")
     from awino import working_memory
 
-    for line in working_memory.Checklist(workspace.state_root).moves_summary_lines(
-        since
-    ):
+    for line in working_memory.Checklist(workspace.state_root).moves_summary_lines(since):
         _echo(line)
 
 

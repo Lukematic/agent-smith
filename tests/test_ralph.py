@@ -8,6 +8,7 @@ human with a structured report and leaves any linked seed open.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,12 @@ from awino.seeds import Issue, Seeds, SeedsResult, SeedsState
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RALPH_SKILL = REPO_ROOT / "skills" / "awino-ralph" / "SKILL.md"
+
+_PY = sys.executable.replace("\\", "/")
+_PASS = f'"{_PY}" -c "import sys; sys.exit(0)"'
+_FAIL = f'"{_PY}" -c "import sys; sys.exit(1)"'
+_FAIL_NOPE = f'"{_PY}" -c "import sys; sys.stderr.write(\'nope\\n\'); sys.exit(1)"'
+_FAIL_DETAIL = f'"{_PY}" -c "import sys; sys.stderr.write(\'some-failure-detail\\n\'); sys.exit(3)"'
 
 ATTEMPT_OK = """# Attempt: fix the flaky test
 
@@ -72,9 +79,7 @@ def driver(project: Path, tmp_path: Path) -> loops.RalphDriver:
 
 
 @pytest.fixture()
-def event_driver(
-    project: Path, tmp_path: Path, loop_ledger: Ledger
-) -> loops.RalphDriver:
+def event_driver(project: Path, tmp_path: Path, loop_ledger: Ledger) -> loops.RalphDriver:
     return loops.RalphDriver(
         project_root=project,
         loops_dir=tmp_path / "loops",
@@ -97,8 +102,11 @@ def seeds_closed(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
         Seeds,
         "show",
         lambda self, issue_id: Issue(
-            id=issue_id, title="Fix the flaky test", status="open",
-            type="task", priority=2,
+            id=issue_id,
+            title="Fix the flaky test",
+            status="open",
+            type="task",
+            priority=2,
         ),
     )
 
@@ -116,7 +124,7 @@ def _write_attempt(driver: loops.RalphDriver, state: loops.LoopState, text: str)
     path.write_text(text, encoding="utf-8")
 
 
-def _at_verify(driver: loops.RalphDriver, check: str = "true") -> loops.LoopState:
+def _at_verify(driver: loops.RalphDriver, check: str = _PASS) -> loops.LoopState:
     state = driver.new("fix the flaky test", check=check)
     _write_attempt(driver, state, ATTEMPT_OK)
     assert driver.check(state) == []
@@ -136,16 +144,12 @@ class TestRalphNew:
         assert state.id.startswith("ralph-")
         assert loops.kind_of(state.id) == "ralph"
 
-    def test_attempt_prompt_comes_from_the_ralph_skill(
-        self, driver: loops.RalphDriver
-    ) -> None:
+    def test_attempt_prompt_comes_from_the_ralph_skill(self, driver: loops.RalphDriver) -> None:
         text = loops.skill_section(RALPH_SKILL, "The loop", "awino-ralph")
         assert text.startswith("## The loop")
         assert len(text) > 100
 
-    def test_verify_prompt_comes_from_the_ralph_skill(
-        self, driver: loops.RalphDriver
-    ) -> None:
+    def test_verify_prompt_comes_from_the_ralph_skill(self, driver: loops.RalphDriver) -> None:
         text = loops.skill_section(RALPH_SKILL, "Verification is the skill", "awino-ralph")
         assert text.strip()
 
@@ -171,9 +175,7 @@ class TestRalphAttemptValidation:
         assert missing
         assert any("too short" in item for item in missing)
 
-    def test_three_failed_attempts_lock_the_loop(
-        self, driver: loops.RalphDriver
-    ) -> None:
+    def test_three_failed_attempts_lock_the_loop(self, driver: loops.RalphDriver) -> None:
         state = driver.new("fix the flaky test", check="true")
         _write_attempt(driver, state, "too short\n")
         for _ in range(loops.MAX_ATTEMPTS):
@@ -185,18 +187,14 @@ class TestRalphAttemptValidation:
 
 
 class TestRalphVerifyPass:
-    def test_passing_check_completes_the_loop(
-        self, event_driver: loops.RalphDriver
-    ) -> None:
+    def test_passing_check_completes_the_loop(self, event_driver: loops.RalphDriver) -> None:
         state = _at_verify(event_driver, check="true")
         assert event_driver.advance(state) == "done"
         state = event_driver.load(state.id)
         assert state.phase == "done"
         assert not state.locked
 
-    def test_verify_history_records_command_exit_and_tail(
-        self, driver: loops.RalphDriver
-    ) -> None:
+    def test_verify_history_records_command_exit_and_tail(self, driver: loops.RalphDriver) -> None:
         state = _at_verify(driver, check="echo hello-verification-output")
         driver.advance(state)
         state = driver.load(state.id)
@@ -235,13 +233,15 @@ class TestRalphVerifyPass:
     ) -> None:
         monkeypatch.setattr(Seeds, "state", lambda self: (SeedsState.READY, "ok"))
         monkeypatch.setattr(
-            Seeds, "show",
+            Seeds,
+            "show",
             lambda self, issue_id: Issue(
                 id=issue_id, title="t", status="open", type="task", priority=2
             ),
         )
         monkeypatch.setattr(
-            Seeds, "close",
+            Seeds,
+            "close",
             lambda self, issue_id, reason: SeedsResult(
                 ok=False, command="sd close", detail="boom", payload=None
             ),
@@ -257,19 +257,15 @@ class TestRalphVerifyPass:
 
 
 class TestRalphVerifyFailRetry:
-    def test_failing_check_routes_to_retry(
-        self, event_driver: loops.RalphDriver
-    ) -> None:
-        state = _at_verify(event_driver, check="false")
+    def test_failing_check_routes_to_retry(self, event_driver: loops.RalphDriver) -> None:
+        state = _at_verify(event_driver, check=_FAIL)
         assert event_driver.advance(state) == "retry"
         state = event_driver.load(state.id)
         assert state.phase == "retry"
         assert not state.locked
         assert state.phase != "done"
 
-    def test_retry_routing_keeps_checklist_in_sync(
-        self, project: Path, tmp_path: Path
-    ) -> None:
+    def test_retry_routing_keeps_checklist_in_sync(self, project: Path, tmp_path: Path) -> None:
         """Regression: the verify->retry routing must advance the
         working-memory checklist, or the spine's capture step refuses the
         next `loop next` ("checklist still shows phase 'verify' but the loop
@@ -281,18 +277,14 @@ class TestRalphVerifyFailRetry:
             skill_md=RALPH_SKILL,
             state_root=tmp_path / ".awino",
         )
-        state = driver.new("fix the flaky test", check="false")
+        state = driver.new("fix the flaky test", check=_FAIL)
         _write_attempt(driver, state, ATTEMPT_OK)
         assert driver.check(state) == []
         assert driver.advance(state) == "verify"
         assert driver.advance(state) == "retry"
         checklist = driver._checklist()
         assert checklist is not None
-        item = next(
-            entry
-            for entry in checklist.items()
-            if entry.get("loop_id") == state.id
-        )
+        item = next(entry for entry in checklist.items() if entry.get("loop_id") == state.id)
         assert item["phase"] == "retry"
         # The next advance (retry -> verify) must not be spine-blocked.
         _write_attempt(driver, state, ATTEMPT_OK + "\nSecond try, addressing the failure.\n")
@@ -302,7 +294,7 @@ class TestRalphVerifyFailRetry:
     def test_failed_verification_emits_verify_failed_with_evidence(
         self, event_driver: loops.RalphDriver, loop_ledger: Ledger
     ) -> None:
-        state = _at_verify(event_driver, check="echo some-failure-detail >&2; exit 3")
+        state = _at_verify(event_driver, check=_FAIL_DETAIL)
         event_driver.advance(state)
         events = loop_ledger.loop_events(state.id)
         failed = [e for e in events if e.kind == "verify_failed"]
@@ -310,10 +302,8 @@ class TestRalphVerifyFailRetry:
         assert "exited 3" in failed[0].detail
         assert "some-failure-detail" in failed[0].detail
 
-    def test_retry_prompt_carries_prior_failure_evidence(
-        self, driver: loops.RalphDriver
-    ) -> None:
-        state = _at_verify(driver, check="echo some-failure-detail >&2; exit 3")
+    def test_retry_prompt_carries_prior_failure_evidence(self, driver: loops.RalphDriver) -> None:
+        state = _at_verify(driver, check=_FAIL_DETAIL)
         driver.advance(state)
         state = driver.load(state.id)
         prompt = driver.prompt_block(state, "retry")
@@ -321,18 +311,18 @@ class TestRalphVerifyFailRetry:
         assert "exited 3" in prompt
 
     def test_retry_cycles_back_to_verify(self, driver: loops.RalphDriver) -> None:
-        state = _at_verify(driver, check="false")
+        state = _at_verify(driver, check=_FAIL)
         assert driver.advance(state) == "retry"
         _write_attempt(driver, state, ATTEMPT_OK + "\nSecond try, addressing the failure.\n")
         assert driver.check(state) == []
         # Swap in a passing check to prove the cycle completes.
-        state.check_command = "true"
+        state.check_command = _PASS
         driver.save(state)
         assert driver.advance(state) == "verify"
         assert driver.advance(state) == "done"
 
     def test_second_failure_returns_to_retry(self, driver: loops.RalphDriver) -> None:
-        state = _at_verify(driver, check="false")
+        state = _at_verify(driver, check=_FAIL)
         assert driver.advance(state) == "retry"
         _write_attempt(driver, state, ATTEMPT_OK + "\nAnother attempt.\n")
         assert driver.check(state) == []
@@ -345,7 +335,7 @@ class TestRalphVerifyFailRetry:
 
 class TestRalphEscalation:
     def _three_failures(self, driver: loops.RalphDriver) -> loops.LoopState:
-        state = _at_verify(driver, check="echo nope >&2; exit 1")
+        state = _at_verify(driver, check=_FAIL_NOPE)
         assert driver.advance(state) == "retry"
         _write_attempt(driver, state, ATTEMPT_OK + "\nTry two.\n")
         assert driver.check(state) == []
@@ -356,9 +346,7 @@ class TestRalphEscalation:
         assert driver.advance(state) == "verify"
         return driver.load(state.id)
 
-    def test_third_failure_escalates_done_and_locked(
-        self, event_driver: loops.RalphDriver
-    ) -> None:
+    def test_third_failure_escalates_done_and_locked(self, event_driver: loops.RalphDriver) -> None:
         state = self._three_failures(event_driver)
         assert event_driver.advance(state) == "done"
         state = event_driver.load(state.id)
@@ -382,7 +370,7 @@ class TestRalphEscalation:
     def test_escalation_leaves_seed_open(
         self, driver: loops.RalphDriver, seeds_closed: list[tuple[str, str]]
     ) -> None:
-        state = driver.new("fix the flaky test", check="false", seed_id="seed-2")
+        state = driver.new("fix the flaky test", check=_FAIL, seed_id="seed-2")
         _write_attempt(driver, state, ATTEMPT_OK)
         assert driver.check(state) == []
         driver.advance(state)
@@ -435,7 +423,18 @@ class TestRalphCli:
     def test_run_ralph_prints_attempt_prompt(self, cli_env: Path) -> None:
         runner = CliRunner()
         result = runner.invoke(
-            loop_app, ["run", "ralph", "--task", "fix it", "--check", "true", "--skip-challenge", "--skip-reason", "test fixture"]
+            loop_app,
+            [
+                "run",
+                "ralph",
+                "--task",
+                "fix it",
+                "--check",
+                "true",
+                "--skip-challenge",
+                "--skip-reason",
+                "test fixture",
+            ],
         )
         assert result.exit_code == 0, result.output
         assert "LOOP  ralph-" in result.output
@@ -450,7 +449,18 @@ class TestRalphCli:
     def test_next_runs_check_and_completes(self, cli_env: Path) -> None:
         runner = CliRunner()
         created = runner.invoke(
-            loop_app, ["run", "ralph", "--task", "fix it", "--check", "true", "--skip-challenge", "--skip-reason", "test fixture"]
+            loop_app,
+            [
+                "run",
+                "ralph",
+                "--task",
+                "fix it",
+                "--check",
+                "true",
+                "--skip-challenge",
+                "--skip-reason",
+                "test fixture",
+            ],
         )
         assert created.exit_code == 0, created.output
         artifact = cli_env / self._artifact_path(created.output)
@@ -469,7 +479,18 @@ class TestRalphCli:
     def test_next_routes_failed_verify_to_retry(self, cli_env: Path) -> None:
         runner = CliRunner()
         created = runner.invoke(
-            loop_app, ["run", "ralph", "--task", "fix it", "--check", "false", "--skip-challenge", "--skip-reason", "test fixture"]
+            loop_app,
+            [
+                "run",
+                "ralph",
+                "--task",
+                "fix it",
+                "--check",
+                "false",
+                "--skip-challenge",
+                "--skip-reason",
+                "test fixture",
+            ],
         )
         assert created.exit_code == 0, created.output
         artifact = cli_env / self._artifact_path(created.output)
@@ -484,7 +505,18 @@ class TestRalphCli:
     def test_status_shows_ralph_kind_and_next(self, cli_env: Path) -> None:
         runner = CliRunner()
         created = runner.invoke(
-            loop_app, ["run", "ralph", "--task", "fix it", "--check", "true", "--skip-challenge", "--skip-reason", "test fixture"]
+            loop_app,
+            [
+                "run",
+                "ralph",
+                "--task",
+                "fix it",
+                "--check",
+                "true",
+                "--skip-challenge",
+                "--skip-reason",
+                "test fixture",
+            ],
         )
         assert created.exit_code == 0, created.output
         status = runner.invoke(loop_app, ["status"])
@@ -548,18 +580,14 @@ class TestRalphChallengeGate:
     def test_run_ralph_passes_with_recorded_devil(self, cli_env: Path) -> None:
         from awino import think
 
-        think.record_insight(
-            "devil", DEVIL_CHALLENGE_OK, cli_env / ".awino", source="test"
-        )
+        think.record_insight("devil", DEVIL_CHALLENGE_OK, cli_env / ".awino", source="test")
         result = self._run()
         assert result.exit_code == 0, result.output
         assert "CHALLENGE" in result.output
         assert "devil" in result.output
         assert "LOOP  ralph-" in result.output
 
-    def test_run_ralph_non_challenge_mode_does_not_satisfy(
-        self, cli_env: Path
-    ) -> None:
+    def test_run_ralph_non_challenge_mode_does_not_satisfy(self, cli_env: Path) -> None:
         from awino import think
 
         # thought-experiment records to decisions, but it does not attack
@@ -576,25 +604,17 @@ class TestRalphChallengeGate:
 
     def test_run_delegate_refused_without_challenge(self, cli_env: Path) -> None:
         runner = CliRunner()
-        result = runner.invoke(
-            loop_app, ["run", "delegate", "--task", "split the work"]
-        )
+        result = runner.invoke(loop_app, ["run", "delegate", "--task", "split the work"])
         assert result.exit_code == 1, result.output
         assert "REFUSED" in result.output
         assert "challenge" in result.output.lower()
 
-    def test_run_delegate_passes_with_recorded_premortem(
-        self, cli_env: Path
-    ) -> None:
+    def test_run_delegate_passes_with_recorded_premortem(self, cli_env: Path) -> None:
         from awino import think
 
-        think.record_insight(
-            "premortem", PREMORTEM_CHALLENGE_OK, cli_env / ".awino", source="test"
-        )
+        think.record_insight("premortem", PREMORTEM_CHALLENGE_OK, cli_env / ".awino", source="test")
         runner = CliRunner()
-        result = runner.invoke(
-            loop_app, ["run", "delegate", "--task", "split the work"]
-        )
+        result = runner.invoke(loop_app, ["run", "delegate", "--task", "split the work"])
         assert result.exit_code == 0, result.output
         assert "CHALLENGE" in result.output
         assert "premortem" in result.output

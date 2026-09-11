@@ -462,17 +462,12 @@ def _step_memory_write(ctx: Context) -> list[str]:
     if pending:
         model = working_memory.UserModel.load()
         before = len(model.get("learned", []))
-        if working_memory.UserModel.apply_corrections(
-            model, [ask.text for ask in pending]
-        ):
+        if working_memory.UserModel.apply_corrections(model, [ask.text for ask in pending]):
             working_memory.UserModel.save(model)
             for entry in model.get("learned", [])[before:]:
                 if entry.get("skipped"):
                     continue
-                lines.append(
-                    f"user model: {entry['rule']} set "
-                    f"{entry['field']}={entry['to']!r}"
-                )
+                lines.append(f"user model: {entry['rule']} set {entry['field']}={entry['to']!r}")
         for ask in pending:
             promoted.add(f"{sid}:{ask.turn}")
 

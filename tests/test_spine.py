@@ -213,9 +213,7 @@ def loop_ledger(state_root: Path) -> Ledger:
 
 
 @pytest.fixture()
-def driver(
-    project: Path, loop_ledger: Ledger, state_root: Path
-) -> loops.RpiDriver:
+def driver(project: Path, loop_ledger: Ledger, state_root: Path) -> loops.RpiDriver:
     """A driver wired to ledger + working memory, so the capture step's
     boundary checks (ledger trail, checklist) are live. The loops dir
     matches the CLI's (state_root / "loops") so CLI commands resolve the
@@ -236,9 +234,7 @@ def cli_env(project: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return project
 
 
-def _write(
-    driver: loops.RpiDriver, state: loops.LoopState, phase: str, text: str
-) -> None:
+def _write(driver: loops.RpiDriver, state: loops.LoopState, phase: str, text: str) -> None:
     rel = {
         "research": state.research_artifact,
         "pair-plan": state.pairing_artifact,
@@ -272,9 +268,7 @@ def _at_plan(driver: loops.RpiDriver) -> loops.LoopState:
     _write(driver, state, "pair-plan", PAIRING_OK)
     assert driver.check(state) == []
     for qid, _ in driver.pairing_questions(state):
-        driver.record_pair_answer(
-            state, qid, "answer", "use the default recommendation", by="Luke"
-        )
+        driver.record_pair_answer(state, qid, "answer", "use the default recommendation", by="Luke")
     assert driver.check(state) == []
     assert driver.advance(state) == "plan"
     state = driver.load(state.id)
@@ -312,9 +306,7 @@ def _thinking_run(driver: loops.RpiDriver, state: loops.LoopState) -> None:
     driver.record_thinking_run(state, "premortem", by="Luke", memory_id="D-0001")
 
 
-def _paste_comprehension_block(
-    driver: loops.RpiDriver, state: loops.LoopState
-) -> None:
+def _paste_comprehension_block(driver: loops.RpiDriver, state: loops.LoopState) -> None:
     """Paste the comprehension-check record into the plan artifact -- the
     documented workflow: once comprehension work exists in loop state, the
     plan document itself records it (the validator requires the block)."""
@@ -375,9 +367,7 @@ def _void_mission(
     ctx: _Ctx, driver: loops.RpiDriver, state: loops.LoopState
 ) -> tuple[loops.RpiDriver, loops.LoopState]:
     """Step 1 voided: the mission no longer validates (no objective)."""
-    heilmeier.save(
-        ctx.project / ".awino", heilmeier.Catechism(answers={})
-    )
+    heilmeier.save(ctx.project / ".awino", heilmeier.Catechism(answers={}))
     return driver, driver.load(state.id)
 
 
@@ -457,9 +447,7 @@ class TestSpineOrder:
             assert step.name, "every spine step has a name"
             assert step.artifact, f"step {step.name} names its artifact"
 
-    def test_spine_status_renders_in_owner_order(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_spine_status_renders_in_owner_order(self, driver: loops.RpiDriver) -> None:
         state = _at_plan(driver)
         names = [name for name, _, _ in driver.spine_status(state)]
         assert names == [step.name for step in loops.RpiDriver.SPINE]
@@ -549,9 +537,7 @@ class TestMissingPreconditions:
             use_driver.advance(state)
         assert match.lower() in str(exc_info.value).lower()
 
-    def test_satisfied_spine_advances(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_satisfied_spine_advances(self, driver: loops.RpiDriver) -> None:
         """The control: with every artifact present, the same advances
         the missing-cases refuse all succeed."""
         state = _at_research(driver)
@@ -575,11 +561,7 @@ class TestThinkingWaiver:
         assert waiver["by"] == "Luke"
         assert waiver["reason"] == reason
         # Ledger-recorded: the trail names the reason.
-        waived = [
-            e
-            for e in loop_ledger.loop_events(state.id)
-            if e.kind == "thinking_waived"
-        ]
+        waived = [e for e in loop_ledger.loop_events(state.id) if e.kind == "thinking_waived"]
         assert len(waived) == 1
         assert reason in (waived[0].detail or "")
         # decisions.md records the why, keyed as a thinking-waiver.
@@ -588,21 +570,15 @@ class TestThinkingWaiver:
         assert len(keyed) == 1
         assert keyed[0].why == reason
 
-    def test_waiver_without_reason_does_not_waive(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_waiver_without_reason_does_not_waive(self, driver: loops.RpiDriver) -> None:
         """A waiver with no reason is not a conscious decision: approval
         still demands thinking."""
         state = _at_plan(driver)
         with pytest.raises(loops.ApprovalRequired):
-            driver.approve_plan(
-                state, by="Luke", reason="explicit enough", waive_reason="  "
-            )
+            driver.approve_plan(state, by="Luke", reason="explicit enough", waive_reason="  ")
         assert not driver.thinking_satisfied(driver.load(state.id))
 
-    def test_direct_waiver_rejects_a_blank_reason(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_direct_waiver_rejects_a_blank_reason(self, driver: loops.RpiDriver) -> None:
         """The direct call is the same boundary as the CLI: a blank reason
         refuses instead of recording a why-less waiver."""
         state = _at_plan(driver)
@@ -610,9 +586,7 @@ class TestThinkingWaiver:
             driver.waive_thinking(state, by="Luke", reason="   ")
         assert not driver.thinking_satisfied(driver.load(state.id))
 
-    def test_waiver_lets_advancement_proceed(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_waiver_lets_advancement_proceed(self, driver: loops.RpiDriver) -> None:
         """Waiver + comprehension + approval: the challenge step is
         satisfied and the loop advances past plan."""
         state = _at_plan(driver)
@@ -657,9 +631,7 @@ class TestFullSpineWalk:
 
         # Step 10 (verdict): a done loop with no verdict still owes it --
         # work is ok, verdict is missing.
-        status = {
-            name: st for name, st, _ in driver.spine_status(state)
-        }
+        status = {name: st for name, st, _ in driver.spine_status(state)}
         assert status["work"] == "ok"
         assert status["verdict"] == "missing"
 
@@ -679,13 +651,9 @@ class TestFullSpineWalk:
                 detail=f"verdict: partial; loop_id: {state.id}",
             )
         )
-        status = {
-            name: st for name, st, _ in driver.spine_status(state)
-        }
+        status = {name: st for name, st, _ in driver.spine_status(state)}
         assert status["verdict"] == "ok"
-        assert all(
-            st == "ok" for st in status.values()
-        ), status
+        assert all(st == "ok" for st in status.values()), status
 
 
 class TestPrecedent:
@@ -752,14 +720,10 @@ class TestPrecedent:
         state = _at_pair_plan(driver)
         _write(driver, state, "pair-plan", PAIRING_OK)
         assert driver.check(state) == []
-        driver.record_pair_answer(
-            state, "Q1", "answer", "extract a spine module", by="Luke"
-        )
+        driver.record_pair_answer(state, "Q1", "answer", "extract a spine module", by="Luke")
         assert driver.last_precedents == []
 
-    def test_precedent_ranking_is_deterministic(
-        self, state_root: Path
-    ) -> None:
+    def test_precedent_ranking_is_deterministic(self, state_root: Path) -> None:
         """More shared keywords first, then newer first, then lower ids --
         the same inputs always give the same order.
 
@@ -825,7 +789,5 @@ class TestPrecedent:
         _write(driver, state, "pair-plan", PAIRING_OK)
         assert driver.check(state) == []
         # Does not raise; stays silent on garbage.
-        driver.record_pair_answer(
-            state, "Q1", "answer", "extract a spine module", by="Luke"
-        )
+        driver.record_pair_answer(state, "Q1", "answer", "extract a spine module", by="Luke")
         assert driver.last_precedents == []

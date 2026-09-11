@@ -154,9 +154,7 @@ class SkillDoc:
         return bool(self.purpose or self.when_to_use)
 
 
-_USE_HEADING_RE = re.compile(
-    r"(?im)^#{1,4}\s*(when to use|use this skill when|usage)\s*$"
-)
+_USE_HEADING_RE = re.compile(r"(?im)^#{1,4}\s*(when to use|use this skill when|usage)\s*$")
 _USE_LINE_RE = re.compile(
     r"(?m)^(Use this skill [^.\n]*\.?|Use when [^.\n]*\.?|Use for [^.\n]*\.?)\s*$"
 )

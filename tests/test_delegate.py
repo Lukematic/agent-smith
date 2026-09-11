@@ -93,9 +93,7 @@ def driver(project: Path, tmp_path: Path) -> loops.DelegateDriver:
 
 
 @pytest.fixture()
-def event_driver(
-    project: Path, tmp_path: Path, loop_ledger: Ledger
-) -> loops.DelegateDriver:
+def event_driver(project: Path, tmp_path: Path, loop_ledger: Ledger) -> loops.DelegateDriver:
     return loops.DelegateDriver(
         project_root=project,
         loops_dir=tmp_path / "loops",
@@ -117,8 +115,11 @@ def seeds_closed(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
         Seeds,
         "show",
         lambda self, issue_id: Issue(
-            id=issue_id, title="Split the work", status="open",
-            type="task", priority=2,
+            id=issue_id,
+            title="Split the work",
+            status="open",
+            type="task",
+            priority=2,
         ),
     )
 
@@ -164,16 +165,17 @@ class TestDelegateNew:
         assert loops.kind_of(state.id) == "delegate"
 
     def test_phase_prompts_come_from_the_delegate_skill(self) -> None:
-        assert "ownership" in loops.skill_section(
-            DELEGATE_SKILL, "Step 1 — Decompose and check ownership", "awino-delegate"
-        ).lower()
+        assert (
+            "ownership"
+            in loops.skill_section(
+                DELEGATE_SKILL, "Step 1 — Decompose and check ownership", "awino-delegate"
+            ).lower()
+        )
         assert loops.skill_section(
             DELEGATE_SKILL, "Step 6 — Verify and synthesize", "awino-delegate"
         ).strip()
 
-    def test_missing_delegate_skill_section_refuses_to_improvise(
-        self, tmp_path: Path
-    ) -> None:
+    def test_missing_delegate_skill_section_refuses_to_improvise(self, tmp_path: Path) -> None:
         empty = tmp_path / "EMPTY.md"
         empty.write_text("# nothing here\n", encoding="utf-8")
         with pytest.raises(loops.LoopError, match="refusing to invent"):
@@ -186,9 +188,7 @@ class TestDecomposeValidation:
         _write(driver, state, "decompose", DECOMPOSE_OK)
         assert driver.check(state) == []
 
-    def test_missing_decompose_artifact_names_the_path(
-        self, driver: loops.DelegateDriver
-    ) -> None:
+    def test_missing_decompose_artifact_names_the_path(self, driver: loops.DelegateDriver) -> None:
         state = driver.new("split the parser work")
         missing = driver.check(state)
         assert missing
@@ -205,21 +205,23 @@ class TestDecomposeValidation:
     def test_worker_without_files_rejected(self, driver: loops.DelegateDriver) -> None:
         state = driver.new("split the parser work")
         _write(
-            driver, state, "decompose",
+            driver,
+            state,
+            "decompose",
             "# Decompose\n\n## Assignments\n\n### alice\n\nTask: do things.\n",
         )
         missing = driver.check(state)
         assert any("alice" in item and "no files" in item for item in missing)
 
-    def test_files_list_ignores_bullet_prefixed_prose(
-        self, driver: loops.DelegateDriver
-    ) -> None:
+    def test_files_list_ignores_bullet_prefixed_prose(self, driver: loops.DelegateDriver) -> None:
         """The documented format is one bare path per line under `files:`.
         Bullet lines are prose, not ownership claims: a worker whose only
         `files:` content is bullets claims no files."""
         state = driver.new("split the parser work")
         _write(
-            driver, state, "decompose",
+            driver,
+            state,
+            "decompose",
             "# Decompose\n\n## Assignments\n\n### alice\nfiles:\n- src/a.py\n- src/b.py\n",
         )
         missing = driver.check(state)
@@ -228,7 +230,9 @@ class TestDecomposeValidation:
     def test_files_list_accepts_bare_paths(self, driver: loops.DelegateDriver) -> None:
         state = driver.new("split the parser work")
         _write(
-            driver, state, "decompose",
+            driver,
+            state,
+            "decompose",
             "# Decompose\n\n## Assignments\n\n### alice\nfiles:\nsrc/a.py\n",
         )
         assert driver.check(state) == []
@@ -240,7 +244,9 @@ class TestAssignOwnership:
     ) -> None:
         state = driver.new("split the parser work")
         _write(
-            driver, state, "decompose",
+            driver,
+            state,
+            "decompose",
             "# Decompose\n\n## Assignments\n\n"
             "### alice\nfiles:\nsrc/a.py\nsrc/b.py\n\n"
             "### bob\nfiles:\nsrc/b.py\nsrc/c.py\n",
@@ -252,12 +258,12 @@ class TestAssignOwnership:
         assert "alice" in missing[0] and "bob" in missing[0]
         assert "src/b.py" in missing[0]
 
-    def test_nonexistent_claimed_path_rejected(
-        self, driver: loops.DelegateDriver
-    ) -> None:
+    def test_nonexistent_claimed_path_rejected(self, driver: loops.DelegateDriver) -> None:
         state = driver.new("split the parser work")
         _write(
-            driver, state, "decompose",
+            driver,
+            state,
+            "decompose",
             "# Decompose\n\n## Assignments\n\n### alice\nfiles:\nsrc/does-not-exist.py\n",
         )
         assert driver.check(state) == []  # decompose shape is fine
@@ -272,12 +278,12 @@ class TestAssignOwnership:
         assert driver.check(state) == []
         assert driver.advance(state) == "execute"
 
-    def test_three_failed_assigns_lock_the_loop(
-        self, driver: loops.DelegateDriver
-    ) -> None:
+    def test_three_failed_assigns_lock_the_loop(self, driver: loops.DelegateDriver) -> None:
         state = driver.new("split the parser work")
         _write(
-            driver, state, "decompose",
+            driver,
+            state,
+            "decompose",
             "# Decompose\n\n## Assignments\n\n"
             "### alice\nfiles:\nsrc/a.py\n\n"
             "### bob\nfiles:\nsrc/a.py\n",
@@ -298,14 +304,14 @@ class TestExecuteValidation:
         _write(driver, state, "execute", EXECUTE_OK)
         assert driver.check(state) == []
 
-    def test_worker_without_done_claim_rejected(
-        self, driver: loops.DelegateDriver
-    ) -> None:
+    def test_worker_without_done_claim_rejected(self, driver: loops.DelegateDriver) -> None:
         state = _at_assign(driver)
         driver.advance(state)
         state = driver.load(state.id)
         _write(
-            driver, state, "execute",
+            driver,
+            state,
+            "execute",
             "# Execute\n\n## Results\n\n### alice\ndone: did the thing\ncheck: true\n\n"
             "### bob\n\nNo claim here.\n",
         )
@@ -314,9 +320,7 @@ class TestExecuteValidation:
 
 
 class TestControllerVerify:
-    def test_all_claims_verified_completes(
-        self, event_driver: loops.DelegateDriver
-    ) -> None:
+    def test_all_claims_verified_completes(self, event_driver: loops.DelegateDriver) -> None:
         state = _at_verify(event_driver)
         assert event_driver.advance(state) == "done"
         state = event_driver.load(state.id)
@@ -332,14 +336,14 @@ class TestControllerVerify:
         assert kinds[-1] == "loop_closed"
         assert kinds.count("phase_started") == 4  # decompose, assign, execute, verify
 
-    def test_false_done_fails_naming_the_worker(
-        self, driver: loops.DelegateDriver
-    ) -> None:
+    def test_false_done_fails_naming_the_worker(self, driver: loops.DelegateDriver) -> None:
         state = _at_assign(driver)
         driver.advance(state)
         state = driver.load(state.id)
         _write(
-            driver, state, "execute",
+            driver,
+            state,
+            "execute",
             "# Execute\n\n## Results\n\n"
             "### alice\ndone: refactored the parser\ncheck: false\n\n"
             "### bob\ndone: updated the tests\noutput: src/c.py\n",
@@ -358,9 +362,10 @@ class TestControllerVerify:
         driver.advance(state)
         state = driver.load(state.id)
         _write(
-            driver, state, "execute",
-            "# Execute\n\n## Results\n\n"
-            "### alice\ndone: did the thing\noutput: src/nope.py\n",
+            driver,
+            state,
+            "execute",
+            "# Execute\n\n## Results\n\n### alice\ndone: did the thing\noutput: src/nope.py\n",
         )
         assert driver.check(state) == []  # execute shape is fine
         driver.advance(state)
@@ -376,7 +381,9 @@ class TestControllerVerify:
         driver.advance(state)
         state = driver.load(state.id)
         _write(
-            driver, state, "execute",
+            driver,
+            state,
+            "execute",
             "# Execute\n\n## Results\n\n### alice\ndone: did the thing\noutput: src/empty.py\n",
         )
         assert driver.check(state) == []  # execute shape is fine
@@ -390,7 +397,9 @@ class TestControllerVerify:
         driver.advance(state)
         state = driver.load(state.id)
         _write(
-            driver, state, "execute",
+            driver,
+            state,
+            "execute",
             "# Execute\n\n## Results\n\n### alice\ndone: trust me\n",
         )
         assert driver.check(state) == []  # execute shape is fine
@@ -427,7 +436,9 @@ class TestControllerVerify:
         driver.advance(state)
         state = driver.load(state.id)
         _write(
-            driver, state, "execute",
+            driver,
+            state,
+            "execute",
             "# Execute\n\n## Results\n\n### alice\ndone: nope\ncheck: false\n",
         )
         assert driver.check(state) == []  # execute shape is fine
@@ -454,14 +465,36 @@ class TestDelegateCli:
 
     def test_run_delegate_prints_decompose_prompt(self, cli_env: Path) -> None:
         runner = CliRunner()
-        result = runner.invoke(loop_app, ["run", "delegate", "--task", "split it", "--skip-challenge", "--skip-reason", "test fixture"])
+        result = runner.invoke(
+            loop_app,
+            [
+                "run",
+                "delegate",
+                "--task",
+                "split it",
+                "--skip-challenge",
+                "--skip-reason",
+                "test fixture",
+            ],
+        )
         assert result.exit_code == 0, result.output
         assert "LOOP  delegate-" in result.output
         assert "phase: decompose" in result.output
 
     def test_full_delegate_flow_end_to_end(self, cli_env: Path) -> None:
         runner = CliRunner()
-        created = runner.invoke(loop_app, ["run", "delegate", "--task", "split it", "--skip-challenge", "--skip-reason", "test fixture"])
+        created = runner.invoke(
+            loop_app,
+            [
+                "run",
+                "delegate",
+                "--task",
+                "split it",
+                "--skip-challenge",
+                "--skip-reason",
+                "test fixture",
+            ],
+        )
         assert created.exit_code == 0, created.output
         decompose = cli_env / self._artifact_path(created.output)
         decompose.parent.mkdir(parents=True, exist_ok=True)
@@ -489,7 +522,18 @@ class TestDelegateCli:
 
     def test_assign_overlap_refused_at_cli(self, cli_env: Path) -> None:
         runner = CliRunner()
-        created = runner.invoke(loop_app, ["run", "delegate", "--task", "split it", "--skip-challenge", "--skip-reason", "test fixture"])
+        created = runner.invoke(
+            loop_app,
+            [
+                "run",
+                "delegate",
+                "--task",
+                "split it",
+                "--skip-challenge",
+                "--skip-reason",
+                "test fixture",
+            ],
+        )
         decompose = cli_env / self._artifact_path(created.output)
         decompose.parent.mkdir(parents=True, exist_ok=True)
         decompose.write_text(
@@ -506,7 +550,18 @@ class TestDelegateCli:
 
     def test_status_shows_delegate_kind_and_next(self, cli_env: Path) -> None:
         runner = CliRunner()
-        created = runner.invoke(loop_app, ["run", "delegate", "--task", "split it", "--skip-challenge", "--skip-reason", "test fixture"])
+        created = runner.invoke(
+            loop_app,
+            [
+                "run",
+                "delegate",
+                "--task",
+                "split it",
+                "--skip-challenge",
+                "--skip-reason",
+                "test fixture",
+            ],
+        )
         assert created.exit_code == 0, created.output
         status = runner.invoke(loop_app, ["status"])
         assert status.exit_code == 0, status.output

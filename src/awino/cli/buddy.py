@@ -115,9 +115,7 @@ def _iter_runs(ledger: Ledger) -> list[Run]:
 
 def _run_walked(run: Run) -> bool:
     """Phase evidence on a run: a checkpoint, or a skill actually used."""
-    return bool(run.checkpoints) or any(
-        event.state == "used" for event in run.skill_events
-    )
+    return bool(run.checkpoints) or any(event.state == "used" for event in run.skill_events)
 
 
 def _loop_honesty_from_runs(ledger: Ledger) -> dict[str, tuple[int, int]]:
@@ -163,10 +161,7 @@ def _loop_honesty_from_events(events: list[LoopEvent]) -> dict[str, tuple[int, i
                 first_phase[event.loop_id] = event.phase
             elif event.phase != first_phase[event.loop_id]:
                 walked.setdefault(event.loop_kind, set()).add(event.loop_id)
-    return {
-        kind: (len(ids), len(walked.get(kind, ())))
-        for kind, ids in started.items()
-    }
+    return {kind: (len(ids), len(walked.get(kind, ()))) for kind, ids in started.items()}
 
 
 def _loop_honesty(ledger: Ledger) -> tuple[dict[str, tuple[int, int]], str]:
@@ -229,9 +224,7 @@ def _auditable_loops(
         if not state_path.is_file():
             continue
         try:
-            state = loops.LoopState.from_dict(
-                json.loads(state_path.read_text(encoding="utf-8"))
-            )
+            state = loops.LoopState.from_dict(json.loads(state_path.read_text(encoding="utf-8")))
         except (OSError, ValueError, TypeError):
             continue
         skill_md = skills_dir / f"awino-{kind}" / "SKILL.md"
@@ -250,9 +243,7 @@ def _auditable_loops(
     return found
 
 
-def _receipt_findings(
-    workspace: Workspace, ledger: Ledger
-) -> list[skill_receipts.ReceiptFinding]:
+def _receipt_findings(workspace: Workspace, ledger: Ledger) -> list[skill_receipts.ReceiptFinding]:
     """Completed phases without a valid receipt for each required skill."""
     events = ledger.loop_events()
     findings: list[skill_receipts.ReceiptFinding] = []
@@ -261,9 +252,7 @@ def _receipt_findings(
     return findings
 
 
-def _rearm_receiptless_phases(
-    workspace: Workspace, ledger: Ledger
-) -> tuple[list[str], list[str]]:
+def _rearm_receiptless_phases(workspace: Workspace, ledger: Ledger) -> tuple[list[str], list[str]]:
     """Re-arm each loop's earliest receiptless completed phase.
 
     Returns (rearmed_labels, human_prompts). Re-arming sends the loop back
@@ -287,22 +276,15 @@ def _rearm_receiptless_phases(
     rearmed: list[str] = []
     prompts: list[str] = []
     for _key, (driver, state, findings) in sorted(by_loop.items()):
-        earliest = min(
-            findings, key=lambda f: driver.phase_order.index(f.phase)
-        )
-        reason = (
-            f"buddy --fix: re-running the '{earliest.phase}' skill step "
-            f"({earliest.problem})"
-        )
+        earliest = min(findings, key=lambda f: driver.phase_order.index(f.phase))
+        reason = f"buddy --fix: re-running the '{earliest.phase}' skill step ({earliest.problem})"
         try:
             if state.phase == "done":
                 driver.reopen_phase(state, earliest.phase, reason)
             else:
                 driver.reenter_phase(state, earliest.phase, reason)
         except loops.LoopError as exc:
-            prompts.append(
-                f"could not re-arm loop {state.id} phase '{earliest.phase}': {exc}"
-            )
+            prompts.append(f"could not re-arm loop {state.id} phase '{earliest.phase}': {exc}")
             continue
         rearmed.append(
             f"loop {state.id} re-armed at phase '{earliest.phase}': "
@@ -511,9 +493,7 @@ def _scaffold_goals(project_root: Path) -> list[str]:
         except (OSError, yaml.YAMLError):
             data = None
         if isinstance(data, dict) and isinstance(data.get("goals"), list):
-            goals.extend(
-                str(item).strip() for item in data["goals"] if str(item).strip()
-            )
+            goals.extend(str(item).strip() for item in data["goals"] if str(item).strip())
     goals.extend(_open_seed_titles(project_root))
     return goals
 
@@ -605,9 +585,7 @@ def _unrecorded_decisions(
     return out
 
 
-def _stale_fact_refs(
-    state_root: Path, facts: working_memory.Facts
-) -> list[tuple[str, str, str]]:
+def _stale_fact_refs(state_root: Path, facts: working_memory.Facts) -> list[tuple[str, str, str]]:
     """Superseded facts still referenced outside facts.md.
 
     Returns (old_id, new_id, filename) triples. The correction annotations
@@ -631,9 +609,7 @@ def _stale_fact_refs(
     return refs
 
 
-def _report_working_memory(
-    state_root: Path, events: list[LoopEvent]
-) -> None:
+def _report_working_memory(state_root: Path, events: list[LoopEvent]) -> None:
     _echo("WORKING MEMORY  (checklist, facts, decisions, user model)")
     # Checklist: the now.
     checklist = working_memory.Checklist(state_root)
@@ -649,8 +625,10 @@ def _report_working_memory(
             )
         blocked = checklist.blocked_items()
         for item in blocked:
-            _echo(f"  BLOCKED  {item['id']}: {item['loop_id']} -- "
-                  f"{item.get('blocker') or '(no reason recorded)'}")
+            _echo(
+                f"  BLOCKED  {item['id']}: {item['loop_id']} -- "
+                f"{item.get('blocker') or '(no reason recorded)'}"
+            )
         stale = _stale_checklist_prompt(checklist)
         if stale is not None:
             _echo(f"  STALE  {stale}")
@@ -664,8 +642,7 @@ def _report_working_memory(
     week = [e for e in entries if _entry_within_week(e.at)]
     why_less = decisions.why_less()
     _echo(
-        f"  decisions: {len(entries)} recorded "
-        f"({len(week)} this week, {len(why_less)} with no why)"
+        f"  decisions: {len(entries)} recorded ({len(week)} this week, {len(why_less)} with no why)"
     )
     for entry in why_less:
         _echo(f"  WHY_MISSING  {entry.id} '{entry.decision[:60]}' has no recorded why")
@@ -681,22 +658,16 @@ def _report_working_memory(
     facts = working_memory.Facts(state_root)
     fact_entries = facts.entries()
     superseded = [f for f in fact_entries if f.superseded_by]
-    _echo(
-        f"  facts: {len(fact_entries)} recorded ({len(superseded)} superseded)"
-    )
+    _echo(f"  facts: {len(fact_entries)} recorded ({len(superseded)} superseded)")
     for old_id, new_id, name in _stale_fact_refs(state_root, facts):
-        _echo(
-            f"  STALE_REF  {old_id} superseded by {new_id} but still "
-            f"referenced in {name}"
-        )
+        _echo(f"  STALE_REF  {old_id} superseded by {new_id} but still referenced in {name}")
     # User model: the who. Buddy reads it to calibrate, and says so.
     model = working_memory.UserModel.load()
     calibration = working_memory.UserModel.calibration_line(model)
     if calibration:
         _echo(f"  user model: {calibration}")
     else:
-        _echo("  user model: no learned preferences yet "
-              "(~/.awino/profile.yaml)")
+        _echo("  user model: no learned preferences yet (~/.awino/profile.yaml)")
 
 
 def _entry_within_week(at: str) -> bool:
@@ -760,9 +731,7 @@ def _session_groups(state_root: Path) -> dict[str, list[Path]]:
     return groups
 
 
-def _stale_sessions(
-    state_root: Path, *, now: float | None = None
-) -> list[HygieneFinding]:
+def _stale_sessions(state_root: Path, *, now: float | None = None) -> list[HygieneFinding]:
     """Sessions neither active nor touched in _SESSION_STALE_DAYS."""
     now_epoch = now if now is not None else datetime.now(UTC).timestamp()
     cutoff = now_epoch - _SESSION_STALE_DAYS * 86400
@@ -791,9 +760,7 @@ def _stale_sessions(
     return out
 
 
-def _loop_state_findings(
-    state_root: Path, events: list[LoopEvent]
-) -> list[HygieneFinding]:
+def _loop_state_findings(state_root: Path, events: list[LoopEvent]) -> list[HygieneFinding]:
     """Loop state files the trail never mentions, or that fail to parse."""
     out: list[HygieneFinding] = []
     loops_dir = state_root / "loops"
@@ -805,9 +772,7 @@ def _loop_state_findings(
             continue
         loop_id = child.stem
         try:
-            state = loops.LoopState.from_dict(
-                json.loads(child.read_text(encoding="utf-8"))
-            )
+            state = loops.LoopState.from_dict(json.loads(child.read_text(encoding="utf-8")))
         except (OSError, ValueError, TypeError) as exc:
             out.append(
                 HygieneFinding(
@@ -874,9 +839,7 @@ def _unexamined_plan_findings(state_root: Path) -> list[HygieneFinding]:
         if kind != "rpi":
             continue
         try:
-            state = loops.LoopState.from_dict(
-                json.loads(child.read_text(encoding="utf-8"))
-            )
+            state = loops.LoopState.from_dict(json.loads(child.read_text(encoding="utf-8")))
         except (OSError, ValueError, TypeError):
             continue
         plan_approvals = [a for a in state.approvals if a.get("phase") == "plan"]
@@ -915,11 +878,7 @@ def _clutter_files(state_root: Path) -> list[Path]:
         if child.relative_to(state_root).parts[:1] == (_HYGIENE_ARCHIVE,):
             continue
         name = child.name
-        if (
-            name in _CLUTTER_EXACT_NAMES
-            or name.endswith(_CLUTTER_SUFFIXES)
-            or name.endswith("~")
-        ):
+        if name in _CLUTTER_EXACT_NAMES or name.endswith(_CLUTTER_SUFFIXES) or name.endswith("~"):
             out.append(child)
     return out
 
@@ -1028,9 +987,7 @@ def _report_hygiene(state_root: Path, ledger: Ledger) -> None:
         _echo(f"    at {finding.path}")
 
 
-def _archive_stale_session(
-    state_root: Path, ledger: Ledger, finding: HygieneFinding
-) -> str:
+def _archive_stale_session(state_root: Path, ledger: Ledger, finding: HygieneFinding) -> str:
     """Move a stale session's files to archive/sessions/ with a ledger note.
 
     Archive, never delete: the files survive the tidy, and the ledger note
@@ -1063,8 +1020,7 @@ def _archive_stale_session(
         )
     )
     return (
-        f"archived stale session {finding.target} ({moved} file(s)) "
-        f"to {_HYGIENE_ARCHIVE}/sessions/"
+        f"archived stale session {finding.target} ({moved} file(s)) to {_HYGIENE_ARCHIVE}/sessions/"
     )
 
 
@@ -1149,9 +1105,7 @@ def _report_repo_hygiene(project_root: Path) -> None:
         _echo(f"  DOCS_COVERAGE  'awino {command}' has no documentation in docs/")
     catalog = _skill_catalog()
     undocumented_skills = [
-        skill.name
-        for skill in catalog.skills
-        if not skill_catalog.describe(skill).documented
+        skill.name for skill in catalog.skills if not skill_catalog.describe(skill).documented
     ]
     for name in undocumented_skills:
         _echo(f"  DOCS_COVERAGE  skill '{name}': SKILL.md lacks purpose/when-to-use")
@@ -1165,9 +1119,7 @@ def _report_repo_hygiene(project_root: Path) -> None:
     _echo("")
 
 
-def _unknown_loop_verdicts(
-    state_root: Path, events: list[LoopEvent]
-) -> list[LoopEvent]:
+def _unknown_loop_verdicts(state_root: Path, events: list[LoopEvent]) -> list[LoopEvent]:
     """outcome_verdict events for loops that never existed on the trail.
 
     A verdict is real when its loop has a state file or at least a
@@ -1230,9 +1182,7 @@ def _run_report() -> None:
             for verdict, n in counts.items():
                 total[verdict] += n
         _echo(f"  project {workspace.project.name}: {_counts_line(total)}")
-        order = [loop for loop in LOOPS if loop in per_kind] + sorted(
-            set(per_kind) - set(LOOPS)
-        )
+        order = [loop for loop in LOOPS if loop in per_kind] + sorted(set(per_kind) - set(LOOPS))
         for kind in order:
             _echo(f"  {kind}: {_counts_line(per_kind[kind])}")
     for loop_id, kind in unmeasured:
@@ -1248,9 +1198,7 @@ def _run_report() -> None:
         fired = probe.fired if probe.fired is not None else "none (advisor default)"
         mark = "ok " if (probe.fired or "advisor") == probe.expected else "MISS"
         _echo(f"  [{mark}] {probe.expected:<16} <- {probe.sample!r} -> {fired}")
-    misses = [
-        probe for probe in probes if (probe.fired or "advisor") != probe.expected
-    ]
+    misses = [probe for probe in probes if (probe.fired or "advisor") != probe.expected]
     if misses:
         _echo(f"  WARNING  {len(misses)} sample(s) did not fire the expected stance")
     _echo("")
@@ -1262,9 +1210,7 @@ def _run_report() -> None:
     if not honesty:
         _echo("  none found (no runs, no loop events)")
     else:
-        order = [loop for loop in LOOPS if loop in honesty] + sorted(
-            set(honesty) - set(LOOPS)
-        )
+        order = [loop for loop in LOOPS if loop in honesty] + sorted(set(honesty) - set(LOOPS))
         for loop in order:
             declared, evidenced = honesty[loop]
             _echo(f"  declared {loop}: {declared}, with phase evidence: {evidenced}")
@@ -1350,9 +1296,7 @@ def _run_report() -> None:
     # 9. unexamined plans: approved long ago with no thinking-mode output
     # and no waiver. Buddy flags them and prompts the exact command to run
     # one retroactively -- it never invents the thinking itself.
-    _echo(
-        "UNEXAMINED PLANS  (approved long ago, no thinking-mode output, no waiver)"
-    )
+    _echo("UNEXAMINED PLANS  (approved long ago, no thinking-mode output, no waiver)")
     unexamined = _unexamined_plan_findings(workspace.state_root)
     if not unexamined:
         _echo("  none found")
@@ -1463,9 +1407,7 @@ _FIX_HELP = "Apply the mechanical correction for each failing check."
 
 # stance name -> the exact regex string from src/awino/stance.py _RULES.
 # Advisor has no entry: it is the default when no rule fires.
-_STANCE_PATTERNS: dict[str, str] = {
-    name: pattern.pattern for name, pattern in stance._RULES
-}
+_STANCE_PATTERNS: dict[str, str] = {name: pattern.pattern for name, pattern in stance._RULES}
 
 # The loop driver records the original task on loop_started as "task: ...".
 _TASK_IN_DETAIL = re.compile(r"^task:\s*(.+)$", re.S)
@@ -1534,8 +1476,7 @@ def _mark_unwalked(ledger: Ledger, loop_id: str, loop_kind: str, source: str) ->
             kind="loop_started",
             at=datetime.now(UTC).isoformat(),
             detail=(
-                f"{_UNWALKED_MARKER}: declared via {source} "
-                "with no phase evidence; not walked"
+                f"{_UNWALKED_MARKER}: declared via {source} with no phase evidence; not walked"
             ),
         )
     )
@@ -1601,10 +1542,7 @@ def _run_fix() -> None:
         _echo("  every closed loop has a verdict (no correction needed)")
     for loop_id, kind in unmeasured:
         _echo(f"  UNMEASURED  outcome unmeasured: loop {loop_id} (kind {kind})")
-        _echo(
-            f"  PROMPT  run: awino loop close --id {loop_id} "
-            "--verdict yes|partial|no"
-        )
+        _echo(f"  PROMPT  run: awino loop close --id {loop_id} --verdict yes|partial|no")
         need_human += 1
     _echo("")
 
@@ -1617,10 +1555,7 @@ def _run_fix() -> None:
     for probe in misses:
         regex = _STANCE_PATTERNS.get(probe.expected)
         if regex is None:
-            expectation = (
-                "no pattern fires "
-                "(advisor is the default when no _RULES entry matches)"
-            )
+            expectation = "no pattern fires (advisor is the default when no _RULES entry matches)"
         else:
             expectation = f"expected pattern r'{regex}' (src/awino/stance.py _RULES)"
         _echo(f"  MISS {probe.expected} <- {probe.sample!r} : {expectation}")
@@ -1635,9 +1570,7 @@ def _run_fix() -> None:
     # then print its exact redo command.
     _echo("LOOP HONESTY")
     if events:
-        order = [loop for loop in LOOPS if loop in unwalked] + sorted(
-            set(unwalked) - set(LOOPS)
-        )
+        order = [loop for loop in LOOPS if loop in unwalked] + sorted(set(unwalked) - set(LOOPS))
         if not any(unwalked.values()):
             _echo("  no declared-but-unwalked loops (no correction needed)")
         for loop_kind in order:
@@ -1713,10 +1646,7 @@ def _run_fix() -> None:
     # 4. mission freshness: refresh the same way the playbook does.
     _echo("MISSION FRESHNESS")
     if fresh.mission_path is None:
-        _echo(
-            "  ACTION  write the mission line: "
-            'awino mission --set "objective=<one sentence>"'
-        )
+        _echo('  ACTION  write the mission line: awino mission --set "objective=<one sentence>"')
         need_human += 1
     elif fresh.seeds_closed_since is not None and fresh.seeds_closed_since > 0:
         try:
@@ -1724,10 +1654,7 @@ def _run_fix() -> None:
             step_out = playbook._step_mission_refresh(ctx)
         except Exception as exc:
             _echo(f"  mission refresh failed: {exc}")
-            _echo(
-                "  ACTION  refresh by hand: "
-                'awino mission --set "objective=<one sentence>"'
-            )
+            _echo('  ACTION  refresh by hand: awino mission --set "objective=<one sentence>"')
             need_human += 1
         else:
             rendered = (
@@ -1754,11 +1681,10 @@ def _run_fix() -> None:
         goals = _scaffold_goals(project_root)
         if not goals:
             _echo(
-                "  no stated goals to scaffold from; the mission still lacks: "
-                + ", ".join(missing)
+                "  no stated goals to scaffold from; the mission still lacks: " + ", ".join(missing)
             )
             _echo(
-                '  ACTION  write the mission by hand: '
+                "  ACTION  write the mission by hand: "
                 'awino mission --set "objective=<one sentence>"'
             )
             # No count change: the freshness section already asked the human.
@@ -1766,8 +1692,7 @@ def _run_fix() -> None:
             if "objective" in missing:
                 cat.answers["objective"] = goals[0]
                 cat.source["objective"] = (
-                    "draft: scaffolded by buddy --fix from stated goals; "
-                    "human review required"
+                    "draft: scaffolded by buddy --fix from stated goals; human review required"
                 )
                 _echo(
                     f"  FIX scaffolded draft objective from stated goal: "
@@ -1781,12 +1706,9 @@ def _run_fix() -> None:
                     for goal in goals[:3]
                 ]
                 existing = cat.answers.get("exams", "").strip()
-                cat.answers["exams"] = (
-                    (existing + "\n" if existing else "") + "\n".join(drafted)
-                )
+                cat.answers["exams"] = (existing + "\n" if existing else "") + "\n".join(drafted)
                 cat.source["exams"] = (
-                    "draft: scaffolded by buddy --fix from stated goals; "
-                    "human review required"
+                    "draft: scaffolded by buddy --fix from stated goals; human review required"
                 )
                 _echo(
                     f"  FIX scaffolded draft success criteria from "
@@ -1797,7 +1719,7 @@ def _run_fix() -> None:
             applied += 1
             if "success_criteria" in missing:
                 _echo(
-                    '  ACTION  finalize the mission: '
+                    "  ACTION  finalize the mission: "
                     'awino mission --set "exams=<claim> -> <verify command>"'
                 )
                 need_human += 1
@@ -1881,8 +1803,7 @@ def _run_fix() -> None:
         elif finding.kind == "duplicate_marker":
             removed = _dedupe_markers(Path(finding.path))
             _echo(
-                f"  FIX removed {removed} duplicate session-end marker line(s) "
-                f"from {finding.path}"
+                f"  FIX removed {removed} duplicate session-end marker line(s) from {finding.path}"
             )
             applied += 1
         else:  # orphaned_loop, partial_loop: judgmental, never silent
@@ -1916,20 +1837,14 @@ def _run_fix() -> None:
             _echo("  command reference is current (no correction needed)")
         else:
             path = hygiene.write_commands_reference(docs_dir, entries)
-            _echo(
-                f"  FIX regenerated {path} from live --help "
-                f"({len(entries)} commands)"
-            )
+            _echo(f"  FIX regenerated {path} from live --help ({len(entries)} commands)")
             applied += 1
     diagnostics = hygiene.ruff_diagnostics(project_root)
     if diagnostics is None:
         _echo("  note: ruff unavailable -- dead-code pass skipped")
     else:
         for finding in hygiene.dead_code_from_ruff(diagnostics, project_root):
-            _echo(
-                f"  PROMPT  {finding.target}: {finding.detail} -- "
-                "remove it by hand when sure"
-            )
+            _echo(f"  PROMPT  {finding.target}: {finding.detail} -- remove it by hand when sure")
             need_human += 1
     _echo("")
 

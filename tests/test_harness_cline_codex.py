@@ -86,9 +86,7 @@ class TestCodexAdapter:
         assert "---\ndescription" not in rendered
         assert rendered.startswith("<!-- installed by A.W.I.N.O.")
 
-    def test_global_and_project_targets_are_detected(
-        self, fake_home: Path, project: Path
-    ) -> None:
+    def test_global_and_project_targets_are_detected(self, fake_home: Path, project: Path) -> None:
         (fake_home / ".codex").mkdir()
         found = {(t.harness, t.scope): t for t in harness.detected(project)}
         assert (Harness.CODEX, "global") in found
@@ -96,9 +94,7 @@ class TestCodexAdapter:
         assert (Harness.CODEX, "project") in found
         assert found[(Harness.CODEX, "project")].persona_path == project / "AGENTS.md"
 
-    def test_install_writes_fresh_global_agents_md(
-        self, fake_home: Path, awino_home: Path
-    ) -> None:
+    def test_install_writes_fresh_global_agents_md(self, fake_home: Path, awino_home: Path) -> None:
         (fake_home / ".codex").mkdir()
         target = Target(Harness.CODEX, fake_home / ".codex", "global")
         actions = harness.install(awino_home, target)
@@ -226,9 +222,7 @@ class TestExistingHarnessesUnaffected:
         assert Harness.CLAUDE.supports_skills is True
         assert Harness.CURSOR.supports_skills is False
 
-    def test_existing_harness_install_still_works(
-        self, fake_home: Path, awino_home: Path
-    ) -> None:
+    def test_existing_harness_install_still_works(self, fake_home: Path, awino_home: Path) -> None:
         claude_root = fake_home / ".claude"
         (claude_root / "agents").mkdir(parents=True)
         target = Target(Harness.CLAUDE, claude_root, "global")

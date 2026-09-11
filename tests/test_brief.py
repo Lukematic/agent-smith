@@ -173,9 +173,7 @@ def _brief_text(cli_runner: CliRunner) -> str:
 # ── the five sections ────────────────────────────────────────────────────
 
 
-def test_brief_renders_all_five_sections(
-    briefed_project: Path, cli_runner: CliRunner
-) -> None:
+def test_brief_renders_all_five_sections(briefed_project: Path, cli_runner: CliRunner) -> None:
     output = _brief_text(cli_runner)
     for header in ("MISSION", "DELIVERABLES", "DECISIONS", "BEYOND THE HONDA", "GAPS"):
         assert header in output, f"missing section: {header}"
@@ -191,9 +189,7 @@ def test_brief_mission_judges_each_criterion_from_verdicts(
     assert f"[unmet] {CRITERIA[2]}" in output
 
 
-def test_brief_deliverables_cite_ledger_proof(
-    briefed_project: Path, cli_runner: CliRunner
-) -> None:
+def test_brief_deliverables_cite_ledger_proof(briefed_project: Path, cli_runner: CliRunner) -> None:
     output = _brief_text(cli_runner)
     assert f"- Rebuild the search index (loop {LOOP_ID})" in output
     assert "outcome: accomplished" in output
@@ -286,8 +282,7 @@ def test_brief_names_unrecorded_opposing_case_in_gaps(
 
 def test_verdict_criteria_parsing() -> None:
     parsed = brief_mod._verdict_criteria(
-        "verdict: partial; criteria_met: a; b; criteria_unmet: c; "
-        "criteria_unjudgeable: (none)"
+        "verdict: partial; criteria_met: a; b; criteria_unmet: c; criteria_unjudgeable: (none)"
     )
     assert parsed == {"met": ["a", "b"], "unmet": ["c"], "unjudgeable": []}
 

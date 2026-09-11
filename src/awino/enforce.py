@@ -1038,8 +1038,7 @@ class Ledger:
         """Append one loop event to the ledger-level trail."""
         if event.kind not in LOOP_EVENT_KINDS:
             raise LedgerError(
-                f"unknown loop event kind {event.kind!r}; "
-                f"one of {', '.join(LOOP_EVENT_KINDS)}"
+                f"unknown loop event kind {event.kind!r}; one of {', '.join(LOOP_EVENT_KINDS)}"
             )
         if not event.at:
             event = replace(event, at=datetime.now(UTC).isoformat())
@@ -1085,9 +1084,7 @@ class Ledger:
         if not path.is_file():
             return []
         bad: list[tuple[int, str]] = []
-        for lineno, line in enumerate(
-            path.read_text(encoding="utf-8").splitlines(), 1
-        ):
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             stripped = line.strip()
             if not stripped:
                 continue

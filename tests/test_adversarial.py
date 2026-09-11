@@ -18,8 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from awino import heilmeier, loops, skill_receipts, think
-from awino import stance_verify
+from awino import heilmeier, loops, skill_receipts, stance_verify, think
 from awino.enforce import Ledger, LoopEvent
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -249,9 +248,7 @@ class TestResearchAdversarial:
 
     def test_null_bytes_rejected(self, rpi: loops.RpiDriver) -> None:
         state = _rpi_at(rpi, "research")
-        _write_artifact(
-            rpi, state.research_artifact, RESEARCH_OK + "\x00\x00binary tail"
-        )
+        _write_artifact(rpi, state.research_artifact, RESEARCH_OK + "\x00\x00binary tail")
         missing = rpi.check(state)
         assert any("null bytes" in item for item in missing)
 
@@ -259,23 +256,17 @@ class TestResearchAdversarial:
         state = _rpi_at(rpi, "research")
         # U+202E RIGHT-TO-LEFT OVERRIDE can visually reorder text so the
         # approved rendering differs from the validated bytes.
-        _write_artifact(
-            rpi, state.research_artifact, RESEARCH_OK + "\u202e hidden"
-        )
+        _write_artifact(rpi, state.research_artifact, RESEARCH_OK + "\u202e hidden")
         missing = rpi.check(state)
         assert any("bidi" in item for item in missing)
 
     def test_bidi_isolate_rejected(self, rpi: loops.RpiDriver) -> None:
         state = _rpi_at(rpi, "research")
-        _write_artifact(
-            rpi, state.research_artifact, RESEARCH_OK + "\u2066 isolated\u2069"
-        )
+        _write_artifact(rpi, state.research_artifact, RESEARCH_OK + "\u2066 isolated\u2069")
         missing = rpi.check(state)
         assert any("bidi" in item for item in missing)
 
-    def test_legitimate_international_text_passes(
-        self, rpi: loops.RpiDriver
-    ) -> None:
+    def test_legitimate_international_text_passes(self, rpi: loops.RpiDriver) -> None:
         """CJK, Arabic, Hebrew, and emoji are not hostile: only the explicit
         bidi formatting controls are refused, never the scripts themselves."""
         state = _rpi_at(rpi, "research")
@@ -287,17 +278,13 @@ class TestResearchAdversarial:
         _write_artifact(rpi, state.research_artifact, text)
         assert rpi.check(state) == []
 
-    def test_traversal_artifact_path_rejected(
-        self, rpi: loops.RpiDriver
-    ) -> None:
+    def test_traversal_artifact_path_rejected(self, rpi: loops.RpiDriver) -> None:
         state = _rpi_at(rpi, "research")
         state.research_artifact = "../../etc/evil.md"
         missing = rpi.check(state)
         assert any("escapes the project" in item for item in missing)
 
-    def test_absolute_artifact_path_rejected(
-        self, rpi: loops.RpiDriver
-    ) -> None:
+    def test_absolute_artifact_path_rejected(self, rpi: loops.RpiDriver) -> None:
         state = _rpi_at(rpi, "research")
         state.research_artifact = "/etc/evil.md"
         missing = rpi.check(state)
@@ -305,30 +292,19 @@ class TestResearchAdversarial:
 
     def test_hollow_sections_named(self, rpi: loops.RpiDriver) -> None:
         state = _rpi_at(rpi, "research")
-        text = _hollow_section(
-            RESEARCH_OK, "## Assumptions challenged", "## Angles considered"
-        )
+        text = _hollow_section(RESEARCH_OK, "## Assumptions challenged", "## Angles considered")
         _write_artifact(rpi, state.research_artifact, text)
         missing = rpi.check(state)
-        assert any(
-            "assumptions challenged" in item and "empty" in item
-            for item in missing
-        )
+        assert any("assumptions challenged" in item and "empty" in item for item in missing)
 
-    def test_hollow_section_not_double_reported(
-        self, rpi: loops.RpiDriver
-    ) -> None:
+    def test_hollow_section_not_double_reported(self, rpi: loops.RpiDriver) -> None:
         """A hollow section fails once, as empty -- the content checks that
         require section content stay silent for it."""
         state = _rpi_at(rpi, "research")
-        text = _hollow_section(
-            RESEARCH_OK, "## Assumptions challenged", "## Angles considered"
-        )
+        text = _hollow_section(RESEARCH_OK, "## Assumptions challenged", "## Angles considered")
         _write_artifact(rpi, state.research_artifact, text)
         missing = rpi.check(state)
-        assumption_failures = [
-            item for item in missing if "assumptions challenged" in item
-        ]
+        assumption_failures = [item for item in missing if "assumptions challenged" in item]
         assert len(assumption_failures) == 1
         assert "empty" in assumption_failures[0]
 
@@ -355,32 +331,23 @@ class TestPairPlanAdversarial:
 
     def test_hollow_sub_problems_named(self, rpi: loops.RpiDriver) -> None:
         state = _rpi_at(rpi, "pair-plan")
-        text = _hollow_section(
-            PAIRING_OK, "## Sub-problems", "## Candidate approaches"
-        )
+        text = _hollow_section(PAIRING_OK, "## Sub-problems", "## Candidate approaches")
         _write_artifact(rpi, state.pairing_artifact, text)
         missing = rpi.check(state)
-        assert any(
-            "sub-problems" in item and "empty" in item for item in missing
-        )
+        assert any("sub-problems" in item and "empty" in item for item in missing)
 
-    def test_traversal_artifact_path_rejected(
-        self, rpi: loops.RpiDriver
-    ) -> None:
+    def test_traversal_artifact_path_rejected(self, rpi: loops.RpiDriver) -> None:
         state = _rpi_at(rpi, "pair-plan")
         state.pairing_artifact = "thoughts/../../evil.md"
         missing = rpi.check(state)
         assert any("escapes the project" in item for item in missing)
 
-    def test_sycophancy_inside_quote_still_rejected(
-        self, rpi: loops.RpiDriver
-    ) -> None:
+    def test_sycophancy_inside_quote_still_rejected(self, rpi: loops.RpiDriver) -> None:
         """A banned validation phrase does not become acceptable inside an
         attributed quote: the critic scans substrings, not intent."""
         failures = stance_verify.verify(
             "advisor",
-            'As the user said, "great question, let\'s dig in". '
-            "I disagree with the timeline.",
+            'As the user said, "great question, let\'s dig in". I disagree with the timeline.',
         )
         assert failures == ["no validation phrases"]
 
@@ -393,9 +360,7 @@ class TestPairPlanAdversarial:
 class TestPlanAdversarial:
     """Hostile inputs against PlanPhase.validate."""
 
-    def test_scope_traversal_rejected_with_escape_named(
-        self, rpi: loops.RpiDriver
-    ) -> None:
+    def test_scope_traversal_rejected_with_escape_named(self, rpi: loops.RpiDriver) -> None:
         """A scope path climbing out of the repo is an escape attempt, not
         a missing file: the error must say so instead of laundering the
         traversal through normalization."""
@@ -403,23 +368,16 @@ class TestPlanAdversarial:
         text = PLAN_OK.replace("`src/a.py`", "`../../etc/passwd`")
         _write_artifact(rpi, state.plan_artifact, text)
         missing = rpi.check(state)
-        assert any(
-            "escapes the project" in item and "../../etc/passwd" in item
-            for item in missing
-        )
+        assert any("escapes the project" in item and "../../etc/passwd" in item for item in missing)
 
-    def test_scope_absolute_path_rejected(
-        self, rpi: loops.RpiDriver
-    ) -> None:
+    def test_scope_absolute_path_rejected(self, rpi: loops.RpiDriver) -> None:
         state = _plan_ready_state(rpi)
         text = PLAN_OK.replace("`src/a.py`", "`/etc/passwd`")
         _write_artifact(rpi, state.plan_artifact, text)
         missing = rpi.check(state)
         assert any("escapes the project" in item for item in missing)
 
-    def test_scope_internal_dotdot_allowed(
-        self, rpi: loops.RpiDriver, project: Path
-    ) -> None:
+    def test_scope_internal_dotdot_allowed(self, rpi: loops.RpiDriver, project: Path) -> None:
         """'src/../src/a.py' normalizes inside the repo: not an escape."""
         state = _plan_ready_state(rpi)
         text = PLAN_OK.replace("`src/a.py`", "`src/../src/a.py`")
@@ -427,16 +385,13 @@ class TestPlanAdversarial:
         missing = rpi.check(state)
         assert not any("escapes the project" in item for item in missing)
 
-    def test_scope_missing_file_still_named(
-        self, rpi: loops.RpiDriver
-    ) -> None:
+    def test_scope_missing_file_still_named(self, rpi: loops.RpiDriver) -> None:
         state = _plan_ready_state(rpi)
         text = PLAN_OK.replace("`src/a.py`", "`src/does-not-exist.py`")
         _write_artifact(rpi, state.plan_artifact, text)
         missing = rpi.check(state)
         assert any(
-            "does not exist in repo" in item and "src/does-not-exist.py" in item
-            for item in missing
+            "does not exist in repo" in item and "src/does-not-exist.py" in item for item in missing
         )
 
     def test_hollow_tests_section_named(self, rpi: loops.RpiDriver) -> None:
@@ -447,21 +402,15 @@ class TestPlanAdversarial:
         )
         _write_artifact(rpi, state.plan_artifact, text)
         missing = rpi.check(state)
-        assert any(
-            "'tests'" in item and "empty" in item for item in missing
-        )
+        assert any("'tests'" in item and "empty" in item for item in missing)
 
-    def test_unknown_question_reference_rejected(
-        self, rpi: loops.RpiDriver
-    ) -> None:
+    def test_unknown_question_reference_rejected(self, rpi: loops.RpiDriver) -> None:
         """A decision citing Q9 when only Q1/Q2 were asked is untraced."""
         state = _plan_ready_state(rpi)
         text = PLAN_OK + "\n## Decisions\n- Q9 -> ship it because speed.\n"
         _write_artifact(rpi, state.plan_artifact, text)
         missing = rpi.check(state)
-        assert any(
-            "unknown question" in item and "Q9" in item for item in missing
-        )
+        assert any("unknown question" in item and "Q9" in item for item in missing)
 
     def test_null_bytes_rejected(self, rpi: loops.RpiDriver) -> None:
         state = _plan_ready_state(rpi)
@@ -475,9 +424,7 @@ class TestPlanAdversarial:
         missing = rpi.check(state)
         assert any("bidi" in item for item in missing)
 
-    def test_traversal_artifact_path_rejected(
-        self, rpi: loops.RpiDriver
-    ) -> None:
+    def test_traversal_artifact_path_rejected(self, rpi: loops.RpiDriver) -> None:
         state = _plan_ready_state(rpi)
         state.plan_artifact = "../evil.md"
         missing = rpi.check(state)
@@ -498,51 +445,30 @@ class TestDelegateAdversarial:
         )
         return state, delegate.check(state)
 
-    def test_decompose_traversal_claim_rejected(
-        self, delegate: loops.DelegateDriver
-    ) -> None:
+    def test_decompose_traversal_claim_rejected(self, delegate: loops.DelegateDriver) -> None:
         """'../../etc/passwd' is an escape attempt: the decompose phase must
         name it as such, not pass it through to assign as a normalized
         'etc/passwd' that merely fails to exist."""
-        _, missing = self._decompose(
-            delegate, "### worker-a\nfiles:\n../../etc/passwd\nsrc/a.py\n"
-        )
-        assert any(
-            "escapes the project" in item and "../../etc/passwd" in item
-            for item in missing
-        )
+        _, missing = self._decompose(delegate, "### worker-a\nfiles:\n../../etc/passwd\nsrc/a.py\n")
+        assert any("escapes the project" in item and "../../etc/passwd" in item for item in missing)
 
-    def test_decompose_absolute_claim_rejected(
-        self, delegate: loops.DelegateDriver
-    ) -> None:
-        _, missing = self._decompose(
-            delegate, "### worker-a\nfiles:\n/etc/passwd\nsrc/a.py\n"
-        )
-        assert any(
-            "escapes the project" in item and "/etc/passwd" in item
-            for item in missing
-        )
+    def test_decompose_absolute_claim_rejected(self, delegate: loops.DelegateDriver) -> None:
+        _, missing = self._decompose(delegate, "### worker-a\nfiles:\n/etc/passwd\nsrc/a.py\n")
+        assert any("escapes the project" in item and "/etc/passwd" in item for item in missing)
 
-    def test_decompose_internal_dotdot_claim_allowed(
-        self, delegate: loops.DelegateDriver
-    ) -> None:
+    def test_decompose_internal_dotdot_claim_allowed(self, delegate: loops.DelegateDriver) -> None:
         """'src/../src/a.py' normalizes inside the repo: not an escape."""
-        _, missing = self._decompose(
-            delegate, "### worker-a\nfiles:\nsrc/../src/a.py\n"
-        )
+        _, missing = self._decompose(delegate, "### worker-a\nfiles:\nsrc/../src/a.py\n")
         assert not any("escapes the project" in item for item in missing)
 
-    def test_assign_traversal_claim_rejected(
-        self, delegate: loops.DelegateDriver
-    ) -> None:
+    def test_assign_traversal_claim_rejected(self, delegate: loops.DelegateDriver) -> None:
         """The assign phase re-checks raw claims: an escape that somehow
         passed decompose still fails here, named as an escape."""
         state = delegate.new("split the work")
         _write_artifact(
             delegate,
             state.decompose_artifact,
-            "# Decompose\n\n## Assignments\n\n"
-            "### worker-a\nfiles:\n../../etc/passwd\n",
+            "# Decompose\n\n## Assignments\n\n### worker-a\nfiles:\n../../etc/passwd\n",
         )
         state.phase = "assign"
         missing = delegate.check(state)
@@ -558,43 +484,36 @@ class TestDelegateAdversarial:
         link = project / "link-out.py"
         if link.is_symlink() or link.exists():
             link.unlink()
-        link.symlink_to(outside)
+        try:
+            link.symlink_to(outside)
+        except OSError as exc:
+            pytest.skip(f"Symlinks not supported/privileged on this host: {exc}")
         state = delegate.new("split the work")
         _write_artifact(
             delegate,
             state.decompose_artifact,
-            "# Decompose\n\n## Assignments\n\n"
-            "### worker-a\nfiles:\nlink-out.py\n",
+            "# Decompose\n\n## Assignments\n\n### worker-a\nfiles:\nlink-out.py\n",
         )
         state.phase = "assign"
         missing = delegate.check(state)
         assert any(
-            "resolves outside the project" in item and "link-out.py" in item
-            for item in missing
+            "resolves outside the project" in item and "link-out.py" in item for item in missing
         )
 
-    def test_execute_traversal_artifact_path_rejected(
-        self, delegate: loops.DelegateDriver
-    ) -> None:
+    def test_execute_traversal_artifact_path_rejected(self, delegate: loops.DelegateDriver) -> None:
         state = delegate.new("split the work")
         state.phase = "execute"
         state.execute_artifact = "../../evil.md"
         missing = delegate.check(state)
         assert any("escapes the project" in item for item in missing)
 
-    def test_execute_empty_results_named(
-        self, delegate: loops.DelegateDriver
-    ) -> None:
+    def test_execute_empty_results_named(self, delegate: loops.DelegateDriver) -> None:
         """A '## Results' heading with no worker blocks is hollow."""
         state = delegate.new("split the work")
         state.phase = "execute"
-        _write_artifact(
-            delegate, state.execute_artifact, "# Execute\n\n## Results\n"
-        )
+        _write_artifact(delegate, state.execute_artifact, "# Execute\n\n## Results\n")
         missing = delegate.check(state)
-        assert any(
-            "Results" in item and "empty" in item for item in missing
-        )
+        assert any("Results" in item and "empty" in item for item in missing)
 
     def test_verify_output_symlink_escape_rejected(
         self, delegate: loops.DelegateDriver, project: Path, tmp_path: Path
@@ -607,7 +526,10 @@ class TestDelegateAdversarial:
         link = project / "deliverable.py"
         if link.is_symlink() or link.exists():
             link.unlink()
-        link.symlink_to(outside)
+        try:
+            link.symlink_to(outside)
+        except OSError as exc:
+            pytest.skip(f"Symlinks not supported/privileged on this host: {exc}")
         state = delegate.new("split the work")
         state.phase = "controller-verify"
         _write_artifact(
@@ -617,14 +539,9 @@ class TestDelegateAdversarial:
             "done: wrote the deliverable\noutput: deliverable.py\n",
         )
         missing = delegate.check(state)
-        assert any(
-            "escapes the project" in item and "deliverable.py" in item
-            for item in missing
-        )
+        assert any("escapes the project" in item and "deliverable.py" in item for item in missing)
 
-    def test_execute_null_bytes_rejected(
-        self, delegate: loops.DelegateDriver
-    ) -> None:
+    def test_execute_null_bytes_rejected(self, delegate: loops.DelegateDriver) -> None:
         state = delegate.new("split the work")
         state.phase = "execute"
         _write_artifact(delegate, state.execute_artifact, "# Execute\x00\n")
@@ -643,19 +560,13 @@ class TestRalphAdversarial:
             skill_md=RPI_SKILL,
         )
 
-    def test_attempt_traversal_artifact_path_rejected(
-        self, ralph: loops.RalphDriver
-    ) -> None:
+    def test_attempt_traversal_artifact_path_rejected(self, ralph: loops.RalphDriver) -> None:
         state = ralph.new("hammer it", check="true")
         state.phase = "attempt"
         state.ralph_artifact = "../../evil.md"
-        assert any(
-            "escapes the project" in item for item in ralph.check(state)
-        )
+        assert any("escapes the project" in item for item in ralph.check(state))
 
-    def test_attempt_null_bytes_rejected(
-        self, ralph: loops.RalphDriver
-    ) -> None:
+    def test_attempt_null_bytes_rejected(self, ralph: loops.RalphDriver) -> None:
         state = ralph.new("hammer it", check="true")
         state.phase = "attempt"
         _write_artifact(ralph, state.ralph_artifact, "x" * 300 + "\x00")
@@ -667,31 +578,23 @@ class TestRalphAdversarial:
         _write_artifact(ralph, state.ralph_artifact, "x" * 300 + "\u202e")
         assert any("bidi" in item for item in ralph.check(state))
 
-    def test_retry_traversal_artifact_path_rejected(
-        self, ralph: loops.RalphDriver
-    ) -> None:
+    def test_retry_traversal_artifact_path_rejected(self, ralph: loops.RalphDriver) -> None:
         state = ralph.new("hammer it", check="true")
         state.phase = "retry"
         state.ralph_artifact = "/etc/evil.md"
-        assert any(
-            "escapes the project" in item for item in ralph.check(state)
-        )
+        assert any("escapes the project" in item for item in ralph.check(state))
 
 
 class TestReceiptAdversarial:
     """Tampered skill receipts against LoopDriver.validate_receipt."""
 
-    def _research_with_receipt(
-        self, rpi: loops.RpiDriver
-    ) -> loops.LoopState:
+    def _research_with_receipt(self, rpi: loops.RpiDriver) -> loops.LoopState:
         state = _rpi_at(rpi, "research")
         _write_artifact(rpi, state.research_artifact, RESEARCH_OK)
         assert rpi.check(state) == []
         return state
 
-    def _receipt_file(
-        self, rpi: loops.RpiDriver, state: loops.LoopState
-    ) -> Path:
+    def _receipt_file(self, rpi: loops.RpiDriver, state: loops.LoopState) -> Path:
         path = skill_receipts.receipt_path(
             rpi._receipts_root(),
             loop_id=state.id,
@@ -701,17 +604,13 @@ class TestReceiptAdversarial:
         assert path.is_file(), "check() must have written the receipt"
         return path
 
-    def _tamper(
-        self, rpi: loops.RpiDriver, state: loops.LoopState, **fields: object
-    ) -> None:
+    def _tamper(self, rpi: loops.RpiDriver, state: loops.LoopState, **fields: object) -> None:
         path = self._receipt_file(rpi, state)
         data = json.loads(path.read_text(encoding="utf-8"))
         data.update(fields)
         path.write_text(json.dumps(data), encoding="utf-8")
 
-    def test_tampered_inner_skill_named(
-        self, rpi: loops.RpiDriver
-    ) -> None:
+    def test_tampered_inner_skill_named(self, rpi: loops.RpiDriver) -> None:
         """The receipt file is named for awino-rpi but declares awino-evil
         inside: the inner fields are checked, not just the filename."""
         state = self._research_with_receipt(rpi)
@@ -720,9 +619,7 @@ class TestReceiptAdversarial:
         assert problem is not None
         assert "tampered" in problem and "awino-evil" in problem
 
-    def test_tampered_inner_phase_named(
-        self, rpi: loops.RpiDriver
-    ) -> None:
+    def test_tampered_inner_phase_named(self, rpi: loops.RpiDriver) -> None:
         """A receipt copied from another phase (inner phase 'plan', read as
         'research') is tampering, not a valid receipt."""
         state = self._research_with_receipt(rpi)
@@ -731,22 +628,18 @@ class TestReceiptAdversarial:
         assert problem is not None
         assert "tampered" in problem
 
-    def test_output_artifact_mismatch_named(
-        self, rpi: loops.RpiDriver
-    ) -> None:
+    def test_output_artifact_mismatch_named(self, rpi: loops.RpiDriver) -> None:
         """A receipt pointing at a different artifact than the phase's own
         is refused, even when the other artifact exists."""
         state = self._research_with_receipt(rpi)
-        other = _write_artifact(rpi, "thoughts/other.md", "# other\n")
+        _write_artifact(rpi, "thoughts/other.md", "# other\n")
         self._tamper(rpi, state, output_artifact="thoughts/other.md")
         problem = rpi.validate_receipt(state, "research", "awino-rpi")
         assert problem is not None
         assert "thoughts/other.md" in problem
         assert "not the phase's output artifact" in problem
 
-    def test_output_artifact_escape_named(
-        self, rpi: loops.RpiDriver
-    ) -> None:
+    def test_output_artifact_escape_named(self, rpi: loops.RpiDriver) -> None:
         """A receipt whose declared output escapes the project fails on
         confinement. The receipt is rebound to the tampered inputs first:
         without that, the tampered artifact path alone makes the receipt
@@ -796,16 +689,12 @@ class TestReceiptAdversarial:
         assert problem is not None
         assert "malformed" in problem
 
-    def test_modified_artifact_after_receipt_fails(
-        self, rpi: loops.RpiDriver
-    ) -> None:
+    def test_modified_artifact_after_receipt_fails(self, rpi: loops.RpiDriver) -> None:
         """Editing the artifact after the receipt was written changes its
         bytes: the artifact_hash no longer matches, so the artifact is
         re-validated -- and the hostile edit is refused."""
         state = self._research_with_receipt(rpi)
-        _write_artifact(
-            rpi, state.research_artifact, RESEARCH_OK + "\x00 tampered"
-        )
+        _write_artifact(rpi, state.research_artifact, RESEARCH_OK + "\x00 tampered")
         problem = rpi.validate_receipt(state, "research", "awino-rpi")
         assert problem is not None
         assert "null bytes" in problem
@@ -842,9 +731,9 @@ class TestPremortemAdversarial:
         """'None' is not a warning sign, however it is punctuated: the
         marker's presence with a negation as its whole substance fails."""
         failures = think.validate("premortem", _premortem_text(reason))
-        assert any(
-            "no real warning signs" in item for item in failures
-        ), f"passed but should fail: {reason}"
+        assert any("no real warning signs" in item for item in failures), (
+            f"passed but should fail: {reason}"
+        )
 
     def test_real_warning_signs_pass(self) -> None:
         failures = think.validate(
@@ -892,9 +781,7 @@ class TestStanceCriticAdversarial:
             "so glad you asked about that",
         ],
     )
-    def test_banned_phrases_rejected_case_insensitive(
-        self, phrase: str
-    ) -> None:
+    def test_banned_phrases_rejected_case_insensitive(self, phrase: str) -> None:
         # A labeled disagreement keeps the advisor's other rule quiet, so
         # this test isolates the banned-phrase rule.
         failures = stance_verify.verify(
@@ -907,8 +794,7 @@ class TestStanceCriticAdversarial:
         substrings, and a banned phrase inside quotes is still the phrase."""
         failures = stance_verify.verify(
             "advisor",
-            'Quoting the user: "great question" -- now the analysis. '
-            "I disagree with the timeline.",
+            'Quoting the user: "great question" -- now the analysis. I disagree with the timeline.',
         )
         assert failures == ["no validation phrases"]
 
@@ -924,14 +810,13 @@ class TestStanceCriticAdversarial:
         assert failures == []
 
     @pytest.mark.parametrize("mode", ["premortem", "devil", "blindspot"])
-    def test_thinking_modes_carry_no_validation_phrases(
-        self, mode: str
-    ) -> None:
+    def test_thinking_modes_carry_no_validation_phrases(self, mode: str) -> None:
         """Mode outputs verified through the critic get the shared
         no-validation-phrases check composed with their structure rules:
         the banned phrase is caught whatever else the mode requires."""
         failures = stance_verify.verify(
-            mode, "Great question! " + _premortem_text("1. x. Warning signs: y.")
+            mode,
+            "Great question! " + _premortem_text("1. x. Warning signs: y.")
             if mode == "premortem"
             else "Great question, moving on.",
         )
@@ -942,9 +827,7 @@ class TestSpineAdversarial:
     """Hostile inputs against the spine checks (thinking, verdict)."""
 
     @pytest.fixture()
-    def ledger_driver(
-        self, project: Path, tmp_path: Path
-    ) -> tuple[loops.RpiDriver, Ledger]:
+    def ledger_driver(self, project: Path, tmp_path: Path) -> tuple[loops.RpiDriver, Ledger]:
         ledger = Ledger(tmp_path / "state")
         driver = loops.RpiDriver(
             project_root=project,
@@ -966,9 +849,7 @@ class TestSpineAdversarial:
         ledger.record_loop_event(
             _trail_event("rpi-00000000-0000", "outcome_verdict", "verdict=yes"),
         )
-        check = next(
-            step for step in loops.RpiDriver.SPINE if step.name == "verdict"
-        )
+        check = next(step for step in loops.RpiDriver.SPINE if step.name == "verdict")
         assert check.check(driver, state) == "outcome verdict (yes/partial/no)"
 
     def test_verdict_for_this_loop_satisfies(
@@ -979,9 +860,7 @@ class TestSpineAdversarial:
         ledger.record_loop_event(
             _trail_event(state.id, "outcome_verdict", "verdict=yes"),
         )
-        check = next(
-            step for step in loops.RpiDriver.SPINE if step.name == "verdict"
-        )
+        check = next(step for step in loops.RpiDriver.SPINE if step.name == "verdict")
         assert check.check(driver, state) is None
 
     def test_thinking_gate_reads_state_not_ledger_by_design(
@@ -996,21 +875,15 @@ class TestSpineAdversarial:
         driver, ledger = ledger_driver
         state = driver.new("real work")
         assert driver.thinking_satisfied(state) is False
-        driver.record_thinking_run(
-            state, "premortem", by="t", memory_id="D-0001"
-        )
+        driver.record_thinking_run(state, "premortem", by="t", memory_id="D-0001")
         reloaded = driver.load(state.id)
         assert driver.thinking_satisfied(reloaded) is True
         kinds = [
-            event.kind
-            for event in ledger.loop_events(state.id)
-            if event.kind == "thinking_run"
+            event.kind for event in ledger.loop_events(state.id) if event.kind == "thinking_run"
         ]
         assert kinds == ["thinking_run"]
 
-    def test_thinking_waiver_without_reason_refused(
-        self, rpi: loops.RpiDriver
-    ) -> None:
+    def test_thinking_waiver_without_reason_refused(self, rpi: loops.RpiDriver) -> None:
         state = rpi.new("real work")
         with pytest.raises(loops.LoopError, match="needs a reason"):
             rpi.waive_thinking(state, by="t", reason="   ")
@@ -1032,9 +905,7 @@ def _trail_event(loop_id: str, kind: str, detail: str = "") -> LoopEvent:
 class TestLedgerParsingAdversarial:
     """Corrupt trail lines: skipped for reading, reported for repair."""
 
-    def test_corrupt_line_skipped_but_reported(
-        self, tmp_path: Path
-    ) -> None:
+    def test_corrupt_line_skipped_but_reported(self, tmp_path: Path) -> None:
         ledger = Ledger(tmp_path / "state")
         ledger.record_loop_event(_trail_event("rpi-1", "loop_started", "ok"))
         trail = tmp_path / "state" / "loops.jsonl"
@@ -1070,9 +941,7 @@ class TestStateLoadAdversarial:
         driver.loops_dir.mkdir(parents=True, exist_ok=True)
         return driver
 
-    def test_truncated_json_names_file_and_recovery(
-        self, tmp_path: Path, project: Path
-    ) -> None:
+    def test_truncated_json_names_file_and_recovery(self, tmp_path: Path, project: Path) -> None:
         driver = self._driver(tmp_path, project)
         path = driver.loops_dir / "rpi-1-abc.json"
         path.write_text('{"id": "rpi-1-abc", "phas', encoding="utf-8")
@@ -1082,9 +951,7 @@ class TestStateLoadAdversarial:
         assert "corrupt" in message and str(path) in message
         assert "killed mid-write" in message
 
-    def test_partial_state_names_file_and_recovery(
-        self, tmp_path: Path, project: Path
-    ) -> None:
+    def test_partial_state_names_file_and_recovery(self, tmp_path: Path, project: Path) -> None:
         driver = self._driver(tmp_path, project)
         path = driver.loops_dir / "rpi-1-abc.json"
         path.write_text(
@@ -1096,23 +963,17 @@ class TestStateLoadAdversarial:
         message = str(excinfo.value)
         assert "incomplete" in message and str(path) in message
 
-    def test_traversal_loop_id_refused(
-        self, tmp_path: Path, project: Path
-    ) -> None:
+    def test_traversal_loop_id_refused(self, tmp_path: Path, project: Path) -> None:
         driver = self._driver(tmp_path, project)
         with pytest.raises(loops.LoopError, match="bad loop id"):
             driver.load("../../etc/passwd")
 
-    def test_absolute_loop_id_refused(
-        self, tmp_path: Path, project: Path
-    ) -> None:
+    def test_absolute_loop_id_refused(self, tmp_path: Path, project: Path) -> None:
         driver = self._driver(tmp_path, project)
         with pytest.raises(loops.LoopError, match="bad loop id"):
             driver.load("/etc/passwd")
 
-    def test_missing_loop_still_named(
-        self, tmp_path: Path, project: Path
-    ) -> None:
+    def test_missing_loop_still_named(self, tmp_path: Path, project: Path) -> None:
         driver = self._driver(tmp_path, project)
         with pytest.raises(loops.LoopError, match="no loop"):
             driver.load("rpi-9-missing")
@@ -1122,9 +983,7 @@ class TestMissionAdversarial:
     """Mission alignment is advisory by design: drift is flagged, never
     blocking. This pins the documented trade-off."""
 
-    def test_drift_flags_but_never_blocks(
-        self, rpi: loops.RpiDriver, project: Path
-    ) -> None:
+    def test_drift_flags_but_never_blocks(self, rpi: loops.RpiDriver, project: Path) -> None:
         # Mission goals live in .awino/MISSION.md (goal headings); the
         # catechism JSON alone carries no goal texts for the drift check.
         (project / ".awino").mkdir(parents=True, exist_ok=True)
@@ -1136,6 +995,6 @@ class TestMissionAdversarial:
         missing = rpi.check(state)
         assert missing == []
         assert rpi.last_drift, "drift must be flagged"
-        assert any(
-            "sourdough" in goal for goal in rpi.last_drift
-        ), f"flag must name the unaddressed goal: {rpi.last_drift}"
+        assert any("sourdough" in goal for goal in rpi.last_drift), (
+            f"flag must name the unaddressed goal: {rpi.last_drift}"
+        )

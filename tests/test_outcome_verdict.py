@@ -79,11 +79,7 @@ def _attach_seed(project: Path, loop_id: str, seed_id: str) -> None:
 
 
 def _verdict_event(ledger: Ledger, loop_id: str) -> LoopEvent:
-    events = [
-        event
-        for event in ledger.loop_events(loop_id)
-        if event.kind == "outcome_verdict"
-    ]
+    events = [event for event in ledger.loop_events(loop_id) if event.kind == "outcome_verdict"]
     assert len(events) == 1, f"expected one verdict event, got {len(events)}"
     return events[0]
 
@@ -142,9 +138,7 @@ def test_close_without_verdict_exits_nonzero_and_prints_the_question(
     assert "--verdict" in result.output
     # No verdict was recorded.
     assert not [
-        event
-        for event in _ledger(project).loop_events(loop_id)
-        if event.kind == "outcome_verdict"
+        event for event in _ledger(project).loop_events(loop_id) if event.kind == "outcome_verdict"
     ]
 
 
@@ -170,9 +164,7 @@ def test_close_without_seed_records_seed_none_explicitly(cli_env: Path) -> None:
     assert "goal: unstated" in result.output
 
 
-def test_close_seed_closed_already_status(
-    cli_env: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_close_seed_closed_already_status(cli_env: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The verdict event states the seed's resulting status without changing it."""
     project = cli_env
     loop_id = _run_loop(project)
@@ -341,22 +333,12 @@ def test_buddy_reports_outcome_rates_per_project_and_per_type(
     assert result.exit_code == 0, result.output
     assert "OUTCOME RATES" in result.output
     # Project totals: 4 verdicts -> 2 accomplished (50%), 1 partial (25%), 1 not (25%).
-    assert (
-        "4 verdicts: 2 accomplished (50%), 1 partial (25%), 1 not (25%)"
-        in result.output
-    )
+    assert "4 verdicts: 2 accomplished (50%), 1 partial (25%), 1 not (25%)" in result.output
     # Per loop type.
+    assert "rpi: 2 verdicts: 2 accomplished (100%), 0 partial (0%), 0 not (0%)" in result.output
+    assert "ralph: 1 verdicts: 0 accomplished (0%), 1 partial (100%), 0 not (0%)" in result.output
     assert (
-        "rpi: 2 verdicts: 2 accomplished (100%), 0 partial (0%), 0 not (0%)"
-        in result.output
-    )
-    assert (
-        "ralph: 1 verdicts: 0 accomplished (0%), 1 partial (100%), 0 not (0%)"
-        in result.output
-    )
-    assert (
-        "delegate: 1 verdicts: 0 accomplished (0%), 0 partial (0%), 1 not (100%)"
-        in result.output
+        "delegate: 1 verdicts: 0 accomplished (0%), 0 partial (0%), 1 not (100%)" in result.output
     )
 
 
@@ -382,11 +364,7 @@ def test_buddy_fix_prompts_the_exact_close_command(
     assert "outcome unmeasured" in result.output
     assert "awino loop close --id rpi-e --verdict yes|partial|no" in result.output
     # --fix never invents a verdict: no outcome_verdict event for the loop.
-    assert not [
-        event
-        for event in ledger.loop_events("rpi-e")
-        if event.kind == "outcome_verdict"
-    ]
+    assert not [event for event in ledger.loop_events("rpi-e") if event.kind == "outcome_verdict"]
 
 
 def test_buddy_outcome_rates_with_no_verdicts(

@@ -146,12 +146,18 @@ def _comprehend(driver: loops.RpiDriver, state: loops.LoopState) -> None:
     so the driver generates two probes and two suggestions; every one must
     be answered or decided, and the explanation must name both decisions."""
     driver.record_suggestion_decision(
-        state, "S1", "rejected",
-        "the phases and scope are already explicit enough to proceed", by="Luke",
+        state,
+        "S1",
+        "rejected",
+        "the phases and scope are already explicit enough to proceed",
+        by="Luke",
     )
     driver.record_suggestion_decision(
-        state, "S2", "accepted",
-        "noted: the tests section stands in as the objectives list", by="Luke",
+        state,
+        "S2",
+        "accepted",
+        "noted: the tests section stands in as the objectives list",
+        by="Luke",
     )
     driver.record_explanation(
         state,
@@ -161,17 +167,13 @@ def _comprehend(driver: loops.RpiDriver, state: loops.LoopState) -> None:
         "until verified.",
         by="Luke",
     )
-    driver.record_probe_answer(
-        state, "P1", "strangler: safer, zero downtime", by="Luke"
-    )
+    driver.record_probe_answer(state, "P1", "strangler: safer, zero downtime", by="Luke")
     driver.record_probe_answer(
         state, "P2", "zero downtime budget, flag stays until verified", by="Luke"
     )
 
 
-def _paste_comprehension_block(
-    driver: loops.RpiDriver, state: loops.LoopState
-) -> None:
+def _paste_comprehension_block(driver: loops.RpiDriver, state: loops.LoopState) -> None:
     """Paste the comprehension-check record into the plan artifact -- the
     documented workflow: once comprehension work exists in loop state, the
     plan document itself records it (the validator requires the block)."""
@@ -212,9 +214,7 @@ def ledger(state_root: Path) -> Ledger:
 
 
 @pytest.fixture()
-def driver(
-    project: Path, ledger: Ledger, state_root: Path
-) -> loops.RpiDriver:
+def driver(project: Path, ledger: Ledger, state_root: Path) -> loops.RpiDriver:
     return loops.RpiDriver(
         project_root=project,
         loops_dir=state_root / "loops",
@@ -227,14 +227,10 @@ def driver(
 
 @pytest.fixture()
 def workspace(project: Path, state_root: Path) -> SimpleNamespace:
-    return SimpleNamespace(
-        project=SimpleNamespace(root=project), state_root=state_root
-    )
+    return SimpleNamespace(project=SimpleNamespace(root=project), state_root=state_root)
 
 
-def _write(
-    driver: loops.RpiDriver, state: loops.LoopState, phase: str, text: str
-) -> None:
+def _write(driver: loops.RpiDriver, state: loops.LoopState, phase: str, text: str) -> None:
     rel = {
         "research": state.research_artifact,
         "pair-plan": state.pairing_artifact,
@@ -260,9 +256,7 @@ def _confirm_problem(driver: loops.RpiDriver, state: loops.LoopState) -> None:
     driver.confirm_problem(state, by="Luke")
 
 
-def _receipt_file(
-    state_root: Path, loop_id: str, phase: str, skill: str = "awino-rpi"
-) -> Path:
+def _receipt_file(state_root: Path, loop_id: str, phase: str, skill: str = "awino-rpi") -> Path:
     return skill_receipts.receipt_path(state_root, loop_id, phase, skill)
 
 
@@ -278,9 +272,7 @@ class TestReceiptGate:
             driver.advance(state)
         assert "awino-rpi" in str(exc_info.value)
         assert exc_info.value.phase == "research"
-        assert any(
-            "awino-rpi" in problem for problem in exc_info.value.problems
-        )
+        assert any("awino-rpi" in problem for problem in exc_info.value.problems)
 
     def test_receipt_with_missing_output_artifact_is_rejected(
         self, driver: loops.RpiDriver, state_root: Path
@@ -291,8 +283,7 @@ class TestReceiptGate:
         with pytest.raises(loops.ReceiptBlocked) as exc_info:
             driver.advance(state)
         assert any(
-            "missing output artifact" in problem
-            and state.research_artifact in problem
+            "missing output artifact" in problem and state.research_artifact in problem
             for problem in exc_info.value.problems
         )
 
@@ -303,10 +294,7 @@ class TestReceiptGate:
         _write(driver, state, "research", "too short, no evidence\n")
         with pytest.raises(loops.ReceiptBlocked) as exc_info:
             driver.advance(state)
-        assert any(
-            "fails its own validation" in problem
-            for problem in exc_info.value.problems
-        )
+        assert any("fails its own validation" in problem for problem in exc_info.value.problems)
 
     def test_unchanged_artifact_does_not_rerun_validation(
         self, driver: loops.RpiDriver, monkeypatch: pytest.MonkeyPatch
@@ -356,35 +344,25 @@ class TestReceiptGate:
         """A receipt file that exists but does not parse is invalid: it
         names the problem instead of pretending no receipt was written."""
         state = _research_done(driver)
-        _receipt_file(state_root, state.id, "research").write_text(
-            "{not json", encoding="utf-8"
-        )
+        _receipt_file(state_root, state.id, "research").write_text("{not json", encoding="utf-8")
         assert driver.skill_statuses(state, "research") == {"awino-rpi": "invalid"}
         with pytest.raises(loops.ReceiptBlocked) as exc_info:
             driver.advance(state)
         assert any(
-            "malformed" in problem and "awino-rpi" in problem
-            for problem in exc_info.value.problems
+            "malformed" in problem and "awino-rpi" in problem for problem in exc_info.value.problems
         )
 
-    def test_stale_inputs_hash_is_rejected(
-        self, driver: loops.RpiDriver, project: Path
-    ) -> None:
+    def test_stale_inputs_hash_is_rejected(self, driver: loops.RpiDriver, project: Path) -> None:
         state = _research_done(driver)
         # The mission moved after the receipt was written: the attestation
         # no longer describes the phase's actual inputs.
         heilmeier.save(
             project_state_dir(project),
-            heilmeier.Catechism(
-                {"objective": "a different objective", "exams": "x -> true"}
-            ),
+            heilmeier.Catechism({"objective": "a different objective", "exams": "x -> true"}),
         )
         with pytest.raises(loops.ReceiptBlocked) as exc_info:
             driver.advance(state)
-        assert any(
-            "stale skill receipt" in problem
-            for problem in exc_info.value.problems
-        )
+        assert any("stale skill receipt" in problem for problem in exc_info.value.problems)
 
     def test_receipt_names_phase_skill_and_inputs(
         self, driver: loops.RpiDriver, state_root: Path
@@ -398,9 +376,7 @@ class TestReceiptGate:
         assert receipt.phase == "research"
         assert receipt.output_artifact == state.research_artifact
         # version pins the skill text: content hash of SKILL.md.
-        assert receipt.version == skill_receipts.skill_version(
-            SKILL_MD.parent.parent, "awino-rpi"
-        )
+        assert receipt.version == skill_receipts.skill_version(SKILL_MD.parent.parent, "awino-rpi")
         expected = skill_receipts.inputs_hash(
             artifact_path=state.research_artifact,
             criteria_hash=driver._live_criteria_hash(),
@@ -416,28 +392,20 @@ class TestReceiptGate:
         self, driver: loops.RpiDriver, project: Path, state_root: Path
     ) -> None:
         state = _research_done(driver)
-        before = _receipt_file(state_root, state.id, "research").read_text(
-            encoding="utf-8"
-        )
+        before = _receipt_file(state_root, state.id, "research").read_text(encoding="utf-8")
         heilmeier.save(
             project_state_dir(project),
-            heilmeier.Catechism(
-                {"objective": "a different objective", "exams": "x -> true"}
-            ),
+            heilmeier.Catechism({"objective": "a different objective", "exams": "x -> true"}),
         )
         # Re-validation re-attests: the receipt is refreshed, not duplicated.
         assert driver.check(state) == []
-        after = _receipt_file(state_root, state.id, "research").read_text(
-            encoding="utf-8"
-        )
+        after = _receipt_file(state_root, state.id, "research").read_text(encoding="utf-8")
         assert before != after
         assert driver.advance(state) in ("pair-plan", "plan")
 
 
 class TestRequiredSkillsDeclaration:
-    def test_brief_without_required_skills_is_rejected(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_brief_without_required_skills_is_rejected(self, driver: loops.RpiDriver) -> None:
         state = driver.new("migrate auth")
         _write(driver, state, "research", RESEARCH_OK)
         _confirm_problem(driver, state)
@@ -446,13 +414,9 @@ class TestRequiredSkillsDeclaration:
         assert driver.check(state) == []
         assert driver.advance(state) == "pair-plan"
         missing = driver.check(state)
-        assert any(
-            "required skills" in item for item in missing
-        )
+        assert any("required skills" in item for item in missing)
 
-    def test_brief_missing_a_phase_names_it(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_brief_missing_a_phase_names_it(self, driver: loops.RpiDriver) -> None:
         state = driver.new("migrate auth")
         _write(driver, state, "research", RESEARCH_OK)
         _confirm_problem(driver, state)
@@ -461,13 +425,9 @@ class TestRequiredSkillsDeclaration:
         assert driver.check(state) == []
         assert driver.advance(state) == "pair-plan"
         missing = driver.check(state)
-        assert any(
-            "'plan'" in item and "required-skills" in item for item in missing
-        )
+        assert any("'plan'" in item and "required-skills" in item for item in missing)
 
-    def test_brief_with_unknown_skill_is_rejected(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_brief_with_unknown_skill_is_rejected(self, driver: loops.RpiDriver) -> None:
         state = driver.new("migrate auth")
         _write(driver, state, "research", RESEARCH_OK)
         _confirm_problem(driver, state)
@@ -476,14 +436,9 @@ class TestRequiredSkillsDeclaration:
         assert driver.check(state) == []
         assert driver.advance(state) == "pair-plan"
         missing = driver.check(state)
-        assert any(
-            "awino-teleport" in item and "no such skill" in item
-            for item in missing
-        )
+        assert any("awino-teleport" in item and "no such skill" in item for item in missing)
 
-    def test_declared_skills_drive_the_gate(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_declared_skills_drive_the_gate(self, driver: loops.RpiDriver) -> None:
         state = driver.new("migrate auth")
         _write(driver, state, "research", RESEARCH_OK)
         _confirm_problem(driver, state)
@@ -494,9 +449,7 @@ class TestRequiredSkillsDeclaration:
         # Machine-check phases need no receipts.
         assert driver.required_skills(state, "implement") == []
 
-    def test_project_local_skill_is_known(
-        self, driver: loops.RpiDriver, project: Path
-    ) -> None:
+    def test_project_local_skill_is_known(self, driver: loops.RpiDriver, project: Path) -> None:
         """A skill the project added under <project>/skills/ is real: the
         brief validator must not reject it as invented."""
         local = project / "skills" / "awino-local"
@@ -550,9 +503,7 @@ class TestFullLoop:
 
         # One skill_receipt ledger event per artifact phase.
         kinds = [
-            event.kind
-            for event in ledger.loop_events(state.id)
-            if event.kind == "skill_receipt"
+            event.kind for event in ledger.loop_events(state.id) if event.kind == "skill_receipt"
         ]
         assert len(kinds) == 3
 

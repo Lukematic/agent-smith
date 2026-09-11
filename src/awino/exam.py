@@ -136,7 +136,7 @@ def run_exam(keep: bool = False) -> list[ProbeResult]:
                 ProbeResult(probe.name, fired, line.strip()[:140] or output.strip()[-140:])
             )
         # skill-in-prompt: inspect the floor prompt the exam wrote
-        prompts = list(project_state_dir(root) / "assignments".glob("*.md"))
+        prompts = list((project_state_dir(root) / "assignments").glob("*.md"))
         text = prompts[0].read_text(encoding="utf-8") if prompts else ""
         results.append(
             ProbeResult(
@@ -147,7 +147,9 @@ def run_exam(keep: bool = False) -> list[ProbeResult]:
         )
         results.append(
             ProbeResult(
-                "intent.persisted", project_state_dir(root) / "intent.json".is_file(), "state/intent.json"
+                "intent.persisted",
+                (project_state_dir(root) / "intent.json").is_file(),
+                "state/intent.json",
             )
         )
     finally:

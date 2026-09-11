@@ -246,6 +246,11 @@ def project_env(project: Path, *, base: dict[str, str] | None = None) -> dict[st
     if scripts.is_dir():
         env["VIRTUAL_ENV"] = str(venv)
         parts.insert(0, str(scripts))
+    elif inherited:
+        fallback_scripts = Path(inherited) / ("Scripts" if os.name == "nt" else "bin")
+        if fallback_scripts.is_dir():
+            env["VIRTUAL_ENV"] = inherited
+            parts.insert(0, str(fallback_scripts))
     env["PATH"] = os.pathsep.join(parts)
     return env
 

@@ -214,9 +214,7 @@ class TestStaleInstallUpgradesEndToEnd:
             encoding="utf-8",
         )
         lesson = awino_dir / "memory" / "lessons.md"
-        lesson.write_text(
-            "- [2026-09-11] stale installs must upgrade cleanly\n", encoding="utf-8"
-        )
+        lesson.write_text("- [2026-09-11] stale installs must upgrade cleanly\n", encoding="utf-8")
         run = Ledger(awino_dir).open(
             TaskClass.RESEARCH, objective="probe run that must survive upgrade"
         )

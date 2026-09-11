@@ -104,8 +104,14 @@ MODES: tuple[Mode, ...] = (
             ("simple explanation", ("simple explanation", "explain simply", "plain language")),
             ("eli5", ("eli5", "explain like i'm five", "twelve-year-old", "for a child")),
             ("diagram", ("diagram", "variable map", "relationship diagram", "boxes and arrows")),
-            ("where it breaks", ("where it breaks", "where the explanation breaks", "gaps", "shaky")),
-            ("self-check", ("self-check", "self check", "test yourself", "check your understanding")),
+            (
+                "where it breaks",
+                ("where it breaks", "where the explanation breaks", "gaps", "shaky"),
+            ),
+            (
+                "self-check",
+                ("self-check", "self check", "test yourself", "check your understanding"),
+            ),
         ),
     ),
     Mode(
@@ -184,7 +190,10 @@ MODES: tuple[Mode, ...] = (
             "frightening, and useless."
         ),
         (
-            ("failure reasons", ("failure reasons", "failure reason", "why it failed", "reasons it failed")),
+            (
+                "failure reasons",
+                ("failure reasons", "failure reason", "why it failed", "reasons it failed"),
+            ),
             ("the tripwire", ("tripwire", "metric you will watch", "watch", "threshold")),
         ),
     ),
@@ -200,7 +209,7 @@ MODES: tuple[Mode, ...] = (
             "\n"
             "## The answer\n"
             "Answer it straight. No hedging, no reframing it into a safer\n"
-            "question. If the honest answer is \"I don't know,\" say what you\n"
+            'question. If the honest answer is "I don\'t know," say what you\n'
             "would need to find out."
         ),
         (
@@ -270,9 +279,7 @@ MODES: tuple[Mode, ...] = (
             "  -- a way of seeing the problem where the assumption doesn't\n"
             "  apply."
         ),
-        (
-            ("assumptions", ("assumptions",)),
-        ),
+        (("assumptions", ("assumptions",)),),
     ),
     Mode(
         "simplify",
@@ -297,7 +304,7 @@ MODES: tuple[Mode, ...] = (
             "\n"
             "## Solution using only these\n"
             "Solve the problem using ONLY the variables named above -- say\n"
-            "so explicitly (\"using only these variables\"). If the solution\n"
+            'so explicitly ("using only these variables"). If the solution\n'
             "needs something you threw away, the variable set was wrong:\n"
             "revise it, don't smuggle extras in."
         ),
@@ -405,9 +412,7 @@ _REFRAME_RE = re.compile(r"(?i)\b(refram\w*|new frame|instead think|rather think
 _INVISIBILITY_RE = re.compile(
     r"(?i)\b(invisible because|why (it|this) was invisible|missed because|couldn'?t see|blind to|never thought to check)\b"
 )
-_ONLY_MARKER_RE = re.compile(
-    r"(?i)\b(using only|only these|nothing else|no other variables?)\b"
-)
+_ONLY_MARKER_RE = re.compile(r"(?i)\b(using only|only these|nothing else|no other variables?)\b")
 # The teaching side: feynman and simplify must draw the core variables and
 # their relationships, not just describe them. A diagram is boxes and
 # arrows -- a mermaid block, an A --> B relationship line, or box-drawing.
@@ -498,9 +503,7 @@ def _require_sections(mode: Mode, text: str) -> tuple[list[str], dict[str, str]]
     return missing, bodies
 
 
-def _validate_teaching(
-    mode_name: str, bodies: dict[str, str], missing: list[str]
-) -> None:
+def _validate_teaching(mode_name: str, bodies: dict[str, str], missing: list[str]) -> None:
     """The teaching side, shared by feynman and simplify: an ELI5 section
     (plain language a smart twelve-year-old follows) and a diagram section
     that actually draws the variables and their relationships. Missing
@@ -527,8 +530,7 @@ def _validate_blindspot(_mode: Mode, text: str) -> list[str]:
         for i, entry in enumerate(_entries(bodies["blind spots"]), 1):
             if not _INVISIBILITY_RE.search(entry):
                 missing.append(
-                    f"blind spot {i} ('{_entry_head(entry)}') does not say "
-                    "why it was invisible"
+                    f"blind spot {i} ('{_entry_head(entry)}') does not say why it was invisible"
                 )
     return missing
 
@@ -567,9 +569,7 @@ _VACUOUS_WARNING_RE = re.compile(
     r"|no warning signs?|no early warnings?)"
     r"(\s+(whatsoever|at all|known|identified|yet))?[.,;!\s]*$"
 )
-_TRAILING_NEGATION_RE = re.compile(
-    r"(?i)\bno\s+(warning signs?|early warnings?)\s*[.,;!]*$"
-)
+_TRAILING_NEGATION_RE = re.compile(r"(?i)\bno\s+(warning signs?|early warnings?)\s*[.,;!]*$")
 
 
 def _validate_premortem(_mode: Mode, text: str) -> list[str]:
@@ -577,18 +577,14 @@ def _validate_premortem(_mode: Mode, text: str) -> list[str]:
     body = bodies.get("failure reasons", "")
     entries = _entries(body)
     if len(entries) < 3:
-        missing.append(
-            f"premortem names {len(entries)} failure reasons; at least 3 required"
-        )
+        missing.append(f"premortem names {len(entries)} failure reasons; at least 3 required")
     for i, entry in enumerate(entries, 1):
         if not _WARNING_SIGN_RE.search(entry):
-            missing.append(
-                f"failure reason {i} ('{_entry_head(entry)}') has no warning signs"
-            )
+            missing.append(f"failure reason {i} ('{_entry_head(entry)}') has no warning signs")
             continue
         real_sign = False
         for match in _WARNING_SIGN_RE.finditer(entry):
-            tail = re.sub(r"^[\s:—–-]+", "", entry[match.end() :].strip())
+            tail = re.sub(r"^[\s:—\u2013-]+", "", entry[match.end() :].strip())
             if _VACUOUS_WARNING_RE.match(tail):
                 continue  # this marker says nothing; maybe another one does
             # A marker followed only by punctuation is a trailing negation
@@ -613,9 +609,7 @@ def _validate_premortem(_mode: Mode, text: str) -> list[str]:
     return missing
 
 
-_ACTION_WORDS_RE = re.compile(
-    r"(?i)\b(buy|sell|go ahead|ship|launch|approve|invest|trade)\b"
-)
+_ACTION_WORDS_RE = re.compile(r"(?i)\b(buy|sell|go ahead|ship|launch|approve|invest|trade)\b")
 _DIGIT_RE = re.compile(r"\d")
 
 
@@ -626,9 +620,7 @@ def _validate_recommend(_mode: Mode, text: str) -> list[str]:
     missing, bodies = _require_sections(_mode, text)
     evidence = bodies.get("the evidence", "")
     if evidence and not _DIGIT_RE.search(evidence):
-        missing.append(
-            "the evidence section names no numbers: no numbers means no evidence"
-        )
+        missing.append("the evidence section names no numbers: no numbers means no evidence")
     call = bodies.get("the recommendation", "")
     edge = bodies.get("the edge", "")
     if call and _ACTION_WORDS_RE.search(call) and not _DIGIT_RE.search(edge):
@@ -682,9 +674,7 @@ def _validate_simplify(_mode: Mode, text: str) -> list[str]:
     missing, bodies = _require_sections(_mode, text)
     entries = _entries(bodies.get("minimal variables", ""))
     if not missing and len(entries) < 2:
-        missing.append(
-            f"simplify names {len(entries)} minimal variables; at least 2 required"
-        )
+        missing.append(f"simplify names {len(entries)} minimal variables; at least 2 required")
     solution = bodies.get("solution using only these", "")
     if solution and not _ONLY_MARKER_RE.search(solution):
         missing.append(
@@ -773,10 +763,7 @@ def _summarize(mode_name: str, text: str) -> str:
     if mode_name == "premortem":
         entries = _entries(bodies.get("failure reasons", ""))
         top = _entry_head(entries[0]) if entries else "(none)"
-        return (
-            f"{len(entries)} failure reasons named, each with warning signs. "
-            f"Top risk: {top}."
-        )
+        return f"{len(entries)} failure reasons named, each with warning signs. Top risk: {top}."
     if mode_name == "assumption-destroyer":
         entries = _entries(bodies.get("assumptions", ""))
         return f"{len(entries)} assumptions named, each inverted and reframed."
@@ -795,9 +782,7 @@ def _summarize(mode_name: str, text: str) -> str:
     return f"Thinking recorded ({mode_name}): {first}."
 
 
-def record_insight(
-    mode_name: str, text: str, state_root: Path, source: str
-) -> tuple[str, str]:
+def record_insight(mode_name: str, text: str, state_root: Path, source: str) -> tuple[str, str]:
     """Validate a mode's output and write its insights to working memory.
 
     Returns (memory filename, entry id). Raises ThinkError naming the missing

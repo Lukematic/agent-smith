@@ -46,11 +46,34 @@ def migrate_legacy_dir(old: Path, new: Path) -> Path:
     ``.awino`` wins for reads and writes; the old directory is never deleted
     or merged silently, because guessing at a merge could destroy user data.
 
-    Returns ``new`` in all cases so callers have one canonical path.
+    Returns ``new`` if migration succeeded or ``.awino`` already existed,
+    or ``old`` if migration failed, so callers have a working path.
     """
     if old.is_dir() and not new.exists():
-        old.rename(new)
-    return new
+        import shutil
+        import time
+
+        for attempt in range(5):
+            try:
+                old.rename(new)
+                break
+            except OSError:
+                if attempt < 4:
+                    time.sleep(0.05 * (attempt + 1))
+                else:
+                    try:
+                        shutil.move(str(old), str(new))
+                    except OSError:
+                        return old
+    return new if new.exists() or not old.exists() else old
+
+
+def _user_home() -> Path:
+    """Resolve the user's home directory portably across POSIX and Windows."""
+    env_home = os.environ.get("HOME") or os.environ.get("USERPROFILE")
+    if env_home:
+        return Path(env_home).expanduser().resolve()
+    return Path.home()
 
 
 def project_state_dir(project_root: Path) -> Path:
@@ -64,7 +87,8 @@ def project_state_dir(project_root: Path) -> Path:
 
 def user_config_dir() -> Path:
     """The per-user config directory, migrating ``~/.smith`` to ``~/.awino`` once."""
-    return migrate_legacy_dir(Path.home() / LEGACY_STATE_DIR, Path.home() / STATE_DIR)
+    home = _user_home()
+    return migrate_legacy_dir(home / LEGACY_STATE_DIR, home / STATE_DIR)
 
 
 @dataclass(frozen=True)

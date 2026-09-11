@@ -163,9 +163,7 @@ def driver(project: Path, tmp_path: Path) -> loops.RpiDriver:
 
 
 @pytest.fixture()
-def event_driver(
-    project: Path, tmp_path: Path, loop_ledger: Ledger
-) -> loops.RpiDriver:
+def event_driver(project: Path, tmp_path: Path, loop_ledger: Ledger) -> loops.RpiDriver:
     return loops.RpiDriver(
         project_root=project,
         loops_dir=tmp_path / "loops",
@@ -234,7 +232,9 @@ class TestPairBriefValidation:
         _write(driver, state, "research", RESEARCH_OK)
         _confirm_problem(driver, state)
         _write(
-            driver, state, "pair-plan",
+            driver,
+            state,
+            "pair-plan",
             BRIEF_OK.replace("## Sub-problems", "## Background"),
         )
         assert driver.check(state) == []
@@ -270,7 +270,9 @@ class TestPairBriefValidation:
         _write(driver, state, "research", RESEARCH_OK)
         _confirm_problem(driver, state)
         _write(
-            driver, state, "pair-plan",
+            driver,
+            state,
+            "pair-plan",
             BRIEF_OK.replace("Q1:", "Question one:").replace("Q2:", "Question two:"),
         )
         assert driver.check(state) == []
@@ -293,8 +295,7 @@ class TestPairingQuestions:
         state = _at_pair_plan(driver)
         lines = driver.describe_pairing(state)
         assert any(
-            "Q1: Which approach do you prefer, big bang or strangler?" in line
-            for line in lines
+            "Q1: Which approach do you prefer, big bang or strangler?" in line for line in lines
         )
 
     def test_unanswered_lists_all_initially(self, driver: loops.RpiDriver) -> None:
@@ -340,9 +341,7 @@ class TestPairAnswers:
 
 
 class TestPairingGate:
-    def test_cannot_advance_with_unanswered_questions(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_cannot_advance_with_unanswered_questions(self, driver: loops.RpiDriver) -> None:
         state = _at_pair_plan(driver)
         driver.record_pair_answer(state, "Q1", "answer", "strangler")
         with pytest.raises(loops.PairingIncomplete) as exc_info:
@@ -350,18 +349,14 @@ class TestPairingGate:
         assert exc_info.value.unanswered == ["Q2"]
         assert "Q2" in str(exc_info.value)
 
-    def test_advance_allowed_when_all_answered(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_advance_allowed_when_all_answered(self, driver: loops.RpiDriver) -> None:
         state = _at_pair_plan(driver)
         driver.record_pair_answer(state, "Q1", "answer", "strangler")
         driver.record_pair_answer(state, "Q2", "default", "zero downtime assumed")
         assert driver.check(state) == []
         assert driver.advance(state) == "plan"
 
-    def test_plan_without_decisions_section_fails(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_plan_without_decisions_section_fails(self, driver: loops.RpiDriver) -> None:
         """The decision trace is unconditional now that pair-planning is a
         mandatory spine step: a plan with no Decisions section fails
         validation even when every pairing question was answered."""
@@ -372,12 +367,12 @@ class TestPairingGate:
         assert driver.advance(state) == "plan"
         state = driver.load(state.id)
         plan_without_decisions = "\n".join(
-            line for line in PLAN_OK.splitlines()
-            if not line.startswith("## Decisions")
+            line for line in PLAN_OK.splitlines() if not line.startswith("## Decisions")
         )
         # Remove the decision bullets too (they were under ## Decisions).
         plan_without_decisions = "\n".join(
-            line for line in plan_without_decisions.splitlines()
+            line
+            for line in plan_without_decisions.splitlines()
             if "Q1" not in line and "Q2" not in line
         )
         _write(driver, state, "plan", plan_without_decisions)
@@ -394,9 +389,7 @@ class TestPlanDecisionTrace:
         assert driver.advance(state) == "plan"
         return driver.load(state.id)
 
-    def test_plan_prompt_carries_human_decisions(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_plan_prompt_carries_human_decisions(self, driver: loops.RpiDriver) -> None:
         state = self._at_plan_answered(driver)
         prompt = driver.prompt_block(state, "plan")
         assert "Human decisions so far" in prompt
@@ -423,9 +416,7 @@ class TestPlanDecisionTrace:
         missing = driver.check(state)
         assert any("unknown question 'Q9'" in item for item in missing)
 
-    def test_explicit_default_with_reason_passes(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_explicit_default_with_reason_passes(self, driver: loops.RpiDriver) -> None:
         state = self._at_plan_answered(driver)
         plan = PLAN_OK + "- Use Postgres (default: the team already runs it).\n"
         _write(driver, state, "plan", plan)
@@ -433,9 +424,7 @@ class TestPlanDecisionTrace:
 
 
 class TestPairPlanBack:
-    def test_back_from_plan_to_pair_plan_allowed(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_back_from_plan_to_pair_plan_allowed(self, driver: loops.RpiDriver) -> None:
         state = _at_pair_plan(driver)
         driver.record_pair_answer(state, "Q1", "answer", "strangler")
         driver.record_pair_answer(state, "Q2", "answer", "zero")
@@ -482,21 +471,25 @@ class TestPairPlanningCli:
         raise AssertionError(f"no {prefix} line in output")
 
     def _run_to_pair_plan(self, cli_env: Path) -> CliRunner:
-        runner = CliRunner()
-        created = runner.invoke(loop_app, ["run", "rpi", "--task", "migrate auth"])
+        runner = CliRunner(env={"AWINO_PROJECT": str(cli_env)})
+        created = runner.invoke(
+            loop_app, ["run", "rpi", "--task", "migrate auth"], env={"AWINO_PROJECT": str(cli_env)}
+        )
         assert created.exit_code == 0, created.output
-        research = cli_env / self._artifact_path(created.output)
+        rel = Path(str(self._artifact_path(created.output)).replace("\\", "/"))
+        research = cli_env / rel
         research.parent.mkdir(parents=True, exist_ok=True)
         research.write_text(RESEARCH_OK, encoding="utf-8")
         # The pairing brief shares the research artifact's stamp and topic.
-        brief = cli_env / Path(
-            str(self._artifact_path(created.output)).replace("/research/", "/pairing/")
-        )
+        brief_rel = Path(str(rel).replace("research", "pairing"))
+        brief = cli_env / brief_rel
         brief.parent.mkdir(parents=True, exist_ok=True)
         brief.write_text(BRIEF_OK, encoding="utf-8")
-        confirmed = runner.invoke(loop_app, ["confirm-problem", "--confirmed"])
+        confirmed = runner.invoke(
+            loop_app, ["confirm-problem", "--confirmed"], env={"AWINO_PROJECT": str(cli_env)}
+        )
         assert confirmed.exit_code == 0, confirmed.output
-        nxt = runner.invoke(loop_app, ["next"])
+        nxt = runner.invoke(loop_app, ["next"], env={"AWINO_PROJECT": str(cli_env)})
         assert nxt.exit_code == 0, nxt.output
         assert "ADVANCED  phase=pair-plan" in nxt.output
         return runner
@@ -511,9 +504,7 @@ class TestPairPlanningCli:
 
     def test_answer_and_default_then_advance(self, cli_env: Path) -> None:
         runner = self._run_to_pair_plan(cli_env)
-        answered = runner.invoke(
-            loop_app, ["answer", "--question", "Q1", "--answer", "strangler"]
-        )
+        answered = runner.invoke(loop_app, ["answer", "--question", "Q1", "--answer", "strangler"])
         assert answered.exit_code == 0, answered.output
         assert "ANSWERED  Q1" in answered.output
         assert "REMAINING  Q2" in answered.output
@@ -531,9 +522,7 @@ class TestPairPlanningCli:
 
     def test_answer_unknown_question_refused(self, cli_env: Path) -> None:
         runner = self._run_to_pair_plan(cli_env)
-        refused = runner.invoke(
-            loop_app, ["answer", "--question", "Q9", "--answer", "nope"]
-        )
+        refused = runner.invoke(loop_app, ["answer", "--question", "Q9", "--answer", "nope"])
         assert refused.exit_code == 1
         assert "REFUSED" in refused.output
 

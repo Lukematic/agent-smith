@@ -21,9 +21,10 @@ from awino.cli import _echo, _workspace, app
 @app.command("think")
 def think_command(
     mode: str = typer.Argument(
-        None, help="Thinking mode: feynman, blindspot, devil, premortem, "
+        None,
+        help="Thinking mode: feynman, blindspot, devil, premortem, "
         "uncomfortable, thought-experiment, first-principles, "
-        "assumption-destroyer, simplify, or recommend. Omit to list all ten."
+        "assumption-destroyer, simplify, or recommend. Omit to list all ten.",
     ),
     record: str = typer.Option(
         None,
@@ -57,10 +58,7 @@ def think_command(
     try:
         item = think.by_name(mode)
     except ValueError:
-        _echo(
-            f"REFUSED  unknown thinking mode {mode!r}: "
-            f"one of {', '.join(think.MODE_NAMES)}"
-        )
+        _echo(f"REFUSED  unknown thinking mode {mode!r}: one of {', '.join(think.MODE_NAMES)}")
         raise typer.Exit(2) from None
 
     if record is None:

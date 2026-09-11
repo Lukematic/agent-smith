@@ -53,9 +53,7 @@ def _write_mission(project: Path) -> None:
     root = _state_root(project)
     root.mkdir(parents=True, exist_ok=True)
     (root / "heilmeier.json").write_text(
-        json.dumps(
-            {"answers": {"objective": OBJECTIVE, "exams": CRITERION}, "source": {}}
-        ),
+        json.dumps({"answers": {"objective": OBJECTIVE, "exams": CRITERION}, "source": {}}),
         encoding="utf-8",
     )
 
@@ -145,9 +143,7 @@ class TestFreshProjectOnboards:
         assert "Here's what's next" in result.output
         assert "Here's what I need from you" in result.output
 
-    def test_operator_records_only_the_safe_session_start_marker(
-        self, proj: Path
-    ) -> None:
+    def test_operator_records_only_the_safe_session_start_marker(self, proj: Path) -> None:
         result = _invoke([])
         assert result.exit_code == 0, result.output
         root = _state_root(proj)
@@ -160,9 +156,7 @@ class TestFreshProjectOnboards:
 
 
 class TestMidLoopResumes:
-    def test_resume_shows_loop_kind_phase_and_spine(
-        self, proj: Path
-    ) -> None:
+    def test_resume_shows_loop_kind_phase_and_spine(self, proj: Path) -> None:
         _write_mission(proj)
         state = _write_loop(proj)
         result = _invoke([])
@@ -174,9 +168,7 @@ class TestMidLoopResumes:
         assert "[ok] mission" in result.output
         assert "next:" in result.output
 
-    def test_resume_narrates_the_next_step_without_running_it(
-        self, proj: Path
-    ) -> None:
+    def test_resume_narrates_the_next_step_without_running_it(self, proj: Path) -> None:
         _write_mission(proj)
         state = _write_loop(proj)
         before = (_state_root(proj) / "loops" / f"{state.id}.json").read_bytes()
@@ -188,9 +180,7 @@ class TestMidLoopResumes:
 
 
 class TestStaleLoopNudges:
-    def test_stale_checklist_nudges_with_the_exact_command(
-        self, proj: Path
-    ) -> None:
+    def test_stale_checklist_nudges_with_the_exact_command(self, proj: Path) -> None:
         _write_mission(proj)
         state = _write_loop(proj)
         _backdate_checklist(proj)
@@ -224,9 +214,7 @@ class TestNoWorkSuggestsCommitment:
 
 
 class TestDestructiveNextActionPauses:
-    def test_ralph_verify_with_destructive_check_pauses_with_yes_no(
-        self, proj: Path
-    ) -> None:
+    def test_ralph_verify_with_destructive_check_pauses_with_yes_no(self, proj: Path) -> None:
         _write_mission(proj)
         state = _write_loop(
             proj,

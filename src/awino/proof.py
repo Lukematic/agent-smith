@@ -265,13 +265,9 @@ def write_pack(pack: dict[str, str], out_dir: Path, *, generator: str) -> Path:
     index = {
         "generator": generator,
         "generated_at": datetime.now(UTC).isoformat(),
-        "artifacts": [
-            {"path": rel, "sha256": _sha256(out_dir / rel)} for rel in sorted(pack)
-        ],
+        "artifacts": [{"path": rel, "sha256": _sha256(out_dir / rel)} for rel in sorted(pack)],
     }
-    (out_dir / "index.json").write_text(
-        json.dumps(index, indent=2) + "\n", encoding="utf-8"
-    )
+    (out_dir / "index.json").write_text(json.dumps(index, indent=2) + "\n", encoding="utf-8")
     return out_dir
 
 
@@ -304,9 +300,7 @@ def _read_json(pack_dir: Path, rel: str, failures: list[ProofFailure]):
     return None
 
 
-def _check_integrity(
-    pack_dir: Path, failures: list[ProofFailure]
-) -> dict[str, str] | None:
+def _check_integrity(pack_dir: Path, failures: list[ProofFailure]) -> dict[str, str] | None:
     """Phase 1: every file matches the index; every file is indexed."""
     index = _read_json(pack_dir, "index.json", failures)
     if index is None:
@@ -322,35 +316,25 @@ def _check_integrity(
             or not isinstance(item.get("path"), str)
             or not isinstance(item.get("sha256"), str)
         ):
-            failures.append(
-                ProofFailure("index.json", f"malformed artifact entry: {item!r}")
-            )
+            failures.append(ProofFailure("index.json", f"malformed artifact entry: {item!r}"))
             continue
         wanted[item["path"]] = item["sha256"]
     for rel in sorted(wanted):
         path = pack_dir / rel
         if not path.is_file():
-            failures.append(
-                ProofFailure(rel, "listed in index.json but missing from pack")
-            )
+            failures.append(ProofFailure(rel, "listed in index.json but missing from pack"))
         elif _sha256(path) != wanted[rel]:
-            failures.append(
-                ProofFailure(rel, "hash mismatch: file changed after export")
-            )
+            failures.append(ProofFailure(rel, "hash mismatch: file changed after export"))
     for path in sorted(pack_dir.rglob("*")):
         if not path.is_file():
             continue
         rel = path.relative_to(pack_dir).as_posix()
         if rel != "index.json" and rel not in wanted:
-            failures.append(
-                ProofFailure(rel, "present in pack but not listed in index.json")
-            )
+            failures.append(ProofFailure(rel, "present in pack but not listed in index.json"))
     return wanted if not failures else None
 
 
-def _check_ledger(
-    pack_dir: Path, failures: list[ProofFailure]
-) -> list[dict] | None:
+def _check_ledger(pack_dir: Path, failures: list[ProofFailure]) -> list[dict] | None:
     """Phase 2: the trail parses, is append-ordered, and loops transition sanely."""
     path = pack_dir / "ledger.jsonl"
     try:
@@ -366,34 +350,22 @@ def _check_ledger(
         try:
             event = json.loads(line)
         except ValueError as exc:
-            failures.append(
-                ProofFailure("ledger.jsonl", f"line {lineno}: not JSON ({exc})")
-            )
+            failures.append(ProofFailure("ledger.jsonl", f"line {lineno}: not JSON ({exc})"))
             continue
         if not isinstance(event, dict):
-            failures.append(
-                ProofFailure("ledger.jsonl", f"line {lineno}: not an object")
-            )
+            failures.append(ProofFailure("ledger.jsonl", f"line {lineno}: not an object"))
             continue
         missing = [
-            key
-            for key in ("loop_id", "loop_kind", "phase", "kind", "at")
-            if key not in event
+            key for key in ("loop_id", "loop_kind", "phase", "kind", "at") if key not in event
         ]
         if missing:
-            failures.append(
-                ProofFailure(
-                    "ledger.jsonl", f"line {lineno}: missing keys {missing}"
-                )
-            )
+            failures.append(ProofFailure("ledger.jsonl", f"line {lineno}: missing keys {missing}"))
             continue
         try:
             at = datetime.fromisoformat(str(event["at"]))
         except ValueError:
             failures.append(
-                ProofFailure(
-                    "ledger.jsonl", f"line {lineno}: bad timestamp {event['at']!r}"
-                )
+                ProofFailure("ledger.jsonl", f"line {lineno}: bad timestamp {event['at']!r}")
             )
             continue
         if previous_at is not None and at.isoformat() < previous_at:
@@ -412,11 +384,7 @@ def _check_ledger(
         first_kind.setdefault(loop_id, str(event["kind"]))
         if event["kind"] == "loop_closed":
             if loop_id in closed:
-                failures.append(
-                    ProofFailure(
-                        "ledger.jsonl", f"loop {loop_id}: closed twice"
-                    )
-                )
+                failures.append(ProofFailure("ledger.jsonl", f"loop {loop_id}: closed twice"))
             closed.add(loop_id)
     for loop_id, kind in sorted(first_kind.items()):
         if kind != "loop_started":
@@ -443,9 +411,7 @@ def _check_verdicts(
     loop_ids = {str(event["loop_id"]) for event in events}
     for item in verdicts:
         if not isinstance(item, dict):
-            failures.append(
-                ProofFailure("verdicts.json", f"malformed verdict: {item!r}")
-            )
+            failures.append(ProofFailure("verdicts.json", f"malformed verdict: {item!r}"))
             continue
         loop_id = str(item.get("loop_id", ""))
         if loop_id not in loop_ids:
@@ -459,8 +425,7 @@ def _check_verdicts(
             failures.append(
                 ProofFailure(
                     "verdicts.json",
-                    f"loop {loop_id}: verdict {item.get('verdict')!r} "
-                    "is not yes|partial|no",
+                    f"loop {loop_id}: verdict {item.get('verdict')!r} is not yes|partial|no",
                 )
             )
     return verdicts
@@ -491,17 +456,14 @@ def _check_brief(
     if mission is not None:
         objective = _norm(str(mission.get("objective") or ""))
         if objective and objective not in flat:
-            failures.append(
-                ProofFailure("brief.md", "mission objective not traced in brief")
-            )
+            failures.append(ProofFailure("brief.md", "mission objective not traced in brief"))
         criteria = mission.get("success_criteria") or []
         for criterion in criteria:
             if _norm(str(criterion)) not in flat:
                 failures.append(
                     ProofFailure(
                         "brief.md",
-                        "success criterion not traced in brief: "
-                        f"{str(criterion)[:60]}",
+                        f"success criterion not traced in brief: {str(criterion)[:60]}",
                     )
                 )
     deliverable_loops = sorted(
@@ -513,9 +475,7 @@ def _check_brief(
     )
     for loop_id in deliverable_loops:
         if loop_id not in brief:
-            failures.append(
-                ProofFailure("brief.md", f"closed loop {loop_id} not named in brief")
-            )
+            failures.append(ProofFailure("brief.md", f"closed loop {loop_id} not named in brief"))
 
 
 def _check_plan(pack_dir: Path, failures: list[ProofFailure]) -> None:

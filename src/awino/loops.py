@@ -109,9 +109,7 @@ _ASSUMPTION_ITEM_RE = re.compile(r"(?m)^\s*(?:[-*+]|\d+[.)])\s+\S")
 # The applicability check (lawyer move) content rules: the section must name
 # the problem as given, the reframe (or that the stated problem stands), the
 # evidence for it, and the user's recorded confirmation.
-_STATED_PROBLEM_RE = re.compile(
-    r"(?i)\b(stated problem|problem as given|as asked)\b"
-)
+_STATED_PROBLEM_RE = re.compile(r"(?i)\b(stated problem|problem as given|as asked)\b")
 _REFRAMED_PROBLEM_RE = re.compile(
     r"(?i)\b(reframed problem|the real problem|reframe|actual problem)\b"
 )
@@ -119,9 +117,7 @@ _STANDS_CONFIRMED_RE = re.compile(
     r"(?i)\b(the stated problem stands|no reframe|confirmed as stated|stands confirmed)\b"
 )
 _EVIDENCE_RE = re.compile(r"(?i)\bevidence\b")
-_USER_CONFIRMATION_RE = re.compile(
-    r"(?i)\b(user confirmed|confirmed by|confirmation:)\b"
-)
+_USER_CONFIRMATION_RE = re.compile(r"(?i)\b(user confirmed|confirmed by|confirmation:)\b")
 
 _HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.MULTILINE)
 
@@ -172,11 +168,41 @@ def kind_of(loop_id: str) -> str:
 MISSION_MIN_TOKEN = 5
 MISSION_STOPWORDS = frozenset(
     {
-        "about", "above", "after", "again", "against", "among", "because",
-        "before", "being", "below", "between", "could", "doing", "during",
-        "every", "first", "from", "goals", "having", "mission", "other",
-        "project", "should", "their", "there", "these", "those", "through",
-        "under", "until", "where", "which", "while", "with", "within",
+        "about",
+        "above",
+        "after",
+        "again",
+        "against",
+        "among",
+        "because",
+        "before",
+        "being",
+        "below",
+        "between",
+        "could",
+        "doing",
+        "during",
+        "every",
+        "first",
+        "from",
+        "goals",
+        "having",
+        "mission",
+        "other",
+        "project",
+        "should",
+        "their",
+        "there",
+        "these",
+        "those",
+        "through",
+        "under",
+        "until",
+        "where",
+        "which",
+        "while",
+        "with",
+        "within",
         "would",
     }
 )
@@ -209,11 +235,7 @@ def _mission_goal_texts(project_root: Path) -> list[str]:
         except yaml.YAMLError:
             return []
         if isinstance(data, dict) and isinstance(data.get("goals"), list):
-            return [
-                _goal_item_text(item)
-                for item in data["goals"]
-                if _goal_item_text(item)
-            ]
+            return [_goal_item_text(item) for item in data["goals"] if _goal_item_text(item)]
     return []
 
 
@@ -278,14 +300,10 @@ def mission_success_criteria(project_root: Path) -> list[str]:
     not keyword drift, the criteria themselves. Empty when the mission has
     none on file: A.W.I.N.O. never invents criteria.
     """
-    return heilmeier.success_criteria(
-        heilmeier.load(project_state_dir(project_root))
-    )
+    return heilmeier.success_criteria(heilmeier.load(project_state_dir(project_root)))
 
 
-def evaluate_success_criteria(
-    criteria: list[str], artifact_text: str
-) -> list[tuple[str, str]]:
+def evaluate_success_criteria(criteria: list[str], artifact_text: str) -> list[tuple[str, str]]:
     """Judge each success criterion against an artifact: met / unmet / unjudgeable.
 
     Deterministic keyword matching, the same heuristic as the drift check: a
@@ -362,9 +380,7 @@ class ComprehensionRequired(LoopError):
     def __init__(self, missing: list[str], teach_back: list[str]) -> None:
         self.missing = missing
         self.teach_back = teach_back
-        super().__init__(
-            "comprehension check incomplete: " + "; ".join(missing)
-        )
+        super().__init__("comprehension check incomplete: " + "; ".join(missing))
 
 
 class ReceiptBlocked(LoopError):
@@ -379,9 +395,7 @@ class ReceiptBlocked(LoopError):
     def __init__(self, phase: str, problems: list[str]) -> None:
         self.phase = phase
         self.problems = problems
-        super().__init__(
-            "cannot advance from '" + phase + "': " + "; ".join(problems)
-        )
+        super().__init__("cannot advance from '" + phase + "': " + "; ".join(problems))
 
 
 # ── the spine ──────────────────────────────────────────────────────────────
@@ -473,16 +487,13 @@ def _spine_check_mission(driver: LoopDriver, _state: LoopState) -> str | None:
     return None
 
 
-def _spine_refuse_mission(
-    driver: LoopDriver, _state: LoopState, artifact: str
-) -> LoopError:
+def _spine_refuse_mission(driver: LoopDriver, _state: LoopState, artifact: str) -> LoopError:
     cat = heilmeier.load(project_state_dir(driver.project_root))
     problems = heilmeier.validate_mission(cat)
     return SpineBlocked(
         "mission",
         artifact,
-        "; ".join(problems)
-        + " -- nothing proceeds without it; run `awino mission` "
+        "; ".join(problems) + " -- nothing proceeds without it; run `awino mission` "
         "(buddy scaffolds the draft from your stated goals)",
     )
 
@@ -500,13 +511,10 @@ def _spine_check_capture(driver: LoopDriver, state: LoopState) -> str | None:
     if driver.ledger is not None:
         trail = driver.ledger.loop_events(state.id)
         if state.phase == "done":
-            boundary = any(
-                event.kind == "loop_closed" for event in trail
-            )
+            boundary = any(event.kind == "loop_closed" for event in trail)
         else:
             boundary = any(
-                event.kind == "phase_started" and event.phase == state.phase
-                for event in trail
+                event.kind == "phase_started" and event.phase == state.phase for event in trail
             )
         if not boundary:
             return (
@@ -516,11 +524,7 @@ def _spine_check_capture(driver: LoopDriver, state: LoopState) -> str | None:
     checklist = driver._checklist()
     if checklist is not None:
         item = next(
-            (
-                entry
-                for entry in checklist.items()
-                if entry.get("loop_id") == state.id
-            ),
+            (entry for entry in checklist.items() if entry.get("loop_id") == state.id),
             None,
         )
         if item is None:
@@ -539,14 +543,11 @@ def _spine_check_capture(driver: LoopDriver, state: LoopState) -> str | None:
     return None
 
 
-def _spine_refuse_capture(
-    _driver: LoopDriver, _state: LoopState, artifact: str
-) -> LoopError:
+def _spine_refuse_capture(_driver: LoopDriver, _state: LoopState, artifact: str) -> LoopError:
     return SpineBlocked(
         "capture",
         artifact,
-        "the driver records every boundary itself; repair the trail "
-        "before advancing",
+        "the driver records every boundary itself; repair the trail before advancing",
     )
 
 
@@ -571,18 +572,13 @@ def _spine_check_verdict(driver: LoopDriver, state: LoopState) -> str | None:
     ledger carries an outcome_verdict event for this loop.
     """
     if driver.ledger is not None:
-        if any(
-            event.kind == "outcome_verdict"
-            for event in driver.ledger.loop_events(state.id)
-        ):
+        if any(event.kind == "outcome_verdict" for event in driver.ledger.loop_events(state.id)):
             return None
         return "outcome verdict (yes/partial/no)"
     return None
 
 
-def _spine_refuse_terminal(
-    _driver: LoopDriver, _state: LoopState, artifact: str
-) -> LoopError:
+def _spine_refuse_terminal(_driver: LoopDriver, _state: LoopState, artifact: str) -> LoopError:
     # Unreachable from advance(): terminal steps have from_phases=None and
     # are never evaluated there. Defined so every step has a refuse.
     return SpineBlocked("terminal", artifact, "enforced at its own boundary")
@@ -606,15 +602,11 @@ def _spine_check_pair_plan(driver: RpiDriver, state: LoopState) -> str | None:
     return None
 
 
-def _spine_refuse_pair_plan(
-    driver: RpiDriver, state: LoopState, artifact: str
-) -> LoopError:
+def _spine_refuse_pair_plan(driver: RpiDriver, state: LoopState, artifact: str) -> LoopError:
     unanswered = driver.unanswered_questions(state)
     if unanswered:
         return PairingIncomplete(unanswered)
-    return SpineBlocked(
-        "pair-plan", artifact, "write the brief, then `awino loop next`"
-    )
+    return SpineBlocked("pair-plan", artifact, "write the brief, then `awino loop next`")
 
 
 def _thinking_required_message(state: LoopState) -> str:
@@ -627,7 +619,7 @@ def _thinking_required_message(state: LoopState) -> str:
         "mode and record it "
         f"(`awino loop think --mode premortem --record <file> "
         f"--id {state.id}`), or waive explicitly with "
-        '`awino loop approve --waive-thinking '
+        "`awino loop approve --waive-thinking "
         '--waive-reason "..."`'
     )
 
@@ -643,9 +635,7 @@ def _spine_check_challenge(driver: RpiDriver, state: LoopState) -> str | None:
     return "thinking-mode output or an explicit human waiver (ledger-recorded)"
 
 
-def _spine_refuse_challenge(
-    _driver: RpiDriver, state: LoopState, _artifact: str
-) -> LoopError:
+def _spine_refuse_challenge(_driver: RpiDriver, state: LoopState, _artifact: str) -> LoopError:
     return ApprovalRequired(_thinking_required_message(state))
 
 
@@ -661,16 +651,12 @@ def _spine_check_understand(driver: RpiDriver, state: LoopState) -> str | None:
     return "comprehension record (your explanation + answered probes)"
 
 
-def _spine_refuse_understand(
-    driver: RpiDriver, state: LoopState, _artifact: str
-) -> LoopError:
+def _spine_refuse_understand(driver: RpiDriver, state: LoopState, _artifact: str) -> LoopError:
     missing = driver.comprehension_missing(state)
     return ComprehensionRequired(missing, driver._teach_back_lines(state))
 
 
-def _spine_check_real_problem(
-    _driver: RpiDriver, state: LoopState
-) -> str | None:
+def _spine_check_real_problem(_driver: RpiDriver, state: LoopState) -> str | None:
     """Step 5: the applicability check with the USER-CONFIRMED problem.
 
     The lawyer move: research advances only on a problem the user confirmed
@@ -682,9 +668,7 @@ def _spine_check_real_problem(
     return "applicability check with the user-confirmed problem statement"
 
 
-def _spine_refuse_real_problem(
-    driver: RpiDriver, state: LoopState, _artifact: str
-) -> LoopError:
+def _spine_refuse_real_problem(driver: RpiDriver, state: LoopState, _artifact: str) -> LoopError:
     return ProblemUnconfirmed(driver.problem_question(state))
 
 
@@ -700,9 +684,7 @@ def _spine_check_honda_scope(driver: RpiDriver, state: LoopState) -> str | None:
     return "the Honda scope, approved (human approval)"
 
 
-def _spine_refuse_honda_scope(
-    _driver: RpiDriver, _state: LoopState, _artifact: str
-) -> LoopError:
+def _spine_refuse_honda_scope(_driver: RpiDriver, _state: LoopState, _artifact: str) -> LoopError:
     return ApprovalRequired(
         "plan is not approved; human approval is required between plan "
         "and implement -- run `awino loop approve --by NAME --reason ...`"
@@ -735,9 +717,7 @@ def _spine_check_beyond_honda(driver: RpiDriver, state: LoopState) -> str | None
     return None
 
 
-def _spine_refuse_beyond_honda(
-    _driver: RpiDriver, _state: LoopState, artifact: str
-) -> LoopError:
+def _spine_refuse_beyond_honda(_driver: RpiDriver, _state: LoopState, artifact: str) -> LoopError:
     return SpineBlocked(
         "beyond-honda",
         artifact,
@@ -815,9 +795,7 @@ def skill_section(skill_md: Path | None, heading: str, doc_name: str) -> str:
     try:
         text = skill_md.read_text(encoding="utf-8")
     except OSError as exc:
-        raise LoopError(
-            f"cannot read {doc_name} skill document at {skill_md}: {exc}"
-        ) from exc
+        raise LoopError(f"cannot read {doc_name} skill document at {skill_md}: {exc}") from exc
     start = re.search(rf"^## {re.escape(heading)}\s*$", text, re.MULTILINE)
     if start is None:
         raise LoopError(
@@ -895,9 +873,7 @@ class Phase(abc.ABC):
     name: str
 
     @abc.abstractmethod
-    def prompt_block(
-        self, driver: LoopDriver, state: LoopState | None = None
-    ) -> str:
+    def prompt_block(self, driver: LoopDriver, state: LoopState | None = None) -> str:
         """The text shown to the model when this phase starts."""
 
     @abc.abstractmethod
@@ -908,9 +884,7 @@ class Phase(abc.ABC):
 class ResearchPhase(Phase):
     name = "research"
 
-    def prompt_block(
-        self, driver: LoopDriver, _state: LoopState | None = None
-    ) -> str:
+    def prompt_block(self, driver: LoopDriver, _state: LoopState | None = None) -> str:
         return phase_prompt_text(driver.skill_md, "research")
 
     def validate(self, driver: LoopDriver, state: LoopState) -> list[str]:
@@ -927,13 +901,11 @@ class ResearchPhase(Phase):
             return [hostile]
         if len(text) < RESEARCH_MIN_CHARS:
             return [
-                f"research artifact too short: {len(text)} chars "
-                f"(minimum {RESEARCH_MIN_CHARS})"
+                f"research artifact too short: {len(text)} chars (minimum {RESEARCH_MIN_CHARS})"
             ]
         if not FILE_LINE_RE.search(text):
             return [
-                "research artifact contains no file:line references "
-                "(e.g. 'src/awino/loops.py:42')"
+                "research artifact contains no file:line references (e.g. 'src/awino/loops.py:42')"
             ]
         return _validate_research_sections(text)
 
@@ -989,9 +961,7 @@ def _validate_research_sections(text: str) -> list[str]:
                 "problem: state the problem as given before asking whether it "
                 "is the actual problem"
             )
-        if not _REFRAMED_PROBLEM_RE.search(body) and not _STANDS_CONFIRMED_RE.search(
-            body
-        ):
+        if not _REFRAMED_PROBLEM_RE.search(body) and not _STANDS_CONFIRMED_RE.search(body):
             missing.append(
                 "research artifact section 'applicability check' neither reframes "
                 "the problem nor confirms the stated one stands: 'is this the "
@@ -1016,9 +986,7 @@ def _validate_research_sections(text: str) -> list[str]:
 class PairPlanPhase(Phase):
     name = "pair-plan"
 
-    def prompt_block(
-        self, driver: LoopDriver, _state: LoopState | None = None
-    ) -> str:
+    def prompt_block(self, driver: LoopDriver, _state: LoopState | None = None) -> str:
         return phase_prompt_text(driver.skill_md, "pair-plan")
 
     def validate(self, driver: LoopDriver, state: LoopState) -> list[str]:
@@ -1028,9 +996,7 @@ class PairPlanPhase(Phase):
             return [escape]
         assert path is not None
         if not path.is_file():
-            return [
-                f"pairing brief missing: {rel} -- write it, then run `awino loop next`"
-            ]
+            return [f"pairing brief missing: {rel} -- write it, then run `awino loop next`"]
         text = path.read_text(encoding="utf-8", errors="replace")
         hostile = _hostile_text_refusal(text, rel)
         if hostile is not None:
@@ -1077,8 +1043,7 @@ class PairPlanPhase(Phase):
         questions_text = _section_text(text, ("questions",))
         if not _QUESTION_RE.findall(questions_text):
             missing.append(
-                "pairing brief has no questions in 'Qn:' format "
-                "(e.g. 'Q1: which approach?')"
+                "pairing brief has no questions in 'Qn:' format (e.g. 'Q1: which approach?')"
             )
         # Required skills: the plan declares which skill(s) each phase runs
         # under, so the receipt gate knows what to require. The validator
@@ -1096,14 +1061,12 @@ class PairPlanPhase(Phase):
             for phase_name in driver.artifact_phases:
                 if phase_name not in declared:
                     missing.append(
-                        "pairing brief has no required-skills declaration for "
-                        f"phase '{phase_name}'"
+                        f"pairing brief has no required-skills declaration for phase '{phase_name}'"
                     )
             for phase_name, skills in declared.items():
                 if phase_name not in driver.phase_order:
                     missing.append(
-                        "pairing brief declares required skills for unknown "
-                        f"phase '{phase_name}'"
+                        f"pairing brief declares required skills for unknown phase '{phase_name}'"
                     )
                 for skill in skills:
                     if not driver.skill_known(skill):
@@ -1132,9 +1095,7 @@ def _split_approach_blocks(section_text: str) -> list[tuple[str, str]]:
 class PlanPhase(Phase):
     name = "plan"
 
-    def prompt_block(
-        self, driver: LoopDriver, state: LoopState | None = None
-    ) -> str:
+    def prompt_block(self, driver: LoopDriver, state: LoopState | None = None) -> str:
         base = phase_prompt_text(driver.skill_md, "plan")
         injected = driver.pairing_decisions_block(state) if state is not None else ""
         return injected + base if injected else base
@@ -1166,9 +1127,7 @@ class PlanPhase(Phase):
                 text,
                 PLAN_SECTIONS
                 if state.pair_answers
-                else {
-                    k: v for k, v in PLAN_SECTIONS.items() if k != "decisions"
-                },
+                else {k: v for k, v in PLAN_SECTIONS.items() if k != "decisions"},
             )
         )
         scope_text = _section_text(text, ("scope",))
@@ -1191,9 +1150,7 @@ class PlanPhase(Phase):
         return missing
 
 
-def _validate_decision_trace(
-    plan_text: str, driver: LoopDriver, state: LoopState
-) -> list[str]:
+def _validate_decision_trace(plan_text: str, driver: LoopDriver, state: LoopState) -> list[str]:
     """Every plan decision traces to a pairing question or a declared default.
 
     Decision entries are bullets, numbered items, ### blocks, or markdown
@@ -1243,9 +1200,7 @@ def _validate_decision_trace(
             continue
         mentioned = [n for n in approach_names if n.lower() in entry.lower()]
         if mentioned:
-            marker = _FOLLOW_DEFAULT_RE.search(entry) or _OVERRIDE_DEFAULT_RE.search(
-                entry
-            )
+            marker = _FOLLOW_DEFAULT_RE.search(entry) or _OVERRIDE_DEFAULT_RE.search(entry)
             if marker is None:
                 missing.append(
                     f"decision '{head}' chooses an approach ('{mentioned[0]}') "
@@ -1266,9 +1221,7 @@ def _validate_decision_trace(
         if default and default.group(1).strip():
             continue  # explicitly defaulted with a reason
         if default:
-            missing.append(
-                f"decision '{head}' is marked default but gives no reason"
-            )
+            missing.append(f"decision '{head}' is marked default but gives no reason")
         else:
             missing.append(
                 f"decision '{head}' does not trace to any recorded question "
@@ -1356,16 +1309,40 @@ def _references_decision(explanation: str, head: str) -> bool:
     low = re.sub(r"\s+", " ", explanation.lower())
     if len(words) < 4:
         return " ".join(words) in low if words else False
-    return any(
-        " ".join(words[i : i + 4]) in low for i in range(len(words) - 3)
-    )
+    return any(" ".join(words[i : i + 4]) in low for i in range(len(words) - 3))
 
 
 _CRITERION_STOPWORDS = frozenset(
     {
-        "the", "a", "an", "and", "or", "of", "to", "in", "for", "with", "on",
-        "is", "are", "be", "by", "as", "at", "it", "this", "that", "from",
-        "will", "must", "should", "when", "into", "over", "under", "all",
+        "the",
+        "a",
+        "an",
+        "and",
+        "or",
+        "of",
+        "to",
+        "in",
+        "for",
+        "with",
+        "on",
+        "is",
+        "are",
+        "be",
+        "by",
+        "as",
+        "at",
+        "it",
+        "this",
+        "that",
+        "from",
+        "will",
+        "must",
+        "should",
+        "when",
+        "into",
+        "over",
+        "under",
+        "all",
     }
 )
 
@@ -1377,9 +1354,7 @@ def _criterion_covered(criterion: str, plan_text: str) -> bool:
     significant words (5+ letters, not stopwords) must appear in the plan.
     """
     words = [
-        w
-        for w in re.findall(r"[a-z]{5,}", criterion.lower())
-        if w not in _CRITERION_STOPWORDS
+        w for w in re.findall(r"[a-z]{5,}", criterion.lower()) if w not in _CRITERION_STOPWORDS
     ]
     if not words:
         return True
@@ -1406,15 +1381,11 @@ def _validate_comprehension_record(plan_text: str, state: LoopState) -> list[str
     missing: list[str] = []
     low = block.lower()
     if comp.get("explanation") and "explanation" not in low:
-        missing.append(
-            "comprehension check subsection does not summarize the explanation"
-        )
-    for qid in (comp.get("probes") or {}):
+        missing.append("comprehension check subsection does not summarize the explanation")
+    for qid in comp.get("probes") or {}:
         if qid.lower() not in low:
-            missing.append(
-                f"comprehension check subsection does not record probe {qid}"
-            )
-    for sid in (comp.get("suggestions") or {}):
+            missing.append(f"comprehension check subsection does not record probe {qid}")
+    for sid in comp.get("suggestions") or {}:
         if sid.lower() not in low:
             missing.append(
                 "comprehension check subsection does not record suggestion "
@@ -1440,9 +1411,7 @@ class PlanSuggestion:
 class ImplementPhase(Phase):
     name = "implement"
 
-    def prompt_block(
-        self, driver: LoopDriver, _state: LoopState | None = None
-    ) -> str:
+    def prompt_block(self, driver: LoopDriver, _state: LoopState | None = None) -> str:
         return phase_prompt_text(driver.skill_md, "implement")
 
     def validate(self, driver: LoopDriver, _state: LoopState) -> list[str]:
@@ -1535,9 +1504,7 @@ def _hostile_text_refusal(text: str, rel: str) -> str | None:
     return None
 
 
-def _confined_artifact_path(
-    project_root: Path, rel: str
-) -> tuple[Path | None, str | None]:
+def _confined_artifact_path(project_root: Path, rel: str) -> tuple[Path | None, str | None]:
     """The artifact path confined to the project.
 
     Returns ``(path, None)`` when ``rel`` resolves inside the project root,
@@ -1621,17 +1588,12 @@ def _empty_required_sections(
 class RalphAttemptPhase(Phase):
     name = "attempt"
 
-    def prompt_block(
-        self, driver: LoopDriver, state: LoopState | None = None
-    ) -> str:
+    def prompt_block(self, driver: LoopDriver, state: LoopState | None = None) -> str:
         base = skill_section(driver.skill_md, "The loop", "awino-ralph")
         injected: list[str] = []
         if state is not None:
             injected.append("## Attempt context (injected by the driver)\n\n")
-            injected.append(
-                f"Attempt number: {len(state.verify_history) + 1} "
-                f"of {MAX_ATTEMPTS}. "
-            )
+            injected.append(f"Attempt number: {len(state.verify_history) + 1} of {MAX_ATTEMPTS}. ")
             prior = [h for h in state.verify_history if h.get("outcome") == "failed"]
             if prior:
                 injected.append(
@@ -1654,17 +1616,14 @@ class RalphAttemptPhase(Phase):
             return [escape]
         assert path is not None
         if not path.is_file():
-            return [
-                f"attempt artifact missing: {rel} -- write it, then run `awino loop next`"
-            ]
+            return [f"attempt artifact missing: {rel} -- write it, then run `awino loop next`"]
         text = path.read_text(encoding="utf-8", errors="replace")
         hostile = _hostile_text_refusal(text, rel)
         if hostile is not None:
             return [hostile]
         if len(text) < RALPH_ATTEMPT_MIN_CHARS:
             return [
-                f"attempt artifact too short: {len(text)} chars "
-                f"(minimum {RALPH_ATTEMPT_MIN_CHARS})"
+                f"attempt artifact too short: {len(text)} chars (minimum {RALPH_ATTEMPT_MIN_CHARS})"
             ]
         return []
 
@@ -1672,9 +1631,7 @@ class RalphAttemptPhase(Phase):
 class RalphVerifyPhase(Phase):
     name = "verify"
 
-    def prompt_block(
-        self, driver: LoopDriver, _state: LoopState | None = None
-    ) -> str:
+    def prompt_block(self, driver: LoopDriver, _state: LoopState | None = None) -> str:
         base = skill_section(driver.skill_md, "Verification is the skill", "awino-ralph")
         injected = (
             "## Verification context (injected by the driver)\n\n"
@@ -1749,19 +1706,14 @@ class RalphVerifyPhase(Phase):
 class RalphRetryPhase(Phase):
     name = "retry"
 
-    def prompt_block(
-        self, driver: LoopDriver, state: LoopState | None = None
-    ) -> str:
+    def prompt_block(self, driver: LoopDriver, state: LoopState | None = None) -> str:
         base = skill_section(driver.skill_md, "The loop", "awino-ralph")
         injected = "## Retry context (injected by the driver)\n\n"
         if state is not None:
-            failures = [
-                h for h in state.verify_history if h.get("outcome") == "failed"
-            ]
+            failures = [h for h in state.verify_history if h.get("outcome") == "failed"]
             if failures:
                 injected += (
-                    "The previous attempt was rejected by verification. "
-                    "Its failure evidence:\n"
+                    "The previous attempt was rejected by verification. Its failure evidence:\n"
                 )
                 for h in failures[-2:]:
                     injected += (
@@ -1780,9 +1732,7 @@ class RalphRetryPhase(Phase):
         # A retry that wrote nothing new is a retry in name only. The driver
         # requires the artifact to have grown since the last attempt -- crude,
         # but a retry that says nothing new never fixes anything.
-        path, escape = _confined_artifact_path(
-            driver.project_root, state.ralph_artifact
-        )
+        path, escape = _confined_artifact_path(driver.project_root, state.ralph_artifact)
         if escape is not None:
             return [escape]
         assert path is not None
@@ -1908,9 +1858,7 @@ def _parse_exec_sections(section_text: str) -> list[dict]:
 class DelegateDecomposePhase(Phase):
     name = "decompose"
 
-    def prompt_block(
-        self, driver: LoopDriver, _state: LoopState | None = None
-    ) -> str:
+    def prompt_block(self, driver: LoopDriver, _state: LoopState | None = None) -> str:
         return skill_section(
             driver.skill_md, "Step 1 \u2014 Decompose and check ownership", "awino-delegate"
         )
@@ -1922,9 +1870,7 @@ class DelegateDecomposePhase(Phase):
             return [escape]
         assert path is not None
         if not path.is_file():
-            return [
-                f"decompose artifact missing: {rel} -- write it, then run `awino loop next`"
-            ]
+            return [f"decompose artifact missing: {rel} -- write it, then run `awino loop next`"]
         text = path.read_text(encoding="utf-8", errors="replace")
         hostile = _hostile_text_refusal(text, rel)
         if hostile is not None:
@@ -1936,9 +1882,7 @@ class DelegateDecomposePhase(Phase):
                 "decompose artifact has no '## Assignments' section "
                 "(one '### <worker>' block per worker, each with 'files:')"
             )
-        workers = _parse_workers(
-            _section_text(text, ("assign",))
-        )
+        workers = _parse_workers(_section_text(text, ("assign",)))
         if not workers:
             missing.append(
                 "decompose artifact names no workers: add '### <worker>' blocks "
@@ -1946,9 +1890,7 @@ class DelegateDecomposePhase(Phase):
             )
         for name, info in workers.items():
             if not info["files"]:
-                missing.append(
-                    f"worker '{name}' claims no files: add 'files:' ownership"
-                )
+                missing.append(f"worker '{name}' claims no files: add 'files:' ownership")
             for raw in info["raw_files"]:
                 if _claim_escapes_project(raw):
                     missing.append(
@@ -1962,9 +1904,7 @@ class DelegateDecomposePhase(Phase):
 class DelegateAssignPhase(Phase):
     name = "assign"
 
-    def prompt_block(
-        self, driver: LoopDriver, _state: LoopState | None = None
-    ) -> str:
+    def prompt_block(self, driver: LoopDriver, _state: LoopState | None = None) -> str:
         base = skill_section(
             driver.skill_md, "Step 3 \u2014 Write self-contained assignments", "awino-delegate"
         )
@@ -1982,9 +1922,7 @@ class DelegateAssignPhase(Phase):
         the project (``..`` climbing out, absolute paths, or symlinks
         pointing outside). Overlap is a merge conflict in writing, so it
         fails here -- before any work starts -- rather than at review."""
-        path, escape = _confined_artifact_path(
-            driver.project_root, state.decompose_artifact
-        )
+        path, escape = _confined_artifact_path(driver.project_root, state.decompose_artifact)
         if escape is not None:
             return [escape]
         assert path is not None
@@ -1992,9 +1930,7 @@ class DelegateAssignPhase(Phase):
         hostile = _hostile_text_refusal(text, state.decompose_artifact)
         if hostile is not None:
             return [hostile]
-        workers = _parse_workers(
-            _section_text(text, ("assign",))
-        )
+        workers = _parse_workers(_section_text(text, ("assign",)))
         missing: list[str] = []
         root = driver.project_root.resolve()
         for name in sorted(workers):
@@ -2041,9 +1977,7 @@ class DelegateAssignPhase(Phase):
 class DelegateExecutePhase(Phase):
     name = "execute"
 
-    def prompt_block(
-        self, driver: LoopDriver, _state: LoopState | None = None
-    ) -> str:
+    def prompt_block(self, driver: LoopDriver, _state: LoopState | None = None) -> str:
         return skill_section(
             driver.skill_md, "Step 5 \u2014 Coordinate, do not implement", "awino-delegate"
         )
@@ -2055,9 +1989,7 @@ class DelegateExecutePhase(Phase):
             return [escape]
         assert path is not None
         if not path.is_file():
-            return [
-                f"execute artifact missing: {rel} -- write it, then run `awino loop next`"
-            ]
+            return [f"execute artifact missing: {rel} -- write it, then run `awino loop next`"]
         text = path.read_text(encoding="utf-8", errors="replace")
         hostile = _hostile_text_refusal(text, rel)
         if hostile is not None:
@@ -2067,8 +1999,7 @@ class DelegateExecutePhase(Phase):
         results_text = _section_text(text, ("result",))
         if not any("result" in h for h in headings):
             missing.append(
-                "execute artifact has no '## Results' section "
-                "(one '### <worker>' block per worker)"
+                "execute artifact has no '## Results' section (one '### <worker>' block per worker)"
             )
         elif not _parse_exec_sections(results_text):
             missing.append(
@@ -2087,9 +2018,7 @@ class DelegateExecutePhase(Phase):
 class DelegateVerifyPhase(Phase):
     name = "controller-verify"
 
-    def prompt_block(
-        self, driver: LoopDriver, _state: LoopState | None = None
-    ) -> str:
+    def prompt_block(self, driver: LoopDriver, _state: LoopState | None = None) -> str:
         return skill_section(
             driver.skill_md, "Step 6 \u2014 Verify and synthesize", "awino-delegate"
         )
@@ -2099,9 +2028,7 @@ class DelegateVerifyPhase(Phase):
         command, or require the declared output file to exist and be
         non-empty. The claim is what the worker said; this is what the
         machine checks. A false 'done' fails and names the worker."""
-        path, escape = _confined_artifact_path(
-            driver.project_root, state.execute_artifact
-        )
+        path, escape = _confined_artifact_path(driver.project_root, state.execute_artifact)
         if escape is not None:
             return [escape]
         assert path is not None
@@ -2147,9 +2074,7 @@ class DelegateVerifyPhase(Phase):
         if section["output"]:
             out_path = driver.project_root / _normalize_path(section["output"])
             try:
-                inside = out_path.resolve().is_relative_to(
-                    driver.project_root.resolve()
-                )
+                inside = out_path.resolve().is_relative_to(driver.project_root.resolve())
             except OSError:
                 inside = False
             if not inside:
@@ -2166,6 +2091,7 @@ class DelegateVerifyPhase(Phase):
                 return f"declared output file '{section['output']}' unreadable: {exc}"
             return None
         return "no 'check:' command and no 'output:' file declared -- nothing to verify"
+
 
 # ── drivers ──────────────────────────────────────────────────────────────────
 
@@ -2274,8 +2200,7 @@ class LoopDriver(abc.ABC):
         self.last_precedents: list[str] = []
 
     @abc.abstractmethod
-    def phases(self) -> list[Phase]:
-        ...
+    def phases(self) -> list[Phase]: ...
 
     def _phase(self, name: str) -> Phase:
         for phase in self.phases():
@@ -2300,9 +2225,7 @@ class LoopDriver(abc.ABC):
 
     def save(self, state: LoopState) -> None:
         self.loops_dir.mkdir(parents=True, exist_ok=True)
-        self._path(state.id).write_text(
-            json.dumps(state.to_dict(), indent=2), encoding="utf-8"
-        )
+        self._path(state.id).write_text(json.dumps(state.to_dict(), indent=2), encoding="utf-8")
         (self.loops_dir / "current").write_text(state.id, encoding="utf-8")
 
     def load(self, loop_id: str) -> LoopState:
@@ -2445,13 +2368,9 @@ class LoopDriver(abc.ABC):
         return [f"awino-{self.loop_kind}"]
 
     def _live_criteria_hash(self) -> str:
-        return heilmeier.criteria_hash(
-            heilmeier.load(project_state_dir(self.project_root))
-        )
+        return heilmeier.criteria_hash(heilmeier.load(project_state_dir(self.project_root)))
 
-    def _phase_inputs_hash(
-        self, state: LoopState, phase_name: str, criteria_hash: str
-    ) -> str:
+    def _phase_inputs_hash(self, state: LoopState, phase_name: str, criteria_hash: str) -> str:
         """The receipt's inputs_hash: exactly the phase's consumed inputs --
         artifact path, live mission criteria hash, seed id. Canonical JSON
         with sorted keys. A handwritten receipt alone proves nothing because
@@ -2462,9 +2381,7 @@ class LoopDriver(abc.ABC):
             seed_id=state.seed_id,
         )
 
-    def validate_receipt(
-        self, state: LoopState, phase_name: str, skill: str
-    ) -> str | None:
+    def validate_receipt(self, state: LoopState, phase_name: str, skill: str) -> str | None:
         """None when the skill's receipt for the phase is valid; the exact
         problem otherwise. Existence, then inputs_hash against the phase's
         current actual inputs, then the receipt's declared output artifact
@@ -2490,9 +2407,7 @@ class LoopDriver(abc.ABC):
                 f"no skill receipt for skill '{skill}' (phase '{phase_name}'): "
                 "the phase completed without one"
             )
-        expected = self._phase_inputs_hash(
-            state, phase_name, self._live_criteria_hash()
-        )
+        expected = self._phase_inputs_hash(state, phase_name, self._live_criteria_hash())
         if receipt.inputs_hash != expected:
             return (
                 f"stale skill receipt for skill '{skill}' (phase '{phase_name}'): "
@@ -2514,14 +2429,9 @@ class LoopDriver(abc.ABC):
                 f"points at '{receipt.output_artifact}', not the phase's "
                 f"output artifact '{artifact_rel}'"
             )
-        artifact, escape = _confined_artifact_path(
-            self.project_root, receipt.output_artifact
-        )
+        artifact, escape = _confined_artifact_path(self.project_root, receipt.output_artifact)
         if escape is not None:
-            return (
-                f"skill receipt for skill '{skill}' (phase '{phase_name}'): "
-                f"{escape}"
-            )
+            return f"skill receipt for skill '{skill}' (phase '{phase_name}'): {escape}"
         assert artifact is not None
         if not artifact.is_file():
             return (
@@ -2550,8 +2460,7 @@ class LoopDriver(abc.ABC):
         return [
             problem
             for skill in self.required_skills(state, state.phase)
-            if (problem := self.validate_receipt(state, state.phase, skill))
-            is not None
+            if (problem := self.validate_receipt(state, state.phase, skill)) is not None
         ]
 
     def skill_statuses(self, state: LoopState, phase_name: str) -> dict[str, str]:
@@ -2582,9 +2491,7 @@ class LoopDriver(abc.ABC):
             return
         expected = self._phase_inputs_hash(state, state.phase, criteria_hash)
         artifact_rel = self.phase_artifact(state, state.phase) or ""
-        artifact_hash = skill_receipts.file_sha256(
-            self.project_root / artifact_rel
-        )
+        artifact_hash = skill_receipts.file_sha256(self.project_root / artifact_rel)
         statuses: dict[str, str] = {}
         for skill in self.required_skills(state, state.phase):
             current = skill_receipts.read_receipt(
@@ -2623,12 +2530,9 @@ class LoopDriver(abc.ABC):
         if checklist is not None and statuses:
             checklist.note_skill_status(state.id, state.phase, statuses)
 
-
     # ── lifecycle ────────────────────────────────────────────────────────────
 
-    def new(
-        self, task: str, topic: str | None = None, seed_id: str | None = None
-    ) -> LoopState:
+    def new(self, task: str, topic: str | None = None, seed_id: str | None = None) -> LoopState:
         """Create loop state and fix the expected artifact paths.
 
         The model writes the artifacts; the driver only names where they must
@@ -2680,26 +2584,18 @@ class LoopDriver(abc.ABC):
         try:
             tracker_state, message = tracker.state()
         except Exception as exc:
-            raise LoopError(
-                f"seeds unavailable: {exc}; run without --seed"
-            ) from exc
+            raise LoopError(f"seeds unavailable: {exc}; run without --seed") from exc
         if tracker_state != seeds.SeedsState.READY:
             raise LoopError(f"seeds unavailable: {message}; run without --seed")
         try:
             seed = tracker.show(seed_id)
         except Exception as exc:
-            raise LoopError(
-                f"seeds unavailable: {exc}; run without --seed"
-            ) from exc
+            raise LoopError(f"seeds unavailable: {exc}; run without --seed") from exc
         if seed is None:
-            raise LoopError(
-                f"unknown seed {seed_id!r}; run without --seed "
-                "or with a valid seed id"
-            )
+            raise LoopError(f"unknown seed {seed_id!r}; run without --seed or with a valid seed id")
         if not seed.open:
             raise LoopError(
-                f"seed {seed_id!r} is already closed; "
-                "run without --seed or with an open seed id"
+                f"seed {seed_id!r} is already closed; run without --seed or with an open seed id"
             )
         return seed_id
 
@@ -2761,8 +2657,7 @@ class LoopDriver(abc.ABC):
         if self.ledger is None:
             return False
         return any(
-            event.kind == "artifact_validated"
-            for event in self.ledger.loop_events(state.id)
+            event.kind == "artifact_validated" for event in self.ledger.loop_events(state.id)
         )
 
     def judged_artifact(self, state: LoopState) -> str | None:
@@ -2781,9 +2676,7 @@ class LoopDriver(abc.ABC):
                 return rel
         return None
 
-    def prompt_block(
-        self, state: LoopState, phase_name: str | None = None
-    ) -> str:
+    def prompt_block(self, state: LoopState, phase_name: str | None = None) -> str:
         name = phase_name or state.phase
         return self._phase(name).prompt_block(self, state)
 
@@ -2824,9 +2717,7 @@ class LoopDriver(abc.ABC):
                 validated = True
         return validated
 
-    def record_failure(
-        self, state: LoopState, missing: list[str] | None = None
-    ) -> None:
+    def record_failure(self, state: LoopState, missing: list[str] | None = None) -> None:
         """Count a failed validation; the third failure locks the loop.
 
         A phase that cannot pass three times is not converging -- escalate to
@@ -2854,7 +2745,9 @@ class LoopDriver(abc.ABC):
                     "a human must intervene",
                 )
 
-    def approve_plan(self, state: LoopState, by: str, reason: str, waive_reason: str | None = None) -> None:
+    def approve_plan(
+        self, state: LoopState, by: str, reason: str, waive_reason: str | None = None
+    ) -> None:
         # Case law surfaces on every recording below; reset so a refused
         # approval never leaks another attempt's precedents.
         self.last_precedents = []
@@ -2929,9 +2822,7 @@ class LoopDriver(abc.ABC):
         """
         return bool(state.thinking_runs) or state.thinking_waiver is not None
 
-    def record_thinking_run(
-        self, state: LoopState, mode: str, by: str, memory_id: str
-    ) -> dict:
+    def record_thinking_run(self, state: LoopState, mode: str, by: str, memory_id: str) -> dict:
         """Record a thinking-mode run as a loop step: state, ledger event,
         and the working-memory id the run's insights landed under."""
         run = {
@@ -2963,9 +2854,7 @@ class LoopDriver(abc.ABC):
             "at": datetime.now(UTC).isoformat(timespec="seconds"),
         }
         state.thinking_waiver = waiver
-        self._emit(
-            state, "thinking_waived", detail=f"by={by} reason={reason.strip()}"
-        )
+        self._emit(state, "thinking_waived", detail=f"by={by} reason={reason.strip()}")
         self.save(state)
         self._note_precedents(
             state,
@@ -3036,9 +2925,7 @@ class LoopDriver(abc.ABC):
             out.append((step.name, status, step.artifact))
         return out
 
-    def _note_precedents(
-        self, _state: LoopState, *, area: str, decision: str, why: str
-    ) -> None:
+    def _note_precedents(self, _state: LoopState, *, area: str, decision: str, why: str) -> None:
         """Case law, surfaced where the decision is recorded.
 
         Before a new decision lands in decisions.md, look up past similar
@@ -3060,9 +2947,7 @@ class LoopDriver(abc.ABC):
                 loop_kind=self.loop_kind,
                 ledger=self.ledger,
             )
-            self.last_precedents.extend(
-                working_memory.format_precedent(p) for p in found
-            )
+            self.last_precedents.extend(working_memory.format_precedent(p) for p in found)
         except Exception:
             pass
 
@@ -3133,9 +3018,7 @@ class LoopDriver(abc.ABC):
         self._maybe_close_seed(state)
         return "done"
 
-    def reenter_phase(
-        self, state: LoopState, phase: str, reason: str = ""
-    ) -> LoopState:
+    def reenter_phase(self, state: LoopState, phase: str, reason: str = "") -> LoopState:
         """Re-enter an earlier phase: it becomes current with a fresh attempt count.
 
         The phase's artifact file is kept on disk but must re-validate on the
@@ -3146,14 +3029,10 @@ class LoopDriver(abc.ABC):
         research).
         """
         if phase not in self.phase_order:
-            raise LoopError(
-                f"unknown phase {phase!r}; one of {', '.join(self.phase_order)}"
-            )
+            raise LoopError(f"unknown phase {phase!r}; one of {', '.join(self.phase_order)}")
         if state.phase == "done":
             if self.done_note:
-                raise LoopError(
-                    f"loop is done; {self.done_note} -- start a new loop instead"
-                )
+                raise LoopError(f"loop is done; {self.done_note} -- start a new loop instead")
             raise LoopError("loop is done; start a new loop instead")
         target = self.phase_order.index(phase)
         current = self.phase_order.index(state.phase)
@@ -3186,9 +3065,7 @@ class LoopDriver(abc.ABC):
             )
         return state
 
-    def reopen_phase(
-        self, state: LoopState, phase: str, reason: str = ""
-    ) -> LoopState:
+    def reopen_phase(self, state: LoopState, phase: str, reason: str = "") -> LoopState:
         """Re-open a DONE loop at an earlier phase so a receiptless skill step
         can honestly re-run.
 
@@ -3202,9 +3079,7 @@ class LoopDriver(abc.ABC):
         re-entry is a human intervention.
         """
         if phase not in self.phase_order:
-            raise LoopError(
-                f"unknown phase {phase!r}; one of {', '.join(self.phase_order)}"
-            )
+            raise LoopError(f"unknown phase {phase!r}; one of {', '.join(self.phase_order)}")
         if state.phase != "done":
             raise LoopError(
                 f"loop is not done (phase {state.phase!r}); "
@@ -3225,9 +3100,7 @@ class LoopDriver(abc.ABC):
         self.save(state)
         checklist = self._checklist()
         if checklist is not None:
-            checklist.note_unblocked(
-                state.id, f"re-opened at {phase!r}: {note}", phase=phase
-            )
+            checklist.note_unblocked(state.id, f"re-opened at {phase!r}: {note}", phase=phase)
         return state
 
     # ── mission alignment ────────────────────────────────────────────────
@@ -3261,9 +3134,7 @@ class LoopDriver(abc.ABC):
         )
         return unaddressed
 
-    def _check_success_criteria(
-        self, state: LoopState
-    ) -> list[tuple[str, str]] | None:
+    def _check_success_criteria(self, state: LoopState) -> list[tuple[str, str]] | None:
         """Evaluate the just-validated artifact against the mission's success
         criteria -- not keyword drift, the criteria themselves.
 
@@ -3324,19 +3195,14 @@ class LoopDriver(abc.ABC):
         if not state.seed_id:
             return False
         tracker = seeds.Seeds(self.project_root)
-        reason = (
-            f"{self.loop_kind} loop {state.id} completed: "
-            f"{self._seed_close_evidence(state)}"
-        )
+        reason = f"{self.loop_kind} loop {state.id} completed: {self._seed_close_evidence(state)}"
         try:
             result = tracker.close(state.seed_id, reason)
         except Exception as exc:
             # Seed closure is a courtesy on success, not a second gate: the
             # loop is complete either way. Report the failure in the
             # completion note so the operator knows the seed is still open.
-            self.completion_seed_note = (
-                f"seed {state.seed_id} NOT closed ({exc}); close it by hand"
-            )
+            self.completion_seed_note = f"seed {state.seed_id} NOT closed ({exc}); close it by hand"
             return False
         if not getattr(result, "ok", True):
             self.completion_seed_note = (
@@ -3367,15 +3233,12 @@ class LoopDriver(abc.ABC):
             return self.lock_next(state)
         if state.phase == "done":
             return "loop complete"
-        return self.next_commands.get(
-            state.phase, f"awino loop next --id {state.id}"
-        ).format(id=state.id)
+        return self.next_commands.get(state.phase, f"awino loop next --id {state.id}").format(
+            id=state.id
+        )
 
     def lock_next(self, _state: LoopState) -> str:
-        return (
-            "fix the artifact by hand, then re-run; or abandon with "
-            "`awino loop back`"
-        )
+        return "fix the artifact by hand, then re-run; or abandon with `awino loop back`"
 
     def approval_line(self, _state: LoopState) -> str:
         return "approval: n/a (no approval gate for this loop kind)"
@@ -3386,6 +3249,7 @@ class LoopDriver(abc.ABC):
         if self.completion_seed_note:
             lines.append(f"SEED  {self.completion_seed_note}")
         return lines
+
 
 class RpiDriver(LoopDriver):
     """Research -> pair-plan -> plan -> implement, with human approval gating
@@ -3420,8 +3284,7 @@ class RpiDriver(LoopDriver):
         ),
         SpineStep(
             name="challenge",
-            artifact="thinking-mode output or an explicit human waiver "
-            "(ledger-recorded)",
+            artifact="thinking-mode output or an explicit human waiver (ledger-recorded)",
             check=_spine_check_challenge,
             refuse=_spine_refuse_challenge,
             from_phases=("plan",),
@@ -3435,8 +3298,7 @@ class RpiDriver(LoopDriver):
         ),
         SpineStep(
             name="real-problem",
-            artifact="applicability check with the user-confirmed problem "
-            "statement",
+            artifact="applicability check with the user-confirmed problem statement",
             check=_spine_check_real_problem,
             refuse=_spine_refuse_real_problem,
             from_phases=("research",),
@@ -3496,7 +3358,7 @@ class RpiDriver(LoopDriver):
     }
     next_commands: ClassVar[dict[str, str]] = {
         "research": "write the research artifact, then run `awino loop next --id {id}`",
-        "pair-plan": "answer each open question: `awino loop answer --question Q1 --answer \"...\" --id {id}`",
+        "pair-plan": 'answer each open question: `awino loop answer --question Q1 --answer "..." --id {id}`',
         "plan": "run `awino loop approve --by NAME --reason ... --id {id}` once the plan is right",
         "implement": "open the gate run, then run `awino loop next --id {id}`",
     }
@@ -3527,8 +3389,7 @@ class RpiDriver(LoopDriver):
         if not path.is_file():
             return {}
         return skill_receipts.parse_required_skills(
-            _section_text(path.read_text(encoding="utf-8", errors="replace"),
-                          ("required skills",))
+            _section_text(path.read_text(encoding="utf-8", errors="replace"), ("required skills",))
         )
 
     def required_skills(self, state: LoopState, phase_name: str) -> list[str]:
@@ -3592,18 +3453,10 @@ class RpiDriver(LoopDriver):
             return []
         text = path.read_text(encoding="utf-8", errors="replace")
         approaches: list[tuple[str, str, str]] = []
-        for name, body in _split_approach_blocks(
-            _section_text(text, ("candidate approaches",))
-        ):
+        for name, body in _split_approach_blocks(_section_text(text, ("candidate approaches",))):
             effort = _EFFORT_RE.search(body)
-            role = (
-                "default"
-                if _DEFAULT_RECOMMENDATION_RE.search(body)
-                else "alternate"
-            )
-            approaches.append(
-                (name, effort.group(1).strip() if effort else "unstated", role)
-            )
+            role = "default" if _DEFAULT_RECOMMENDATION_RE.search(body) else "alternate"
+            approaches.append((name, effort.group(1).strip() if effort else "unstated", role))
         return approaches
 
     def unanswered_questions(self, state: LoopState) -> list[str]:
@@ -3627,14 +3480,10 @@ class RpiDriver(LoopDriver):
         return path.read_text(encoding="utf-8", errors="replace")
 
     def _applicability_lines(self, state: LoopState) -> list[str]:
-        body = _section_text(
-            self._research_text(state), RESEARCH_SECTIONS["applicability check"]
-        )
+        body = _section_text(self._research_text(state), RESEARCH_SECTIONS["applicability check"])
         return [ln.strip() for ln in body.splitlines() if ln.strip()]
 
-    def _problem_after_marker(
-        self, state: LoopState, marker: re.Pattern[str]
-    ) -> str | None:
+    def _problem_after_marker(self, state: LoopState, marker: re.Pattern[str]) -> str | None:
         """The first non-empty line after a marker line in the
         applicability-check section: the stated (or reframed) problem as the
         research wrote it."""
@@ -3652,9 +3501,7 @@ class RpiDriver(LoopDriver):
         """The reframed problem, when the research names one."""
         return self._problem_after_marker(state, _REFRAMED_PROBLEM_RE)
 
-    def confirm_problem(
-        self, state: LoopState, by: str, reframed: str | None = None
-    ) -> dict:
+    def confirm_problem(self, state: LoopState, by: str, reframed: str | None = None) -> dict:
         """Record the user's answer to the lawyer move: which problem do we solve?
 
         Verdict "confirmed": the stated problem stands -- solve is the stated
@@ -3676,9 +3523,7 @@ class RpiDriver(LoopDriver):
         else:
             reframed = reframed.strip()
             if not reframed:
-                raise LoopError(
-                    "cannot confirm: --reframed needs the reframed problem text"
-                )
+                raise LoopError("cannot confirm: --reframed needs the reframed problem text")
             verdict, solve = "reframed", reframed
         confirmation = {
             "verdict": verdict,
@@ -3695,9 +3540,7 @@ class RpiDriver(LoopDriver):
         self.save(state)
         return confirmation
 
-    def reenter_phase(
-        self, state: LoopState, phase: str, reason: str = ""
-    ) -> LoopState:
+    def reenter_phase(self, state: LoopState, phase: str, reason: str = "") -> LoopState:
         """Re-entering research clears the problem confirmation.
 
         The confirmation attested the old research ("the stated problem
@@ -3717,7 +3560,7 @@ class RpiDriver(LoopDriver):
         word = "reframed" if conf.get("verdict") == "reframed" else "stated"
         return (
             f"User confirmed by {conf.get('by', '?')}: solve the {word} "
-            f"problem -- \"{conf.get('solve', '?')}\"."
+            f'problem -- "{conf.get("solve", "?")}".'
         )
 
     def problem_line(self, state: LoopState) -> str:
@@ -3726,7 +3569,7 @@ class RpiDriver(LoopDriver):
         if conf is None:
             return (
                 "problem: unconfirmed -- planning cannot proceed until you confirm "
-                "the problem: `awino loop confirm-problem --reframed \"...\" | "
+                'the problem: `awino loop confirm-problem --reframed "..." | '
                 f"--confirmed --id {state.id}`"
             )
         word = "reframed" if conf["verdict"] == "reframed" else "stated"
@@ -3744,7 +3587,7 @@ class RpiDriver(LoopDriver):
             return (
                 f"you asked me to solve '{stated}', but the evidence says the real "
                 f"problem is '{reframed}' -- which do we solve? Run "
-                f"`awino loop confirm-problem --reframed \"...\"` or "
+                f'`awino loop confirm-problem --reframed "..."` or '
                 f"`awino loop confirm-problem --confirmed --id {state.id}`."
             )
         if stated:
@@ -3752,11 +3595,11 @@ class RpiDriver(LoopDriver):
                 f"the research states the problem as '{stated}' but you have not "
                 f"confirmed it is the actual problem -- which do we solve? Run "
                 f"`awino loop confirm-problem --confirmed --id {state.id}` "
-                f"(or `--reframed \"...\"` if the evidence points elsewhere)."
+                f'(or `--reframed "..."` if the evidence points elsewhere).'
             )
         return (
             "the research names no stated problem yet -- write the applicability "
-            "check section, then run `awino loop confirm-problem --reframed \"...\" "
+            'check section, then run `awino loop confirm-problem --reframed "..." '
             f"| --confirmed --id {state.id}`."
         )
 
@@ -3775,10 +3618,7 @@ class RpiDriver(LoopDriver):
             record = state.pair_answers[qid]
             question = asked.get(qid, "(question text not found in brief)")
             if record.get("kind") == "default":
-                lines.append(
-                    f"- {qid}: {question}\n"
-                    f"  DEFAULT: {record.get('text', '')}"
-                )
+                lines.append(f"- {qid}: {question}\n  DEFAULT: {record.get('text', '')}")
             else:
                 lines.append(f"- {qid}: {question}\n  ANSWER: {record.get('text', '')}")
         lines.append("")
@@ -3799,9 +3639,7 @@ class RpiDriver(LoopDriver):
                 "APPROACHES  the default recommendation is the Honda -- exactly "
                 "what was asked; alternates are recommendations, never the plan"
             )
-            scope = working_memory.UserModel.recommendation_scope(
-                working_memory.UserModel.load()
-            )
+            scope = working_memory.UserModel.recommendation_scope(working_memory.UserModel.load())
             ordered = list(approaches)
             if scope == "big-first":
                 # The human's learned preference, not the philosophy's: the
@@ -3820,17 +3658,13 @@ class RpiDriver(LoopDriver):
                         f"what was asked] (effort: {effort})"
                     )
                 else:
-                    lines.append(
-                        f"  - {name} [recommendation] (effort: {effort})"
-                    )
+                    lines.append(f"  - {name} [recommendation] (effort: {effort})")
         for qid, question in self.pairing_questions(state):
             record = state.pair_answers.get(qid)
             if record is None:
                 lines.append(f"OPEN {qid}: {question}")
             elif record.get("kind") == "default":
-                lines.append(
-                    f"DEFAULT {qid}: {question} -> {record.get('text', '')}"
-                )
+                lines.append(f"DEFAULT {qid}: {question} -> {record.get('text', '')}")
             else:
                 lines.append(f"ANSWERED {qid}: {question} -> {record.get('text', '')}")
         return lines
@@ -3933,15 +3767,12 @@ class RpiDriver(LoopDriver):
         if not text:
             return []
         probes: list[tuple[str, str]] = []
-        for i, entry in enumerate(
-            _decision_entries(_decisions_section_text(text))[:2], 1
-        ):
+        for i, entry in enumerate(_decision_entries(_decisions_section_text(text))[:2], 1):
             head = re.sub(r"\s+", " ", entry.splitlines()[0]).strip()[:80]
             probes.append(
                 (
                     f"P{i}",
-                    f"Decision '{head}': why this choice, and what breaks "
-                    "if it is wrong?",
+                    f"Decision '{head}': why this choice, and what breaks if it is wrong?",
                 )
             )
         if len(probes) < 3:
@@ -3951,8 +3782,7 @@ class RpiDriver(LoopDriver):
                 probes.append(
                     (
                         f"P{len(probes) + 1}",
-                        f"Risk '{head}': how would you detect it early, "
-                        "before it costs you?",
+                        f"Risk '{head}': how would you detect it early, before it costs you?",
                     )
                 )
         return probes
@@ -3980,7 +3810,7 @@ class RpiDriver(LoopDriver):
         if not explanation.strip():
             missing.append(
                 "no explanation recorded: write the plan in your own words -- "
-                f"`awino loop explain --text \"...\" --id {state.id}`"
+                f'`awino loop explain --text "..." --id {state.id}`'
             )
         answered = comp.get("probes") or {}
         for qid, question in probes:
@@ -3992,9 +3822,7 @@ class RpiDriver(LoopDriver):
                 )
         heads = self.probed_decision_heads(state)
         if heads and explanation.strip():
-            referenced = sum(
-                1 for head in heads if _references_decision(explanation, head)
-            )
+            referenced = sum(1 for head in heads if _references_decision(explanation, head))
             required = max(1, (len(heads) + 1) // 2)
             if referenced < required:
                 missing.append(
@@ -4004,9 +3832,7 @@ class RpiDriver(LoopDriver):
                 )
         return missing
 
-    def record_explanation(
-        self, state: LoopState, text: str, by: str = "human"
-    ) -> dict:
+    def record_explanation(self, state: LoopState, text: str, by: str = "human") -> dict:
         """Record the human's explanation of the plan, in their own words."""
         text = text.strip()
         if not text:
@@ -4046,9 +3872,7 @@ class RpiDriver(LoopDriver):
         comp["probes"] = probes
         state.comprehension = comp
         self.save(state)
-        self._emit(
-            state, "comprehension_recorded", detail=f"probe {qid} answered by={by}"
-        )
+        self._emit(state, "comprehension_recorded", detail=f"probe {qid} answered by={by}")
         return probes[qid]
 
     def plan_suggestions(self, state: LoopState) -> list[PlanSuggestion]:
@@ -4118,16 +3942,11 @@ class RpiDriver(LoopDriver):
         """
         verdict = verdict.strip().lower()
         if verdict not in ("accepted", "rejected"):
-            raise LoopError(
-                f"bad verdict {verdict!r}: expected accepted or rejected"
-            )
-        suggestion = next(
-            (s for s in self.plan_suggestions(state) if s.id == sid), None
-        )
+            raise LoopError(f"bad verdict {verdict!r}: expected accepted or rejected")
+        suggestion = next((s for s in self.plan_suggestions(state) if s.id == sid), None)
         if suggestion is None:
             raise LoopError(
-                f"unknown suggestion {sid!r}: list them with "
-                f"`awino loop suggest --id {state.id}`"
+                f"unknown suggestion {sid!r}: list them with `awino loop suggest --id {state.id}`"
             )
         comp = state.comprehension or {}
         decided = comp.get("suggestions") or {}
@@ -4147,9 +3966,7 @@ class RpiDriver(LoopDriver):
             detail=f"suggestion={sid} verdict={verdict} by={by}: {reason.strip()}",
         )
         if verdict == "accepted" and suggestion.changes_plan:
-            state.approvals = [
-                a for a in state.approvals if a.get("phase") != "plan"
-            ]
+            state.approvals = [a for a in state.approvals if a.get("phase") != "plan"]
             comp.pop("explanation", None)
             (comp.get("probes") or {}).clear()
             self._emit(
@@ -4184,9 +4001,7 @@ class RpiDriver(LoopDriver):
                     lines.append(f"{qid}: {question} -> unanswered")
                 else:
                     answer = re.sub(r"\s+", " ", record.get("answer", ""))
-                    lines.append(
-                        f"{qid}: {question} -> answered: {answer[:120]}"
-                    )
+                    lines.append(f"{qid}: {question} -> answered: {answer[:120]}")
         suggestions = comp.get("suggestions") or {}
         if suggestions:
             lines.append("Suggestions:")
@@ -4208,9 +4023,7 @@ class RpiDriver(LoopDriver):
             lines.append(f"THINKING  ran: {modes}")
         elif state.thinking_waiver is not None:
             waiver = state.thinking_waiver
-            lines.append(
-                f"THINKING  waived by={waiver.get('by')}: {waiver.get('reason')}"
-            )
+            lines.append(f"THINKING  waived by={waiver.get('by')}: {waiver.get('reason')}")
         else:
             lines.append(
                 "THINKING  none recorded: run one mode "
@@ -4229,18 +4042,14 @@ class RpiDriver(LoopDriver):
                 f'`awino loop explain --text "..." --id {state.id}`'
             )
         for suggestion in self.plan_suggestions(state):
-            decided = (state.comprehension.get("suggestions") or {}).get(
-                suggestion.id
-            )
+            decided = (state.comprehension.get("suggestions") or {}).get(suggestion.id)
             if decided:
                 lines.append(
-                    f"SUGGESTION {suggestion.id} {decided['verdict']}: "
-                    f"{suggestion.text[:80]}"
+                    f"SUGGESTION {suggestion.id} {decided['verdict']}: {suggestion.text[:80]}"
                 )
             else:
                 lines.append(
-                    f"SUGGESTION {suggestion.id} [{suggestion.kind}]: "
-                    f"{suggestion.text[:100]}"
+                    f"SUGGESTION {suggestion.id} [{suggestion.kind}]: {suggestion.text[:100]}"
                 )
         return lines
 
@@ -4248,19 +4057,14 @@ class RpiDriver(LoopDriver):
         """Entering teach-back: the driver explains the concept in its own
         words, then asks the human to explain it back. The plan does not
         advance."""
-        lines = [
-            "TEACH_BACK  the plan does not advance until you can explain it back"
-        ]
+        lines = ["TEACH_BACK  the plan does not advance until you can explain it back"]
         heads = self.probed_decision_heads(state)
         if heads:
-            lines.append(
-                "TEACH_BACK  the concept, in the driver's words (not yours):"
-            )
+            lines.append("TEACH_BACK  the concept, in the driver's words (not yours):")
             for head in heads:
                 lines.append(f"TEACH_BACK    - {head}")
         lines.append(
-            "TEACH_BACK  explain it back: "
-            f'`awino loop explain --text "..." --id {state.id}`'
+            f'TEACH_BACK  explain it back: `awino loop explain --text "..." --id {state.id}`'
         )
         for qid, question in self.comprehension_probes(state):
             lines.append(f"TEACH_BACK  probe {qid}: {question}")
@@ -4280,9 +4084,9 @@ class RpiDriver(LoopDriver):
             if unanswered:
                 qid = unanswered[0]
                 return (
-                    f"`awino loop answer --question {qid} --answer \"...\" "
+                    f'`awino loop answer --question {qid} --answer "..." '
                     f"--id {state.id}` (or `awino loop default --question {qid} "
-                    "--reason \"...\")"
+                    '--reason "...")'
                 )
             return f"all questions answered: `awino loop next --id {state.id}`"
         return super().status_next(state)
@@ -4436,8 +4240,7 @@ class RalphDriver(LoopDriver):
         routes instead of counting as an artifact validation failure."""
         if state.locked:
             raise LoopLocked(
-                f"loop {state.id} is locked after 3 failed verifications; "
-                "a human must intervene"
+                f"loop {state.id} is locked after 3 failed verifications; a human must intervene"
             )
         # Advancement happens here too (retry routing), so the spine is
         # evaluated before the check command runs: nothing proceeds -- not
@@ -4446,9 +4249,7 @@ class RalphDriver(LoopDriver):
         problems = self.check(state)  # runs the command, records evidence
         if not problems:
             return super().advance(state)  # _next_phase(verify) is None -> done
-        failures = sum(
-            1 for record in state.verify_history if record.get("outcome") == "failed"
-        )
+        failures = sum(1 for record in state.verify_history if record.get("outcome") == "failed")
         if failures >= 3:
             self.escalate(state)
             return "done"
@@ -4485,8 +4286,7 @@ class RalphDriver(LoopDriver):
             "loop_closed",
             phase="verify",
             detail=(
-                f"verification passed: `{state.check_command}` exited "
-                f"{last.get('exit_code', 0)}"
+                f"verification passed: `{state.check_command}` exited {last.get('exit_code', 0)}"
             ),
         )
         self._maybe_close_seed(state)
@@ -4563,10 +4363,7 @@ class RalphDriver(LoopDriver):
 
     def _seed_close_evidence(self, state: LoopState) -> str:
         last = state.verify_history[-1] if state.verify_history else {}
-        return (
-            f"verification passed: `{state.check_command}` exited "
-            f"{last.get('exit_code', 0)}"
-        )
+        return f"verification passed: `{state.check_command}` exited {last.get('exit_code', 0)}"
 
 
 class DelegateDriver(LoopDriver):

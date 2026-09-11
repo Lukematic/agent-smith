@@ -53,9 +53,7 @@ class CriterionJudgment:
     loop_id: str | None
 
 
-def _judge_criteria(
-    criteria: list[str], events: list[LoopEvent]
-) -> list[CriterionJudgment]:
+def _judge_criteria(criteria: list[str], events: list[LoopEvent]) -> list[CriterionJudgment]:
     """Per-criterion met/unmet/unjudgeable from the outcome verdict trail.
 
     The latest verdict mentioning a criterion wins; criteria no verdict ever
@@ -65,8 +63,7 @@ def _judge_criteria(
     """
     index = {_norm(criterion): criterion for criterion in criteria}
     judgments = {
-        criterion: CriterionJudgment(criterion, "unjudgeable", None, None)
-        for criterion in criteria
+        criterion: CriterionJudgment(criterion, "unjudgeable", None, None) for criterion in criteria
     }
     for event in events:  # loops.jsonl is oldest-first; later wins
         if event.kind != "outcome_verdict":
@@ -131,10 +128,7 @@ def _deliverables_from_loops(events: list[LoopEvent]) -> list[Deliverable]:
                 verdict = word
             parsed = proof.verdict_criteria(event.detail)
             met, unmet = len(parsed["met"]), len(parsed["unmet"])
-        proof_lines = [
-            f"loops.jsonl: {len(trail)} events "
-            f"({', '.join(sorted(kinds))})"
-        ]
+        proof_lines = [f"loops.jsonl: {len(trail)} events ({', '.join(sorted(kinds))})"]
         validated = []
         for event in trail:
             if event.kind != "artifact_validated":
@@ -145,10 +139,7 @@ def _deliverables_from_loops(events: list[LoopEvent]) -> list[Deliverable]:
         for artifact in validated:
             proof_lines.append(f"validated artifact: {artifact}")
         if verdict is not None:
-            proof_lines.append(
-                f"outcome verdict '{verdict}': {met} criteria met, "
-                f"{unmet} unmet"
-            )
+            proof_lines.append(f"outcome verdict '{verdict}': {met} criteria met, {unmet} unmet")
         else:
             proof_lines.append("no outcome verdict recorded for this loop")
         out.append(
@@ -182,9 +173,7 @@ def _deliverables_from_runs(ledger: Ledger) -> list[Deliverable]:
         evidence_path = child / "evidence.jsonl"
         if evidence_path.is_file():
             evidence = sum(
-                1
-                for line in evidence_path.read_text(encoding="utf-8").splitlines()
-                if line.strip()
+                1 for line in evidence_path.read_text(encoding="utf-8").splitlines() if line.strip()
             )
         out.append(
             Deliverable(
@@ -245,9 +234,7 @@ def _loop_contexts(
         if not state_path.is_file():
             continue
         try:
-            state = loops.LoopState.from_dict(
-                json.loads(state_path.read_text(encoding="utf-8"))
-            )
+            state = loops.LoopState.from_dict(json.loads(state_path.read_text(encoding="utf-8")))
         except (OSError, ValueError, TypeError):
             continue
         try:
@@ -279,14 +266,10 @@ def _loop_contexts(
             pairing_path = project_root / pairing_rel
             if pairing_path.is_file():
                 try:
-                    brief_text = pairing_path.read_text(
-                        encoding="utf-8", errors="replace"
-                    )
+                    brief_text = pairing_path.read_text(encoding="utf-8", errors="replace")
                     bodies = dict(
                         loops._split_approach_blocks(
-                            loops._section_text(
-                                brief_text, ("candidate approaches",)
-                            )
+                            loops._section_text(brief_text, ("candidate approaches",))
                         )
                     )
                 except OSError:
@@ -427,8 +410,7 @@ def _beyond_honda(
     for entry in decisions.why_less():
         items.append(
             BeyondItem(
-                title=f"record the why for decision {entry.id} "
-                f"'{entry.decision[:60]}'",
+                title=f"record the why for decision {entry.id} '{entry.decision[:60]}'",
                 effort=_BEYOND_EFFORT_UNKNOWN,
                 source="buddy audit",
             )
@@ -466,7 +448,11 @@ def _beyond_honda(
 # ── the brief ────────────────────────────────────────────────────────────
 
 
-_VERDICT_WORD = {"yes": "accomplished", "partial": "partially accomplished", "no": "not accomplished"}
+_VERDICT_WORD = {
+    "yes": "accomplished",
+    "partial": "partially accomplished",
+    "no": "not accomplished",
+}
 
 
 def _compile_brief(state_root: Path, project_root: Path, workspace: Workspace) -> list[str]:
@@ -489,33 +475,40 @@ def _compile_brief(state_root: Path, project_root: Path, workspace: Workspace) -
     objective = (cat.answers.get("objective") or "").strip()
     if not objective:
         lines.append("  no mission on file")
-        gaps.append("no mission on file -- set one with "
-                    '`awino mission --set "objective=<one sentence>"`')
+        gaps.append(
+            'no mission on file -- set one with `awino mission --set "objective=<one sentence>"`'
+        )
     else:
         lines.append(f"  Objective: {objective}")
     criteria = heilmeier.success_criteria(cat)
     if not criteria:
         lines.append("  no success criteria on file")
-        gaps.append("no success criteria on file -- wire them with "
-                    '`awino mission --set "exams=<claim> -> <verify command>"`')
+        gaps.append(
+            "no success criteria on file -- wire them with "
+            '`awino mission --set "exams=<claim> -> <verify command>"`'
+        )
     else:
         lines.append("  Success criteria, judged by outcome verdicts:")
         verdicts = [e for e in events if e.kind == "outcome_verdict"]
         if not verdicts:
             lines.append("    no outcome verdict recorded yet")
-            gaps.append("no outcome verdict recorded yet -- close loops with "
-                        "`awino loop close --verdict yes|partial|no` so the "
-                        "mission can be judged")
+            gaps.append(
+                "no outcome verdict recorded yet -- close loops with "
+                "`awino loop close --verdict yes|partial|no` so the "
+                "mission can be judged"
+            )
             for criterion in criteria:
                 lines.append(f"    [unjudgeable] {criterion}")
         else:
             for judgment in _judge_criteria(criteria, events):
-                at = f" (judged {judgment.judged_at}, loop {judgment.loop_id})" if judgment.judged_at else " (never judged)"
+                at = (
+                    f" (judged {judgment.judged_at}, loop {judgment.loop_id})"
+                    if judgment.judged_at
+                    else " (never judged)"
+                )
                 lines.append(f"    [{judgment.status}] {judgment.criterion}{at}")
                 if judgment.status == "unjudgeable":
-                    gaps.append(
-                        f"criterion never judged by a verdict: '{judgment.criterion}'"
-                    )
+                    gaps.append(f"criterion never judged by a verdict: '{judgment.criterion}'")
     lines.append("")
 
     # 2. Deliverables: what was built, with the proof.
@@ -523,8 +516,7 @@ def _compile_brief(state_root: Path, project_root: Path, workspace: Workspace) -
     deliverables = _deliverables_from_loops(events) + _deliverables_from_runs(ledger)
     if not deliverables:
         lines.append("  nothing completed on file (no closed loops or runs)")
-        gaps.append("no completed work on file -- deliverables appear here "
-                    "once loops close")
+        gaps.append("no completed work on file -- deliverables appear here once loops close")
     for item in deliverables:
         lines.append(f"  - {item.title} ({item.kind} {item.ref})")
         if item.verdict is not None:

@@ -183,9 +183,8 @@ def baseline_stance(profile: Path | None = None) -> str:
     baseline is "default", i.e. no forced stance and behavior is unchanged.
     """
     path = profile if profile is not None else profile_path()
-    if path.is_file():
-        if _CHALLENGE_ME.search(path.read_text(encoding="utf-8")):
-            return "advisor"
+    if path.is_file() and _CHALLENGE_ME.search(path.read_text(encoding="utf-8")):
+        return "advisor"
     return "default"
 
 

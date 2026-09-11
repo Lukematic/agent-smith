@@ -28,6 +28,7 @@ def _run_awino(
     args: list[str], project_root: Path, awino_home: Path
 ) -> subprocess.CompletedProcess:
     env = os.environ.copy()
+    env["AWINO_PROJECT"] = str(project_root)
     env["SMITH_PROJECT"] = str(project_root)
     env.pop("VIRTUAL_ENV", None)
     env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
@@ -39,6 +40,26 @@ def _run_awino(
         text=True,
         timeout=60,
     )
+
+
+def _setup_toy_venv(project: Path) -> None:
+    venv = project / ".venv"
+    if not venv.exists():
+        subprocess.run(["uv", "venv", str(venv)], check=True, capture_output=True)
+    site_packages = (
+        venv
+        / ("Lib" if os.name == "nt" else "lib")
+        / (
+            "site-packages"
+            if os.name == "nt"
+            else f"python{sys.version_info.major}.{sys.version_info.minor}/site-packages"
+        )
+    )
+    site_packages.mkdir(parents=True, exist_ok=True)
+    import pytest as _pytest_mod
+
+    active_sp = Path(_pytest_mod.__file__).resolve().parents[1]
+    (site_packages / "active_env.pth").write_text(f"{active_sp}\n", encoding="utf-8")
 
 
 def _open_code_run(project: Path, awino_home: Path, objective: str, scope: str):
@@ -79,6 +100,7 @@ def toy_project(tmp_path: Path) -> Path:
         "def test_toy_passes():\n    assert True\n",
         encoding="utf-8",
     )
+    _setup_toy_venv(project)
     return project
 
 
@@ -118,6 +140,7 @@ class TestGateRecordUsesTargetProject:
             "from nonexistent_module import thing\n\ndef test_x():\n    assert thing\n",
             encoding="utf-8",
         )
+        _setup_toy_venv(project)
 
         opened = _open_code_run(project, awino_home, "broken change", "tests/test_broken.py")
         assert opened.returncode == 0, opened.stdout + opened.stderr

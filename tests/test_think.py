@@ -257,6 +257,7 @@ Using only these variables: cut steps to pay to one.
 
 # ── registry ─────────────────────────────────────────────────────────────
 
+
 class TestModeRegistry:
     def test_ten_modes(self) -> None:
         assert think.MODE_NAMES == (
@@ -311,6 +312,7 @@ class TestModeRegistry:
 
 # ── validation: compliant outputs pass ───────────────────────────────────
 
+
 class TestCompliantOutputsPass:
     @pytest.mark.parametrize(
         "mode_name, text",
@@ -331,6 +333,7 @@ class TestCompliantOutputsPass:
 
 
 # ── validation: failures name the missing part ───────────────────────────
+
 
 class TestFailuresNameTheMissingPart:
     def test_missing_section_named(self) -> None:
@@ -387,6 +390,7 @@ class TestFailuresNameTheMissingPart:
 # twelve-year-old follows it) and a diagram section that actually draws the
 # variables and their relationships -- boxes and arrows, not prose.
 
+
 class TestTeachingSide:
     def test_feynman_teaching_sections_pass(self) -> None:
         assert think.validate("feynman", FEYNMAN_OK) == []
@@ -430,6 +434,7 @@ class TestTeachingSide:
 
 # ── critic integration ───────────────────────────────────────────────────
 
+
 class TestCriticIntegration:
     def test_critic_verifies_thinking_modes(self) -> None:
         from awino import stance_verify
@@ -451,6 +456,7 @@ class TestCriticIntegration:
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────
+
 
 class TestThinkCli:
     def test_think_lists_all_nine_modes(self) -> None:

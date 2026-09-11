@@ -27,6 +27,7 @@ import os
 import re
 import shlex
 import shutil
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -77,15 +78,15 @@ def command_is_executable(cmd: str) -> bool:
     real executable on PATH (``shutil.which``) or be an executable file path.
     """
     try:
-        parts = shlex.split(cmd, posix=True)
+        parts = shlex.split(cmd.replace("\\", "/"), posix=True)
     except ValueError:
         return False
     if not parts:
         return False
     head = parts[0]
-    if "/" in head or os.path.isabs(head):
-        p = Path(head)
-        return p.is_file() and os.access(p, os.X_OK)
+    p = Path(head)
+    if "/" in head or "\\" in head or p.is_absolute():
+        return p.is_file() and (os.access(p, os.X_OK) or sys.platform == "win32")
     return shutil.which(head) is not None
 
 
@@ -315,7 +316,5 @@ def criteria_hash(cat: Catechism) -> str:
     update the mission first rather than judging against stale criteria --
     missions are living.
     """
-    payload = cat.answers.get("objective", "").strip() + "\n" + "\n".join(
-        success_criteria(cat)
-    )
+    payload = cat.answers.get("objective", "").strip() + "\n" + "\n".join(success_criteria(cat))
     return hashlib.sha256(payload.strip().encode("utf-8")).hexdigest()

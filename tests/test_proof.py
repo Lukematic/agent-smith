@@ -44,9 +44,7 @@ def _record(ledger: Ledger, kind: str, phase: str = "", detail: str = "") -> Non
 
 
 @pytest.fixture()
-def proof_project(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> tuple[Path, str]:
+def proof_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, str]:
     """A project with mission, approved plan, verdicts, and test evidence."""
     monkeypatch.chdir(tmp_path)
     for var in ("AWINO_HOME", "SMITH_HOME", "AWINO_PROJECT", "SMITH_PROJECT"):
@@ -70,9 +68,7 @@ def proof_project(
     docs.mkdir()
     plan_file = docs / "plan.md"
     plan_file.write_text("# Plan: search index rebuild\n", encoding="utf-8")
-    run = ledger.open(
-        TaskClass.CODE_CHANGE, "Rebuild the search index", plan_path=plan_file
-    )
+    run = ledger.open(TaskClass.CODE_CHANGE, "Rebuild the search index", plan_path=plan_file)
     decision = ledger.approve_plan(run.run_id, "human", "plan looks right")
     _record(ledger, "loop_started", "research", "task: Rebuild the search index")
     _record(
@@ -112,9 +108,7 @@ def cli_runner(monkeypatch: pytest.MonkeyPatch) -> CliRunner:
     return CliRunner()
 
 
-def _export(
-    cli_runner: CliRunner, project: Path, out: Path
-) -> None:
+def _export(cli_runner: CliRunner, project: Path, out: Path) -> None:
     result = cli_runner.invoke(cli.app, ["proof", "export", "--out", str(out)])
     assert result.exit_code == 0, result.output
 
@@ -152,9 +146,10 @@ def test_export_pack_contents_trace_to_state(
     assert mission["success_criteria"] == CRITERIA
     plan = json.loads((pack / "plan.json").read_text(encoding="utf-8"))
     assert plan["approved_plan_sha256"] == plan_sha
-    assert plan["approved_plan_sha256"] == hashlib.sha256(
-        (project / "docs" / "plan.md").read_bytes()
-    ).hexdigest()
+    assert (
+        plan["approved_plan_sha256"]
+        == hashlib.sha256((project / "docs" / "plan.md").read_bytes()).hexdigest()
+    )
     trail = [
         json.loads(line)
         for line in (pack / "ledger.jsonl").read_text(encoding="utf-8").splitlines()
@@ -191,9 +186,7 @@ def test_export_pack_contents_trace_to_state(
         "brief.md",
     }
     for item in index["artifacts"]:
-        assert hashlib.sha256(
-            (pack / item["path"]).read_bytes()
-        ).hexdigest() == item["sha256"]
+        assert hashlib.sha256((pack / item["path"]).read_bytes()).hexdigest() == item["sha256"]
     brief = (pack / "brief.md").read_text(encoding="utf-8")
     assert "Rebuild the search index without downtime." in brief
     assert LOOP_ID in brief
@@ -267,9 +260,7 @@ def _resign(pack: Path) -> None:
     index_path = pack / "index.json"
     index = json.loads(index_path.read_text(encoding="utf-8"))
     for item in index["artifacts"]:
-        item["sha256"] = hashlib.sha256(
-            (pack / item["path"]).read_bytes()
-        ).hexdigest()
+        item["sha256"] = hashlib.sha256((pack / item["path"]).read_bytes()).hexdigest()
     index_path.write_text(json.dumps(index, indent=2) + "\n", encoding="utf-8")
 
 
@@ -287,8 +278,7 @@ def test_verify_rejects_verdict_for_unknown_loop(
     failures = proof.verify_pack(pack)
     assert failures, "verdict for an unknown loop must fail verification"
     assert any(
-        "verdicts.json" in str(failure) and "deadbeef" in str(failure)
-        for failure in failures
+        "verdicts.json" in str(failure) and "deadbeef" in str(failure) for failure in failures
     ), [str(failure) for failure in failures]
 
 
@@ -299,11 +289,7 @@ def test_verify_rejects_trail_not_starting_with_loop_started(
     pack = tmp_path / "pack"
     _export(cli_runner, project, pack)
     ledger_path = pack / "ledger.jsonl"
-    lines = [
-        line
-        for line in ledger_path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    lines = [line for line in ledger_path.read_text(encoding="utf-8").splitlines() if line.strip()]
     lines.append(
         json.dumps(
             {
@@ -320,8 +306,7 @@ def test_verify_rejects_trail_not_starting_with_loop_started(
     _resign(pack)
     failures = proof.verify_pack(pack)
     assert any(
-        "ledger.jsonl" in str(failure) and "ghost-1" in str(failure)
-        for failure in failures
+        "ledger.jsonl" in str(failure) and "ghost-1" in str(failure) for failure in failures
     ), [str(failure) for failure in failures]
 
 
@@ -343,8 +328,7 @@ def test_verify_rejects_brief_that_invents_facts(
     _resign(pack)
     failures = proof.verify_pack(pack)
     assert any(
-        "brief.md" in str(failure) and "objective" in str(failure)
-        for failure in failures
+        "brief.md" in str(failure) and "objective" in str(failure) for failure in failures
     ), [str(failure) for failure in failures]
 
 
@@ -357,6 +341,5 @@ def test_verify_rejects_unlisted_extra_file(
     (pack / "extra.md").write_text("smuggled in after export\n", encoding="utf-8")
     failures = proof.verify_pack(pack)
     assert any(
-        "extra.md" in str(failure) and "not listed" in str(failure)
-        for failure in failures
+        "extra.md" in str(failure) and "not listed" in str(failure) for failure in failures
     ), [str(failure) for failure in failures]

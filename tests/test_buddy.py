@@ -57,8 +57,7 @@ def test_stance_self_test_each_sample_fires_its_stance() -> None:
             assert probe.fired is None, f"advisor sample should not fire: {probe.sample!r}"
         else:
             assert probe.fired == probe.expected, (
-                f"sample {probe.sample!r} fired {probe.fired!r}, "
-                f"expected {probe.expected!r}"
+                f"sample {probe.sample!r} fired {probe.fired!r}, expected {probe.expected!r}"
             )
 
 
@@ -185,14 +184,26 @@ def _write_mission_and_seeds(tmp_path: Path, mission_epoch: float) -> tuple[Path
     seeds_dir.mkdir(parents=True, exist_ok=True)
     lines = [
         # closed after the mission changed -> counts
-        {"id": "1", "title": "a", "status": "closed",
-         "updated": datetime.fromtimestamp(mission_epoch + 100, UTC).isoformat()},
+        {
+            "id": "1",
+            "title": "a",
+            "status": "closed",
+            "updated": datetime.fromtimestamp(mission_epoch + 100, UTC).isoformat(),
+        },
         # closed before the mission changed -> does not count
-        {"id": "2", "title": "b", "status": "closed",
-         "updated": datetime.fromtimestamp(mission_epoch - 100, UTC).isoformat()},
+        {
+            "id": "2",
+            "title": "b",
+            "status": "closed",
+            "updated": datetime.fromtimestamp(mission_epoch - 100, UTC).isoformat(),
+        },
         # still open -> never counts
-        {"id": "3", "title": "c", "status": "open",
-         "updated": datetime.fromtimestamp(mission_epoch + 200, UTC).isoformat()},
+        {
+            "id": "3",
+            "title": "c",
+            "status": "open",
+            "updated": datetime.fromtimestamp(mission_epoch + 200, UTC).isoformat(),
+        },
     ]
     (seeds_dir / "issues.jsonl").write_text(
         "\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8"
@@ -411,14 +422,8 @@ def test_fix_stance_miss_prints_sample_and_exact_pattern(
     result = cli_runner.invoke(buddy.buddy_app, ["--fix"])
     assert result.exit_code == 0, result.output
     pattern = dict(stance._RULES)["steel-man"].pattern
-    assert (
-        f"  MISS steel-man <- 'challenge this' : expected pattern r'{pattern}'"
-        in result.output
-    )
-    assert (
-        "ACTION  update the steel-man regex in src/awino/stance.py _RULES"
-        in result.output
-    )
+    assert f"  MISS steel-man <- 'challenge this' : expected pattern r'{pattern}'" in result.output
+    assert "ACTION  update the steel-man regex in src/awino/stance.py _RULES" in result.output
     assert "BUDDY-FIX done: 1 correction(s) applied, 2 need a human" in result.output
 
 

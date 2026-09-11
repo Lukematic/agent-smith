@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -170,6 +170,10 @@ def test_installer_scripts_are_executable_in_git_index() -> None:
     }
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="bin/awino is a POSIX shell script; Windows uses bin/awino.cmd and bin/awino.ps1",
+)
 def test_launcher_finds_uv_in_local_bin_not_on_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -196,6 +200,10 @@ def test_launcher_finds_uv_in_local_bin_not_on_path(
     assert "uv-ok" in result.stdout  # only the fake uv prints this
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="bin/awino is a POSIX shell script; Windows uses bin/awino.cmd and bin/awino.ps1",
+)
 def test_launcher_still_degrades_gracefully_without_uv(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -202,7 +202,30 @@ def check_uv(paths: AwinoPaths) -> Result:
     venv = paths.root / ".venv"
     if not venv.is_dir():
         return _fail("uv_env", "no .venv in the project", "just install")
-    code, out = run_command(["uv", "sync", "--all-groups", "--frozen", "--quiet"], paths.root)
+    code, out = run_command(
+        [
+            "uv",
+            "sync",
+            "--all-groups",
+            "--frozen",
+            "--offline",
+            "--link-mode=copy",
+            "--quiet",
+        ],
+        paths.root,
+    )
+    if code != 0:
+        code, out = run_command(
+            [
+                "uv",
+                "sync",
+                "--all-groups",
+                "--frozen",
+                "--link-mode=copy",
+                "--quiet",
+            ],
+            paths.root,
+        )
     if code != 0:
         # --frozen fails when the lock is out of date, which is the real signal.
         return _fail(

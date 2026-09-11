@@ -47,9 +47,7 @@ runner = CliRunner()
 
 
 def _cat(**answers: str) -> Catechism:
-    return Catechism(
-        answers=dict(answers), source=dict.fromkeys(answers, "human")
-    )
+    return Catechism(answers=dict(answers), source=dict.fromkeys(answers, "human"))
 
 
 class TestMeasurableMission:
@@ -90,9 +88,9 @@ class TestMeasurableMission:
 
     def test_criteria_hash_stable_and_sensitive(self) -> None:
         cat = _cat(objective="x", exams="fast -> pytest -q")
-        assert heilmeier.criteria_hash(cat) == heilmeier.criteria_hash(_cat(
-            objective="x", exams="fast -> pytest -q"
-        ))
+        assert heilmeier.criteria_hash(cat) == heilmeier.criteria_hash(
+            _cat(objective="x", exams="fast -> pytest -q")
+        )
         assert heilmeier.criteria_hash(cat) != heilmeier.criteria_hash(
             _cat(objective="x", exams="faster -> pytest -q")
         )
@@ -132,9 +130,7 @@ class TestMissionSetCompletion:
             result = _set(runner, key, text)
             assert result.exit_code == 0, result.output
 
-    def test_complete_with_prose_exams_is_refused(
-        self, mission_project: Path
-    ) -> None:
+    def test_complete_with_prose_exams_is_refused(self, mission_project: Path) -> None:
         self._answer_all_but_exams()
         result = _set(runner, "exams", "it should feel fast")
         assert result.exit_code == 2, result.output
@@ -142,9 +138,7 @@ class TestMissionSetCompletion:
         assert "success_criteria" in result.output
         assert "COMPLETE" not in result.output
 
-    def test_complete_with_wired_exam_is_accepted(
-        self, mission_project: Path
-    ) -> None:
+    def test_complete_with_wired_exam_is_accepted(self, mission_project: Path) -> None:
         self._answer_all_but_exams()
         result = _set(runner, "exams", "it feels fast -> pytest tests/test_speed.py -q")
         assert result.exit_code == 0, result.output
@@ -219,9 +213,7 @@ class TestBuddyCriteria:
         # A scaffolded draft has no wired commands: the mission is still
         # not measurable until the human finalizes it.
         assert heilmeier.validate_mission(cat)
-        assert "BUDDY-FIX done: 2 correction(s) applied, 1 need a human" in (
-            result.output
-        )
+        assert "BUDDY-FIX done: 2 correction(s) applied, 1 need a human" in (result.output)
 
     def test_fix_with_no_stated_goals_scaffolds_nothing(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -242,31 +234,21 @@ class TestSessionStartMissionBrief:
         s.mkdir(parents=True, exist_ok=True)
         return s
 
-    def test_mission_brief_step_runs_with_declared_skill(
-        self, tmp_path: Path
-    ) -> None:
+    def test_mission_brief_step_runs_with_declared_skill(self, tmp_path: Path) -> None:
         s = self._state(tmp_path)
-        lines = run_event(
-            "session-start", s, tmp_path, ledger=Ledger(s), open_seeds=[]
-        )
+        lines = run_event("session-start", s, tmp_path, ledger=Ledger(s), open_seeds=[])
         joined = "\n".join(lines)
         assert "[mission-brief] skill=direct" in joined
         assert STEP_SKILLS["mission-brief"] == "direct"
 
-    def test_mission_brief_shows_unmeasurable_mission(
-        self, tmp_path: Path
-    ) -> None:
+    def test_mission_brief_shows_unmeasurable_mission(self, tmp_path: Path) -> None:
         s = self._state(tmp_path)
-        lines = run_event(
-            "session-start", s, tmp_path, ledger=Ledger(s), open_seeds=[]
-        )
+        lines = run_event("session-start", s, tmp_path, ledger=Ledger(s), open_seeds=[])
         joined = "\n".join(lines)
         assert "MISSION  (revisiting the live mission before work starts)" in joined
         assert "measurable: no (missing: objective, success_criteria)" in joined
 
-    def test_mission_brief_renders_live_objective_and_criteria(
-        self, tmp_path: Path
-    ) -> None:
+    def test_mission_brief_renders_live_objective_and_criteria(self, tmp_path: Path) -> None:
         s = self._state(tmp_path)
         save(
             s,
@@ -275,9 +257,7 @@ class TestSessionStartMissionBrief:
                 exams="fast -> pytest -q\nreliable -> pytest tests/test_r.py -q",
             ),
         )
-        lines = run_event(
-            "session-start", s, tmp_path, ledger=Ledger(s), open_seeds=[]
-        )
+        lines = run_event("session-start", s, tmp_path, ledger=Ledger(s), open_seeds=[])
         joined = "\n".join(lines)
         assert "objective: ship the thing" in joined
         assert "success criteria (2):" in joined
@@ -365,18 +345,14 @@ None.
 """
 
 
-def _write_research(
-    driver: loops.RpiDriver, state: loops.LoopState, text: str
-) -> None:
+def _write_research(driver: loops.RpiDriver, state: loops.LoopState, text: str) -> None:
     path = driver.project_root / state.research_artifact
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
 
 
 class TestResearchFirstPrinciples:
-    def test_missing_sections_each_named(
-        self, rpi_driver: loops.RpiDriver
-    ) -> None:
+    def test_missing_sections_each_named(self, rpi_driver: loops.RpiDriver) -> None:
         state = rpi_driver.new("migrate auth")
         bare = RESEARCH_BASE
         for section in (
@@ -385,9 +361,7 @@ class TestResearchFirstPrinciples:
             "## Angles considered",
             "## Applicability check",
         ):
-            bare = "\n".join(
-                ln for ln in bare.splitlines() if not ln.startswith(section)
-            )
+            bare = "\n".join(ln for ln in bare.splitlines() if not ln.startswith(section))
         # Drop the bodies too: remove the list lines under the headings.
         _write_research(rpi_driver, state, bare)
         missing = rpi_driver.validate_current(state)
@@ -396,9 +370,7 @@ class TestResearchFirstPrinciples:
         assert any("'angles considered'" in m for m in missing)
         assert any("'applicability check'" in m for m in missing)
 
-    def test_solution_before_sections_is_rejected(
-        self, rpi_driver: loops.RpiDriver
-    ) -> None:
+    def test_solution_before_sections_is_rejected(self, rpi_driver: loops.RpiDriver) -> None:
         state = rpi_driver.new("migrate auth")
         jumped = RESEARCH_BASE.replace(
             "## Problem breakdown",
@@ -408,9 +380,7 @@ class TestResearchFirstPrinciples:
         missing = rpi_driver.validate_current(state)
         assert any("before any solution" in m or "proposed solution" in m for m in missing)
 
-    def test_assumptions_section_must_name_assumptions(
-        self, rpi_driver: loops.RpiDriver
-    ) -> None:
+    def test_assumptions_section_must_name_assumptions(self, rpi_driver: loops.RpiDriver) -> None:
         state = rpi_driver.new("migrate auth")
         vague = RESEARCH_BASE.replace(
             '- "Migration requires downtime": challenged -- src/auth.py:42 shows token\n'
@@ -421,9 +391,7 @@ class TestResearchFirstPrinciples:
         missing = rpi_driver.validate_current(state)
         assert any("names no assumption explicitly" in m for m in missing)
 
-    def test_complete_first_principles_research_passes(
-        self, rpi_driver: loops.RpiDriver
-    ) -> None:
+    def test_complete_first_principles_research_passes(self, rpi_driver: loops.RpiDriver) -> None:
         state = rpi_driver.new("migrate auth")
         _write_research(rpi_driver, state, RESEARCH_BASE)
         assert rpi_driver.validate_current(state) == []
@@ -465,9 +433,7 @@ Q2: What is the downtime budget for the migration window?
 """
 
 
-def _at_pair_plan(
-    driver: loops.RpiDriver, brief: str = BRIEF_BASE
-) -> loops.LoopState:
+def _at_pair_plan(driver: loops.RpiDriver, brief: str = BRIEF_BASE) -> loops.LoopState:
     state = driver.new("migrate auth")
     _write_research(driver, state, RESEARCH_BASE)
     assert driver.check(state) == []
@@ -556,12 +522,8 @@ def _comprehend(driver, state) -> None:
 
 
 class TestPairPlanHonda:
-    def test_brief_without_effort_rejected(
-        self, rpi_driver: loops.RpiDriver
-    ) -> None:
-        no_effort = BRIEF_BASE.replace("effort: one day\n", "").replace(
-            "effort: three days\n", ""
-        )
+    def test_brief_without_effort_rejected(self, rpi_driver: loops.RpiDriver) -> None:
+        no_effort = BRIEF_BASE.replace("effort: one day\n", "").replace("effort: three days\n", "")
         state = rpi_driver.new("migrate auth")
         _write_research(rpi_driver, state, RESEARCH_BASE)
         path = rpi_driver.project_root / state.pairing_artifact
@@ -582,9 +544,7 @@ class TestPairPlanHonda:
         missing = rpi_driver.check(state)
         assert any("default recommendation" in m for m in missing)
 
-    def test_brief_with_two_defaults_rejected(
-        self, rpi_driver: loops.RpiDriver
-    ) -> None:
+    def test_brief_with_two_defaults_rejected(self, rpi_driver: loops.RpiDriver) -> None:
         two = BRIEF_BASE.replace(
             "### Big bang\nReplace everything at once.",
             "### Big bang\nDefault recommendation: replace everything at once.",
@@ -593,17 +553,13 @@ class TestPairPlanHonda:
         missing = rpi_driver.check(state)
         assert any("multiple approaches" in m for m in missing)
 
-    def test_pairing_approaches_reports_effort_and_roles(
-        self, rpi_driver: loops.RpiDriver
-    ) -> None:
+    def test_pairing_approaches_reports_effort_and_roles(self, rpi_driver: loops.RpiDriver) -> None:
         state = _at_pair_plan(rpi_driver)
         approaches = rpi_driver.pairing_approaches(state)
         assert ("Big bang", "one day", "alternate") in approaches
         assert ("Strangler", "three days", "default") in approaches
 
-    def test_describe_pairing_presents_honda_as_default(
-        self, rpi_driver: loops.RpiDriver
-    ) -> None:
+    def test_describe_pairing_presents_honda_as_default(self, rpi_driver: loops.RpiDriver) -> None:
         state = _at_pair_plan(rpi_driver)
         lines = rpi_driver.describe_pairing(state)
         joined = "\n".join(lines)
@@ -680,8 +636,7 @@ def _save_measurable_mission(project: Path) -> None:
         _cat(
             objective="migrate auth with zero downtime",
             exams=(
-                "the auth migration completes with zero downtime "
-                "-> pytest tests/test_auth.py -q"
+                "the auth migration completes with zero downtime -> pytest tests/test_auth.py -q"
             ),
         ),
     )
@@ -711,12 +666,15 @@ class TestCriteriaEvaluation:
         _write_research(crit_driver, state, RESEARCH_BASE)
         assert crit_driver.check(state) == []
         judged = dict(crit_driver.last_criteria or [])
-        assert judged[
-            "the auth migration completes with zero downtime "
-            "-> pytest tests/test_auth.py -q"
-        ] == "met"
+        assert (
+            judged[
+                "the auth migration completes with zero downtime -> pytest tests/test_auth.py -q"
+            ]
+            == "met"
+        )
         kinds = [
-            e.kind for e in crit_driver.ledger.loop_events(state.id)  # type: ignore[union-attr]
+            e.kind
+            for e in crit_driver.ledger.loop_events(state.id)  # type: ignore[union-attr]
         ]
         assert "success_criteria_evaluated" in kinds
 
@@ -728,7 +686,8 @@ class TestCriteriaEvaluation:
         assert crit_driver.check(state) == []
         assert crit_driver.last_criteria is None
         kinds = [
-            e.kind for e in crit_driver.ledger.loop_events(state.id)  # type: ignore[union-attr]
+            e.kind
+            for e in crit_driver.ledger.loop_events(state.id)  # type: ignore[union-attr]
         ]
         assert "success_criteria_evaluated" not in kinds
 
@@ -772,18 +731,14 @@ def _cli_driver(project: Path) -> loops.RpiDriver:
 
 def _verdict_event(project: Path, loop_id: str):
     events = [
-        e
-        for e in Ledger(project / ".awino").loop_events(loop_id)
-        if e.kind == "outcome_verdict"
+        e for e in Ledger(project / ".awino").loop_events(loop_id) if e.kind == "outcome_verdict"
     ]
     assert len(events) == 1
     return events[0]
 
 
 class TestLoopCloseCriteria:
-    def test_close_judges_live_criteria_in_verdict(
-        self, cli_env: Path
-    ) -> None:
+    def test_close_judges_live_criteria_in_verdict(self, cli_env: Path) -> None:
         project = cli_env
         loop_id = _run_loop(project)
         _save_measurable_mission(project)
@@ -791,9 +746,7 @@ class TestLoopCloseCriteria:
         state = driver.load(loop_id)
         _write_research_cli(driver, state)
 
-        result = runner.invoke(
-            loop_app, ["close", "--id", loop_id, "--verdict", "yes"]
-        )
+        result = runner.invoke(loop_app, ["close", "--id", loop_id, "--verdict", "yes"])
         assert result.exit_code == 0, result.output
         assert "CRITERIA" in result.output
         assert "[met]" in result.output
@@ -802,9 +755,7 @@ class TestLoopCloseCriteria:
         assert "criteria_unmet:" in event.detail
         assert "criteria_unjudgeable:" in event.detail
 
-    def test_close_refuses_stale_criteria_with_prompt(
-        self, cli_env: Path
-    ) -> None:
+    def test_close_refuses_stale_criteria_with_prompt(self, cli_env: Path) -> None:
         project = cli_env
         loop_id = _run_loop(project)
         _save_measurable_mission(project)
@@ -812,9 +763,7 @@ class TestLoopCloseCriteria:
         state = driver.load(loop_id)
         _write_research_cli(driver, state)
         # Validate the artifact: the loop now stands against criteria A.
-        confirmed = runner.invoke(
-            loop_app, ["confirm-problem", "--id", loop_id, "--confirmed"]
-        )
+        confirmed = runner.invoke(loop_app, ["confirm-problem", "--id", loop_id, "--confirmed"])
         assert confirmed.exit_code == 0, confirmed.output
         result = runner.invoke(loop_app, ["next", "--id", loop_id])
         assert result.exit_code == 0, result.output
@@ -828,15 +777,11 @@ class TestLoopCloseCriteria:
                 exams="the auth migration is reverted -> pytest -q",
             ),
         )
-        result = runner.invoke(
-            loop_app, ["close", "--id", loop_id, "--verdict", "yes"]
-        )
+        result = runner.invoke(loop_app, ["close", "--id", loop_id, "--verdict", "yes"])
         assert result.exit_code == 2, result.output
         assert "PROMPT" in result.output
         assert "stale success criteria" in result.output
-        assert 'awino mission --set "exams=<claim> -> <verify command>"' in (
-            result.output
-        )
+        assert 'awino mission --set "exams=<claim> -> <verify command>"' in (result.output)
         assert "awino loop next" in result.output
         # No verdict was recorded against the stale criteria.
         assert not [
@@ -845,18 +790,14 @@ class TestLoopCloseCriteria:
             if e.kind == "outcome_verdict"
         ]
 
-    def test_close_after_reexamine_judges_live_criteria(
-        self, cli_env: Path
-    ) -> None:
+    def test_close_after_reexamine_judges_live_criteria(self, cli_env: Path) -> None:
         project = cli_env
         loop_id = _run_loop(project)
         _save_measurable_mission(project)
         driver = _cli_driver(project)
         state = driver.load(loop_id)
         _write_research_cli(driver, state)
-        confirmed = runner.invoke(
-            loop_app, ["confirm-problem", "--id", loop_id, "--confirmed"]
-        )
+        confirmed = runner.invoke(loop_app, ["confirm-problem", "--id", loop_id, "--confirmed"])
         assert confirmed.exit_code == 0, confirmed.output
         assert runner.invoke(loop_app, ["next", "--id", loop_id]).exit_code == 0
         # Pair-planning is mandatory: write the brief, answer the questions,
@@ -873,8 +814,15 @@ class TestLoopCloseCriteria:
             answered = runner.invoke(
                 loop_app,
                 [
-                    "answer", "--id", loop_id, "--question", qid,
-                    "--answer", answer, "--by", "tester",
+                    "answer",
+                    "--id",
+                    loop_id,
+                    "--question",
+                    qid,
+                    "--answer",
+                    answer,
+                    "--by",
+                    "tester",
                 ],
             )
             assert answered.exit_code == 0, answered.output
@@ -898,8 +846,7 @@ class TestLoopCloseCriteria:
         # A decision naming a candidate approach must say whether it
         # followed or overrode the default, with a reason.
         plan = (
-            PLAN_BASE
-            + "- Q1 -> strangler: followed the default recommendation "
+            PLAN_BASE + "- Q1 -> strangler: followed the default recommendation "
             "because incremental migration behind a flag keeps downtime "
             "at zero.\n"
             "- Q2 -> zero downtime budget: answered during pair-planning; "
@@ -915,9 +862,7 @@ class TestLoopCloseCriteria:
         _comprehend(driver, state)
         plan_text = path.read_text(encoding="utf-8")
         path.write_text(
-            plan_text.rstrip("\n")
-            + "\n\n"
-            + driver.comprehension_record_block(state),
+            plan_text.rstrip("\n") + "\n\n" + driver.comprehension_record_block(state),
             encoding="utf-8",
         )
         approved = runner.invoke(
@@ -926,9 +871,7 @@ class TestLoopCloseCriteria:
         )
         assert approved.exit_code == 0, approved.output
         assert runner.invoke(loop_app, ["next", "--id", loop_id]).exit_code == 0
-        result = runner.invoke(
-            loop_app, ["close", "--id", loop_id, "--verdict", "partial"]
-        )
+        result = runner.invoke(loop_app, ["close", "--id", loop_id, "--verdict", "partial"])
         assert result.exit_code == 0, result.output
         event = _verdict_event(project, loop_id)
         assert "verdict: partial" in event.detail

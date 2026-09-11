@@ -108,9 +108,7 @@ def inputs_hash(
         "criteria_hash": criteria_hash or "",
         "seed_id": seed_id or "",
     }
-    return hashlib.sha256(
-        json.dumps(payload, sort_keys=True).encode("utf-8")
-    ).hexdigest()
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 def skill_version(skills_dir: Path, skill: str) -> str:
@@ -132,11 +130,7 @@ def skill_version(skills_dir: Path, skill: str) -> str:
 
 def receipt_path(state_root: Path, loop_id: str, phase: str, skill: str) -> Path:
     """Where a receipt lives: the project state dir, never the repo tree."""
-    return (
-        state_root
-        / RECEIPTS_DIRNAME
-        / f"{loop_id}--{phase}--{skill}.json"
-    )
+    return state_root / RECEIPTS_DIRNAME / f"{loop_id}--{phase}--{skill}.json"
 
 
 def file_sha256(path: Path) -> str | None:
@@ -178,9 +172,7 @@ def write_receipt(
     return receipt
 
 
-def read_receipt(
-    state_root: Path, *, loop_id: str, phase: str, skill: str
-) -> SkillReceipt | None:
+def read_receipt(state_root: Path, *, loop_id: str, phase: str, skill: str) -> SkillReceipt | None:
     """Read one receipt. None when absent or unreadable: a corrupt receipt
     parses to no receipt -- the gate reports it as malformed (invalid),
     never as valid. Use receipt_exists() to tell missing from malformed."""
@@ -199,9 +191,7 @@ def read_receipt(
         return None
 
 
-def receipt_exists(
-    state_root: Path, *, loop_id: str, phase: str, skill: str
-) -> bool:
+def receipt_exists(state_root: Path, *, loop_id: str, phase: str, skill: str) -> bool:
     """The receipt file exists on disk, whether or not it parses."""
     return receipt_path(state_root, loop_id, phase, skill).is_file()
 
@@ -285,9 +275,7 @@ def find_receipt_problems(
             problem = driver.validate_receipt(state, phase, skill)
             if problem is None:
                 continue
-            status = (
-                "missing" if problem.startswith("no skill receipt") else "invalid"
-            )
+            status = "missing" if problem.startswith("no skill receipt") else "invalid"
             findings.append(
                 ReceiptFinding(
                     loop_id=loop_id,

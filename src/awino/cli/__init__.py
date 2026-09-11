@@ -75,6 +75,12 @@ floor_app = typer.Typer(help="Portable dispatch floors: any environment can be t
 
 def _version() -> str:
     try:
+        from awino import __version__
+
+        return __version__
+    except Exception:
+        pass
+    try:
         return version("awino-harness")
     except PackageNotFoundError:
         return "0+unknown"
@@ -232,7 +238,19 @@ def _require_valid_plan(ledger: Ledger, run_id: str) -> None:
 
 # Command modules register themselves against the apps above on import. This
 # must stay at the bottom: each module imports the helpers defined here.
-from awino.cli import brief, buddy, dispatch, gate, install, knowledge, loopctl, maintain, project, proof, think  # noqa: E402
+from awino.cli import (  # noqa: E402
+    brief,
+    buddy,
+    dispatch,
+    gate,
+    install,
+    knowledge,
+    loopctl,
+    maintain,
+    project,
+    proof,
+    think,
+)
 
 app.add_typer(buddy.buddy_app, name="buddy")
 app.add_typer(loopctl.loop_app, name="loop")

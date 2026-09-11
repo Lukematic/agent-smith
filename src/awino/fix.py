@@ -80,9 +80,7 @@ def skill_index(paths: AwinoPaths) -> str:
             if doc.documented
             else "(no purpose/when-to-use in SKILL.md)"
         )
-        rows.append(
-            (doc.name, purpose, when, f"../skills/{item.path.parent.name}/SKILL.md")
-        )
+        rows.append((doc.name, purpose, when, f"../skills/{item.path.parent.name}/SKILL.md"))
 
     lines = [
         "# Skills",

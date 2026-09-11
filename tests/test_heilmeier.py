@@ -181,9 +181,7 @@ class TestProseCommandsRejected:
         assert "success_criteria" not in missing_mission_fields(cat)
         assert validate_mission(cat) == []
         # the wired command actually executes: gate-ready means runnable
-        proc = subprocess.run(
-            shlex.split(cmd), capture_output=True, text=True, timeout=30
-        )
+        proc = subprocess.run(shlex.split(cmd), capture_output=True, text=True, timeout=30)
         assert proc.returncode == 0
         assert proc.stdout.strip() == "ok"
 

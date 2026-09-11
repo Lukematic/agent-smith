@@ -246,9 +246,7 @@ def test_learning_rules_never_touch_explicit_fields(home: Path) -> None:
     working_memory.UserModel.save(model)
 
     reloaded = working_memory.UserModel.load()
-    changed = working_memory.UserModel.apply_verdict(
-        reloaded, "no", "way too verbose, summarize"
-    )
+    changed = working_memory.UserModel.apply_verdict(reloaded, "no", "way too verbose, summarize")
     # The rule fired but the explicit field stands; the skip is audited.
     assert not changed
     assert reloaded["narration_verbosity"] == "verbose"
@@ -297,9 +295,7 @@ def _project(tmp_path: Path) -> Path:
     return project
 
 
-def _driver(
-    project: Path, tmp_path: Path, state_root: Path
-) -> loops.RpiDriver:
+def _driver(project: Path, tmp_path: Path, state_root: Path) -> loops.RpiDriver:
     return loops.RpiDriver(
         project_root=project,
         loops_dir=tmp_path / "loops",
@@ -396,9 +392,7 @@ def test_buddy_finds_and_backfills_unrecorded_decisions(state_root: Path) -> Non
     ledger.record_loop_event(
         _loop_event("rpi-1", "approval_granted", "by=human reason=small and safe")
     )
-    ledger.record_loop_event(
-        _loop_event("rpi-2", "approval_granted", "by=human")
-    )
+    ledger.record_loop_event(_loop_event("rpi-2", "approval_granted", "by=human"))
 
     decisions = working_memory.Decisions(state_root)
     events = ledger.loop_events()
@@ -447,9 +441,7 @@ def test_buddy_flags_stale_checklist_and_stale_fact_refs(state_root: Path) -> No
     old_id = facts.append("first claim")
     new_id = facts.correct(old_id, "corrected claim")
     decisions = working_memory.Decisions(state_root)
-    decisions.record(
-        decision="ship it", why=f"because {old_id} said so", source="test"
-    )
+    decisions.record(decision="ship it", why=f"because {old_id} said so", source="test")
     refs = buddy._stale_fact_refs(state_root, facts)
     assert refs == [(old_id, new_id, "decisions.md")]
 
@@ -457,9 +449,7 @@ def test_buddy_flags_stale_checklist_and_stale_fact_refs(state_root: Path) -> No
 # ── session end: facts promoted, corrections learned ─────────────────────────
 
 
-def test_session_end_writes_memory_deltas(
-    tmp_path: Path, state_root: Path, home: Path
-) -> None:
+def test_session_end_writes_memory_deltas(tmp_path: Path, state_root: Path, home: Path) -> None:
     project = _project(tmp_path)
     session_state.start(state_root, "sess-1")
     session_log.append(state_root, "sess-1", "fact", "deploys run on docker compose v2")
@@ -494,9 +484,7 @@ def test_session_end_writes_memory_deltas(
     assert any("loop created at phase 'research'" in line for line in summary)
 
 
-def test_session_end_without_session_skips_memory_deltas(
-    tmp_path: Path, state_root: Path
-) -> None:
+def test_session_end_without_session_skips_memory_deltas(tmp_path: Path, state_root: Path) -> None:
     lines = playbook.run_event(
         "session-end",
         state_root,

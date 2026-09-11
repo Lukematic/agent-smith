@@ -146,9 +146,7 @@ _SHARED_CHECK_ONLY: frozenset[str] = frozenset(
 
 def _verify_thinking_mode(mode_name: str, response_text: str) -> list[str]:
     """A thinking mode's structural failures; empty means compliant."""
-    return think.validate(mode_name, response_text) + _banned_phrase_failures(
-        response_text
-    )
+    return think.validate(mode_name, response_text) + _banned_phrase_failures(response_text)
 
 
 def verify(stance_name: str, response_text: str) -> list[str]:
@@ -166,9 +164,7 @@ def verify(stance_name: str, response_text: str) -> list[str]:
         try:
             think.by_name(stance_name)
         except ValueError:
-            raise ValueError(
-                f"unknown stance or thinking mode: {stance_name}"
-            ) from None
+            raise ValueError(f"unknown stance or thinking mode: {stance_name}") from None
         return _verify_thinking_mode(stance_name, response_text)
     if stance.name == "steel-man":
         return _verify_steel_man(response_text)

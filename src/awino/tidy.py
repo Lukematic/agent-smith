@@ -50,6 +50,7 @@ ROOT_ALLOWED_DIRS = frozenset(
         ".ruff_cache",
         ".pytest_cache",
         ".awino",
+        ".smith",
         "agents",
         "archive",
         "dist",

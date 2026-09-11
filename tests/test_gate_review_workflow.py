@@ -25,6 +25,7 @@ assert Gate.REVIEWED in CONTRACTS[TaskClass.REFACTOR], "test assumes refactor re
 
 def run_cli(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
+    env["AWINO_PROJECT"] = str(project)
     env["SMITH_PROJECT"] = str(project)
     env.pop("VIRTUAL_ENV", None)
     env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
@@ -87,6 +88,45 @@ def _toy_project(tmp_path: Path, name: str = "toy-project") -> Path:
     return project
 
 
+def _setup_toy_venv(project: Path) -> None:
+    venv = project / ".venv"
+    if not venv.exists():
+        subprocess.run(["uv", "venv", str(venv)], check=True, capture_output=True)
+    site_packages = (
+        venv
+        / ("Lib" if os.name == "nt" else "lib")
+        / (
+            "site-packages"
+            if os.name == "nt"
+            else f"python{sys.version_info.major}.{sys.version_info.minor}/site-packages"
+        )
+    )
+    site_packages.mkdir(parents=True, exist_ok=True)
+    import pytest as _pytest_mod
+
+    active_sp = Path(_pytest_mod.__file__).resolve().parents[1]
+    (site_packages / "active_env.pth").write_text(f"{active_sp}\n", encoding="utf-8")
+
+
+def _toy_project(tmp_path: Path, name: str = "toy-project") -> Path:
+    project = tmp_path / name
+    project.mkdir()
+    (project / "pyproject.toml").write_text(
+        '[project]\nname = "toy"\nversion = "0.1.0"\nrequires-python = ">=3.12"\n'
+        'dependencies = ["pytest", "ruff"]\n'
+        "[tool.pytest.ini_options]\n[tool.ruff]\n",
+        encoding="utf-8",
+    )
+    tests_dir = project / "tests"
+    tests_dir.mkdir()
+    (tests_dir / "test_toy.py").write_text(
+        "def test_toy_passes():\n    assert True\n",
+        encoding="utf-8",
+    )
+    _setup_toy_venv(project)
+    return project
+
+
 def _open_refactor_run(project: Path, objective: str, scope: str) -> str:
     plan = project / "plan.md"
     plan.write_text("# Plan\n", encoding="utf-8")
@@ -94,6 +134,7 @@ def _open_refactor_run(project: Path, objective: str, scope: str) -> str:
         project, "gate", "open", "refactor", objective, "--scope", scope, "--plan", str(plan)
     )
     assert opened.returncode == 0, opened.stdout + opened.stderr
+    _setup_toy_venv(project)
     run_id = opened.stdout.splitlines()[0].split()[1]
     approved = run_cli(project, "gate", "plan", "approve", "--by", "reviewer", "--run", run_id)
     assert approved.returncode == 0, approved.stdout + approved.stderr

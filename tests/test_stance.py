@@ -8,8 +8,8 @@ current stance.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -91,7 +91,7 @@ class TestPersistence:
 class TestParaphraseDetection:
     """Every stance fires on the original phrasing and a new paraphrase."""
 
-    CASES = [
+    CASES: ClassVar[list[tuple[str, str, str]]] = [
         # (stance, original-style prompt, new paraphrase prompt)
         (
             "advisor",
@@ -169,24 +169,32 @@ class TestChallengeMeBaseline:
         profile.write_text(text, encoding="utf-8")
         return profile
 
-    def test_challenge_me_true_makes_neutral_prompt_advisor(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_challenge_me_true_makes_neutral_prompt_advisor(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         profile = self._write_profile(tmp_path, "challenge_me: true\n")
         monkeypatch.setenv("AWINO_PROFILE", str(profile))
         resolved = resolve_stance("what time is it")
         assert resolved is not None
         assert resolved.name == "advisor"
 
-    def test_specific_match_still_wins_over_challenge_me(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_specific_match_still_wins_over_challenge_me(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         profile = self._write_profile(tmp_path, "challenge_me: true\n")
         monkeypatch.setenv("AWINO_PROFILE", str(profile))
         assert resolve_stance("teach me how the ledger works").name == "teach-back"
 
-    def test_no_profile_keeps_existing_behavior(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_no_profile_keeps_existing_behavior(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("AWINO_PROFILE", str(tmp_path / "no-such-file.yaml"))
         assert resolve_stance("what time is it") is None
         assert resolve_stance("what time is it", current="steel-man").name == "steel-man"
 
-    def test_challenge_me_false_or_missing_key_keeps_existing_behavior(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_challenge_me_false_or_missing_key_keeps_existing_behavior(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         for text in ("challenge_me: false\n", "other_key: 1\n"):
             profile = self._write_profile(tmp_path, text)
             monkeypatch.setenv("AWINO_PROFILE", str(profile))

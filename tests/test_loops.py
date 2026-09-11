@@ -228,9 +228,7 @@ def loop_ledger(tmp_path: Path) -> Ledger:
 
 
 @pytest.fixture()
-def event_driver(
-    project: Path, tmp_path: Path, loop_ledger: Ledger
-) -> loops.RpiDriver:
+def event_driver(project: Path, tmp_path: Path, loop_ledger: Ledger) -> loops.RpiDriver:
     """A driver wired to a ledger, so every transition lands in the trail."""
     return loops.RpiDriver(
         project_root=project,
@@ -286,9 +284,7 @@ Q2: Who owns the spine module long-term?
 """
 
 
-def _write_pairing(
-    driver: loops.RpiDriver, state: loops.LoopState, text: str = PAIRING_OK
-) -> None:
+def _write_pairing(driver: loops.RpiDriver, state: loops.LoopState, text: str = PAIRING_OK) -> None:
     path = driver.project_root / state.pairing_artifact
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
@@ -297,14 +293,10 @@ def _write_pairing(
 def _answer_all(driver: loops.RpiDriver, state: loops.LoopState) -> None:
     """Answer every pairing question, satisfying the pair-plan spine step."""
     for qid, _ in driver.pairing_questions(state):
-        driver.record_pair_answer(
-            state, qid, "answer", "use the default recommendation", by="Luke"
-        )
+        driver.record_pair_answer(state, qid, "answer", "use the default recommendation", by="Luke")
 
 
-def _advance_to_plan(
-    driver: loops.RpiDriver, state: loops.LoopState
-) -> loops.LoopState:
+def _advance_to_plan(driver: loops.RpiDriver, state: loops.LoopState) -> loops.LoopState:
     """research -> pair-plan -> plan through the mandatory pair-plan step.
 
     The spine's pair-plan step is not skippable: the brief is written, its
@@ -342,18 +334,14 @@ class TestResearchValidation:
         _write_research(driver, state, RESEARCH_OK)
         assert driver.validate_current(state) == []
 
-    def test_missing_research_artifact_names_the_path(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_missing_research_artifact_names_the_path(self, driver: loops.RpiDriver) -> None:
         state = driver.new("add an RPI loop driver")
         missing = driver.validate_current(state)
         assert len(missing) == 1
         assert "research artifact missing" in missing[0]
         assert state.research_artifact in missing[0]
 
-    def test_short_research_rejected_with_char_count(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_short_research_rejected_with_char_count(self, driver: loops.RpiDriver) -> None:
         state = driver.new("add an RPI loop driver")
         _write_research(driver, state, "too short, see src/awino/loops.py:1\n")
         missing = driver.validate_current(state)
@@ -361,9 +349,7 @@ class TestResearchValidation:
         assert "too short" in missing[0]
         assert re.search(r"\d+ chars", missing[0])
 
-    def test_research_without_file_line_refs_rejected(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_research_without_file_line_refs_rejected(self, driver: loops.RpiDriver) -> None:
         text = RESEARCH_OK
         text = re.sub(r"\S+:\d+", "some file", text)
         assert len(text) >= loops.RESEARCH_MIN_CHARS
@@ -435,9 +421,7 @@ class TestLawyerMove:
     planning waits for the user's answer -- stated problem vs. reframed
     problem, with the evidence."""
 
-    def test_reframe_blocks_planning_until_user_confirms(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_reframe_blocks_planning_until_user_confirms(self, driver: loops.RpiDriver) -> None:
         state = driver.new("make the slow page faster")
         _write_research(driver, state, WRONG_PROBLEM_RESEARCH)
         # The research is otherwise valid, but the user hasn't confirmed.
@@ -473,13 +457,9 @@ class TestLawyerMove:
         # to pair-plan, never straight to plan.
         assert driver.advance(state) == "pair-plan"
         reloaded = driver.load(state.id)
-        assert (
-            reloaded.problem_confirmation["solve"] == "Users never reach the page."
-        )
+        assert reloaded.problem_confirmation["solve"] == "Users never reach the page."
 
-    def test_reentering_research_clears_the_confirmation(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_reentering_research_clears_the_confirmation(self, driver: loops.RpiDriver) -> None:
         """The confirmation attested the old research. Re-entry means the
         research is under re-examination, so the lawyer move asks again
         instead of planning on a stale attestation."""
@@ -511,23 +491,17 @@ class TestPlanValidation:
 
     def test_plan_missing_section_names_it(self, driver: loops.RpiDriver) -> None:
         state = self._research_done(driver)
-        text = "\n".join(
-            line for line in PLAN_OK.splitlines() if line.strip() != "## Rollback"
-        )
+        text = "\n".join(line for line in PLAN_OK.splitlines() if line.strip() != "## Rollback")
         _write_plan(driver, state, text)
         missing = driver.validate_current(state)
         assert missing == ["plan missing required section: 'rollback'"]
 
     def test_plan_nonexistent_scope_path_names_it(self, driver: loops.RpiDriver) -> None:
         state = self._research_done(driver)
-        text = PLAN_OK.replace(
-            "`src/awino/cli/loopctl.py`", "`src/awino/cli/does-not-exist.py`"
-        )
+        text = PLAN_OK.replace("`src/awino/cli/loopctl.py`", "`src/awino/cli/does-not-exist.py`")
         _write_plan(driver, state, text)
         missing = driver.validate_current(state)
-        assert missing == [
-            "scope path does not exist in repo: 'src/awino/cli/does-not-exist.py'"
-        ]
+        assert missing == ["scope path does not exist in repo: 'src/awino/cli/does-not-exist.py'"]
 
     def test_plan_accepts_acceptance_synonym(self, driver: loops.RpiDriver) -> None:
         state = self._research_done(driver)
@@ -537,9 +511,7 @@ class TestPlanValidation:
 
 
 class TestApprovalGate:
-    def _at_plan(
-        self, driver: loops.RpiDriver, *, understood: bool = True
-    ) -> loops.LoopState:
+    def _at_plan(self, driver: loops.RpiDriver, *, understood: bool = True) -> loops.LoopState:
         state = driver.new("add an RPI loop driver")
         _write_research(driver, state, RESEARCH_OK)
         assert driver.check(state) == []
@@ -557,9 +529,7 @@ class TestApprovalGate:
             assert driver.check(state) == []
         return state
 
-    def test_next_past_plan_without_approval_is_refused(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_next_past_plan_without_approval_is_refused(self, driver: loops.RpiDriver) -> None:
         state = self._at_plan(driver)
         with pytest.raises(loops.ApprovalRequired, match="not approved"):
             driver.advance(state)
@@ -577,15 +547,11 @@ class TestApprovalGate:
         assert driver.check(reloaded) == []
         assert driver.advance(reloaded) == "implement"
 
-    def test_approval_without_comprehension_is_refused(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_approval_without_comprehension_is_refused(self, driver: loops.RpiDriver) -> None:
         """A plan approved without understanding is a rubber stamp: the
         approval gate refuses until the human has explained the plan back."""
         state = self._at_plan(driver, understood=False)
-        with pytest.raises(
-            loops.ComprehensionRequired, match="comprehension check incomplete"
-        ):
+        with pytest.raises(loops.ComprehensionRequired, match="comprehension check incomplete"):
             driver.approve_plan(state, by="Luke", reason="ok")
         assert not driver.plan_approved(driver.load(state.id))
 
@@ -608,9 +574,7 @@ class TestThinkingGate:
         _comprehend(driver, state)
         _paste_comprehension_block(driver, state)
 
-    def test_approval_without_thinking_is_refused(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_approval_without_thinking_is_refused(self, driver: loops.RpiDriver) -> None:
         state = self._at_plan(driver)
         self._understood(driver, state)
         with pytest.raises(loops.ApprovalRequired, match="critical thinking required"):
@@ -673,9 +637,7 @@ class TestImplementHandoff:
         driver.advance(state)
         return driver.load(state.id)
 
-    def test_implement_validates_against_an_open_rpi_run(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_implement_validates_against_an_open_rpi_run(self, driver: loops.RpiDriver) -> None:
         state = self._at_implement(driver)
         assert driver.validate_current(state) == []
 
@@ -716,9 +678,7 @@ class TestImplementHandoff:
 
 
 class TestThreeStrikes:
-    def test_three_failed_validations_lock_the_loop(
-        self, driver: loops.RpiDriver
-    ) -> None:
+    def test_three_failed_validations_lock_the_loop(self, driver: loops.RpiDriver) -> None:
         state = driver.new("add an RPI loop driver")
         # Never write the artifact: every validation fails.
         for _ in range(3):
@@ -766,18 +726,14 @@ def _loop_id(output: str) -> str:
 
 class TestLoopCli:
     def test_run_rpi_prints_phase_1_prompt(self, cli_env: Path) -> None:
-        result = runner.invoke(
-            loop_app, ["run", "rpi", "--task", "add an RPI loop driver"]
-        )
+        result = runner.invoke(loop_app, ["run", "rpi", "--task", "add an RPI loop driver"])
         assert result.exit_code == 0, result.output
         assert "LOOP" in result.output
         assert "Phase 1" in result.output
         assert "RESEARCH_CONTAMINATION" in result.output
         assert "ARTIFACT" in result.output
 
-    def test_next_with_missing_artifact_prints_what_is_missing(
-        self, cli_env: Path
-    ) -> None:
+    def test_next_with_missing_artifact_prints_what_is_missing(self, cli_env: Path) -> None:
         assert runner.invoke(loop_app, ["run", "rpi", "--task", "x"]).exit_code == 0
         result = runner.invoke(loop_app, ["next"])
         assert result.exit_code == 1
@@ -786,9 +742,7 @@ class TestLoopCli:
 
     def test_full_rpi_flow_end_to_end(self, cli_env: Path) -> None:
         project = cli_env
-        run_result = runner.invoke(
-            loop_app, ["run", "rpi", "--task", "add an RPI loop driver"]
-        )
+        run_result = runner.invoke(loop_app, ["run", "rpi", "--task", "add an RPI loop driver"])
         assert run_result.exit_code == 0, run_result.output
         research_path = project / _artifact_path(run_result.output)
         research_path.parent.mkdir(parents=True, exist_ok=True)
@@ -890,11 +844,15 @@ class TestLoopCli:
         # decisions by name -- then answer the plan's probes.
         explained = runner.invoke(
             loop_app,
-            ["explain", "--text", "We will extract a spine module owning the "
-             "ordered precondition chain. Chose to extract a spine module "
-             "(Q1); followed the default recommendation because one ordered "
-             "list owns the whole chain. Luke owns the spine module "
-             "long-term (Q2)."],
+            [
+                "explain",
+                "--text",
+                "We will extract a spine module owning the "
+                "ordered precondition chain. Chose to extract a spine module "
+                "(Q1); followed the default recommendation because one ordered "
+                "list owns the whole chain. Luke owns the spine module "
+                "long-term (Q2).",
+            ],
         )
         assert explained.exit_code == 0, explained.output
         for qid, answer in (
@@ -1008,9 +966,7 @@ class TestLoopEventPersistence:
         assert event.at == "2026-09-11T08:00:00+00:00"
         assert event.detail == "task: test the trail"
 
-    def test_events_are_oldest_first_and_filterable_by_loop(
-        self, loop_ledger: Ledger
-    ) -> None:
+    def test_events_are_oldest_first_and_filterable_by_loop(self, loop_ledger: Ledger) -> None:
         from awino.enforce import LoopEvent
 
         for loop_id, kind in (("a", "loop_started"), ("b", "loop_started"), ("a", "loop_closed")):
@@ -1065,9 +1021,7 @@ class TestLedgerTrail:
 
     def test_full_rpi_loop_emits_complete_ordered_trail(self, cli_env: Path) -> None:
         project = cli_env
-        run_result = runner.invoke(
-            loop_app, ["run", "rpi", "--task", "add an RPI loop driver"]
-        )
+        run_result = runner.invoke(loop_app, ["run", "rpi", "--task", "add an RPI loop driver"])
         assert run_result.exit_code == 0, run_result.output
         loop_id = _loop_id(run_result.output)
 
@@ -1093,9 +1047,7 @@ class TestLedgerTrail:
             ("Q1", "extract a spine module"),
             ("Q2", "Luke owns it long-term"),
         ):
-            answered = runner.invoke(
-                loop_app, ["answer", "--question", qid, "--answer", answer]
-            )
+            answered = runner.invoke(loop_app, ["answer", "--question", qid, "--answer", answer])
             assert answered.exit_code == 0, answered.output
 
         plan_result = runner.invoke(loop_app, ["next"])
@@ -1131,11 +1083,15 @@ class TestLedgerTrail:
         # by name, and every probe is answered.
         explained = runner.invoke(
             loop_app,
-            ["explain", "--text", "We will extract a spine module owning the "
-             "ordered precondition chain. Chose to extract a spine module "
-             "(Q1); followed the default recommendation because one ordered "
-             "list owns the whole chain. Luke owns the spine module "
-             "long-term (Q2)."],
+            [
+                "explain",
+                "--text",
+                "We will extract a spine module owning the "
+                "ordered precondition chain. Chose to extract a spine module "
+                "(Q1); followed the default recommendation because one ordered "
+                "list owns the whole chain. Luke owns the spine module "
+                "long-term (Q2).",
+            ],
         )
         assert explained.exit_code == 0, explained.output
         for qid, answer in (
@@ -1255,9 +1211,7 @@ class TestArtifactRejection:
         assert event_driver.check(state) == []
         _confirm_problem(event_driver, state)
         state = _advance_to_plan(event_driver, state)
-        text = "\n".join(
-            line for line in PLAN_OK.splitlines() if line.strip() != "## Rollback"
-        )
+        text = "\n".join(line for line in PLAN_OK.splitlines() if line.strip() != "## Rollback")
         _write_plan(event_driver, state, text)
         missing = event_driver.check(state)
         assert missing == ["plan missing required section: 'rollback'"]
@@ -1305,9 +1259,7 @@ class TestBackDriver:
         with pytest.raises(loops.LoopError, match="unknown phase 'deploy'"):
             event_driver.reenter_phase(state, "deploy")
 
-    def test_back_refuses_phase_ahead_of_current(
-        self, event_driver: loops.RpiDriver
-    ) -> None:
+    def test_back_refuses_phase_ahead_of_current(self, event_driver: loops.RpiDriver) -> None:
         state = event_driver.new("add an RPI loop driver")
         with pytest.raises(loops.LoopError, match="only re-enters earlier phases"):
             event_driver.reenter_phase(state, "plan")
@@ -1361,9 +1313,7 @@ class TestBackCli:
         """Past research: the loop sits in pair-plan. The spine's pair-plan
         step is mandatory -- research always leads to pair-plan, never
         straight to plan."""
-        run_result = runner.invoke(
-            loop_app, ["run", "rpi", "--task", "add an RPI loop driver"]
-        )
+        run_result = runner.invoke(loop_app, ["run", "rpi", "--task", "add an RPI loop driver"])
         assert run_result.exit_code == 0, run_result.output
         research_path = project / _artifact_path(run_result.output)
         research_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1388,9 +1338,7 @@ class TestBackCli:
         assert "phase: research" in status.output
         assert "research=0" in status.output
 
-    def test_back_keeps_the_artifact_but_next_revalidates(
-        self, cli_env: Path
-    ) -> None:
+    def test_back_keeps_the_artifact_but_next_revalidates(self, cli_env: Path) -> None:
         project = cli_env
         self._past_research(project)
         assert runner.invoke(loop_app, ["back", "research"]).exit_code == 0

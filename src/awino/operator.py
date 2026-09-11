@@ -188,9 +188,7 @@ def _latest_verdicts(events: list[LoopEvent]) -> dict[str, LoopEvent]:
     return latest
 
 
-def _judge_criteria(
-    criteria: list[str], events: list[LoopEvent]
-) -> list[tuple[str, str]]:
+def _judge_criteria(criteria: list[str], events: list[LoopEvent]) -> list[tuple[str, str]]:
     """Per-criterion met/unmet/unjudgeable; the latest verdict mentioning a
     criterion wins. Same rule as the stakeholder brief's aggregation."""
     norm = lambda text: re.sub(r"\s+", " ", text).strip().lower()  # noqa: E731
@@ -242,9 +240,7 @@ def _read_snapshot(workspace: Workspace) -> Snapshot:
     open_seeds: list[tuple[str, str]] = []
     if seeds_state.usable:
         try:
-            open_seeds = [
-                (issue.id, issue.title) for issue in tracker.ready(limit=5)
-            ]
+            open_seeds = [(issue.id, issue.title) for issue in tracker.ready(limit=5)]
         except Exception:
             open_seeds = []
 
@@ -273,9 +269,7 @@ def _read_snapshot(workspace: Workspace) -> Snapshot:
     if loops_dir.is_dir():
         for path in sorted(loops_dir.glob("*.json")):
             try:
-                state = loops.LoopState.from_dict(
-                    json.loads(path.read_text(encoding="utf-8"))
-                )
+                state = loops.LoopState.from_dict(json.loads(path.read_text(encoding="utf-8")))
                 kind = loops.kind_of(state.id)
                 driver = _driver_for(kind, project_root, loops_dir)
             except (OSError, ValueError, TypeError, loops.LoopError, KeyError):
@@ -346,10 +340,7 @@ def _onboard_action(workspace: Workspace) -> NextAction:
     if questions:
         first = questions[0]
         headline = f"Answer one question: {first.prompt}"
-        ask = (
-            f"{first.why} Reply with: "
-            f"`awino onboard --set {first.key}=...`"
-        )
+        ask = f"{first.why} Reply with: `awino onboard --set {first.key}=...`"
         detail = [
             f"mission draft: {intent.mission or '(unknown)'} (source: {intent.source})",
         ]
@@ -365,7 +356,7 @@ def _onboard_action(workspace: Workspace) -> NextAction:
         detail = [f"mission draft: {intent.mission or '(unknown)'}"]
     detail.append(
         "mission capture includes success criteria: wire each claim to a "
-        "verify command (`awino mission --set \"exams=<claim> -> <command>\"`); "
+        'verify command (`awino mission --set "exams=<claim> -> <command>"`); '
         "the first checklist starts with the first loop or seed"
     )
     return NextAction(kind="onboard", headline=headline, ask=ask, detail=detail)
@@ -374,8 +365,7 @@ def _onboard_action(workspace: Workspace) -> NextAction:
 def _resume_action(view: LoopView) -> NextAction:
     missing = [name for name, status, _ in view.spine if status == "missing"]
     detail = [
-        f"loop {view.id} ({view.kind}), phase {view.phase}"
-        + (" -- LOCKED" if view.locked else ""),
+        f"loop {view.id} ({view.kind}), phase {view.phase}" + (" -- LOCKED" if view.locked else ""),
         f"task: {view.task}",
     ]
     if view.seed_id:
@@ -461,7 +451,7 @@ def _suggest_action(snapshot: Snapshot) -> NextAction:
             headline=f"Commit to the next piece of work: '{title}' ({seed_id})",
             ask=(
                 "Start it with a loop: "
-                f"`awino loop run rpi --task \"{title}\" --seed {seed_id}` "
+                f'`awino loop run rpi --task "{title}" --seed {seed_id}` '
                 "-- or tell me to hold off."
             ),
             detail=[
@@ -527,9 +517,7 @@ def _render(snapshot: Snapshot, action: NextAction, marker_note: str) -> list[st
     else:
         lines.append("  no success criteria on file")
     if snapshot.missing_mission_fields:
-        lines.append(
-            "  missing: " + ", ".join(snapshot.missing_mission_fields)
-        )
+        lines.append("  missing: " + ", ".join(snapshot.missing_mission_fields))
     lines.append("")
     lines.append("CHECKLIST")
     for line in snapshot.checklist_lines:
@@ -543,9 +531,7 @@ def _render(snapshot: Snapshot, action: NextAction, marker_note: str) -> list[st
         lines.append(f"  - {seed_id}: {title}")
     lines.append("")
     lines.append("MEMORY")
-    lines.append(
-        f"  facts: {snapshot.facts_count}, decisions: {snapshot.decisions_count}"
-    )
+    lines.append(f"  facts: {snapshot.facts_count}, decisions: {snapshot.decisions_count}")
     if snapshot.user_model_line:
         lines.append(f"  user model: {snapshot.user_model_line}")
     else:
