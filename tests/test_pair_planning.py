@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from awino import loops
+from awino import heilmeier, loops
 from awino.cli.loopctl import loop_app
 from awino.enforce import Ledger
 
@@ -139,6 +139,16 @@ def project(tmp_path: Path) -> Path:
     project = tmp_path / "project"
     (project / "src").mkdir(parents=True)
     (project / "src" / "auth.py").write_text("# auth\n", encoding="utf-8")
+    # The spine (step 1) refuses all advancement without a valid mission.
+    heilmeier.save(
+        project / ".awino",
+        heilmeier.Catechism(
+            answers={
+                "objective": "exercise the test loop honestly",
+                "exams": "the loop advances through its phases -> true",
+            }
+        ),
+    )
     return project
 
 
@@ -208,9 +218,13 @@ class TestPairBriefValidation:
         _write(driver, state, "research", RESEARCH_OK)
         _confirm_problem(driver, state)
         assert driver.check(state) == []
-        driver.advance(state)  # no brief -> skips to plan; force pair-plan
+        # No brief: the loop still passes through pair-plan (the spine's
+        # pair-plan step is mandatory -- a skip is a decision, never an
+        # oversight), and the spine refuses to leave it, naming the brief.
+        assert driver.advance(state) == "pair-plan"
         state = driver.load(state.id)
-        driver.reenter_phase(state, "pair-plan", "test")
+        with pytest.raises(loops.SpineBlocked, match="pair-plan"):
+            driver.advance(state)
         missing = driver.check(state)
         assert missing
         assert state.pairing_artifact in missing[0]
@@ -345,23 +359,15 @@ class TestPairingGate:
         assert driver.check(state) == []
         assert driver.advance(state) == "plan"
 
-    def test_no_brief_skips_pair_plan(self, driver: loops.RpiDriver) -> None:
-        """Backward compatibility: loops that never write a pairing brief
-        keep the research -> plan -> implement path."""
-        state = driver.new("migrate auth")
-        _write(driver, state, "research", RESEARCH_OK)
-        _confirm_problem(driver, state)
-        assert driver.check(state) == []
-        assert driver.advance(state) == "plan"
-
-    def test_unpaired_plan_needs_no_decisions_section(
+    def test_plan_without_decisions_section_fails(
         self, driver: loops.RpiDriver
     ) -> None:
-        """UNPAIRED_PLAN: when pair-planning was skipped, a plan without a
-        Decisions section still validates (backward compatibility)."""
-        state = driver.new("migrate auth")
-        _write(driver, state, "research", RESEARCH_OK)
-        _confirm_problem(driver, state)
+        """The decision trace is unconditional now that pair-planning is a
+        mandatory spine step: a plan with no Decisions section fails
+        validation even when every pairing question was answered."""
+        state = _at_pair_plan(driver)
+        driver.record_pair_answer(state, "Q1", "answer", "strangler")
+        driver.record_pair_answer(state, "Q2", "default", "zero downtime assumed")
         assert driver.check(state) == []
         assert driver.advance(state) == "plan"
         state = driver.load(state.id)
@@ -375,7 +381,8 @@ class TestPairingGate:
             if "Q1" not in line and "Q2" not in line
         )
         _write(driver, state, "plan", plan_without_decisions)
-        assert driver.check(state) == []
+        missing = driver.check(state)
+        assert any("decisions" in item.lower() for item in missing)
 
 
 class TestPlanDecisionTrace:

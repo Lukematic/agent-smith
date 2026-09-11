@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from awino import loops
+from awino import heilmeier, loops
 from awino.cli.loopctl import loop_app
 from awino.enforce import Ledger
 from awino.seeds import Issue, Seeds, SeedsResult, SeedsState
@@ -35,9 +35,25 @@ Run the verification command for this loop.
 """
 
 
+def _write_mission(project: Path) -> None:
+    """A valid mission: objective + at least one exam wired to a
+    verification command. The spine (step 1) refuses all advancement
+    without it."""
+    heilmeier.save(
+        project / ".awino",
+        heilmeier.Catechism(
+            answers={
+                "objective": "exercise the test loop honestly",
+                "exams": "the loop advances through its phases -> true",
+            }
+        ),
+    )
+
+
 def _project(tmp_path: Path) -> Path:
     project = tmp_path / "project"
     project.mkdir(parents=True)
+    _write_mission(project)
     return project
 
 

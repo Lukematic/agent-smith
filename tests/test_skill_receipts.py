@@ -187,6 +187,17 @@ def project(tmp_path: Path) -> Path:
     project = tmp_path / "project"
     (project / "src").mkdir(parents=True)
     (project / "src" / "auth.py").write_text("# auth\n", encoding="utf-8")
+    # The spine's mission step (step 1) refuses all advancement without a
+    # valid mission: objective + an exam wired to a verification command.
+    heilmeier.save(
+        project / ".awino",
+        heilmeier.Catechism(
+            answers={
+                "objective": "exercise the test loop honestly",
+                "exams": "the loop advances through its phases -> true",
+            }
+        ),
+    )
     return project
 
 

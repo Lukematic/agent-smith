@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from awino import loops
+from awino import heilmeier, loops
 from awino.enforce import Ledger
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -239,12 +239,23 @@ class TestDriftFlaggedNotBlocking:
             event_driver.project_root,
             "# Mission\n\n## Authenticate users securely\n",
         )
+        # The spine (step 1) needs a measurable mission to advance; the
+        # drift check reads the markdown goals above, a separate source.
+        heilmeier.save(
+            event_driver.project_root / ".awino",
+            heilmeier.Catechism(
+                answers={
+                    "objective": "migrate auth honestly",
+                    "exams": "the loop advances through its phases -> true",
+                }
+            ),
+        )
         state = event_driver.new("migrate auth")
         _write_research(event_driver, state, RESEARCH_OK)
         assert event_driver.check(state) == []
         # Drift is flagged, but the loop advances anyway.
         _confirm_problem(event_driver, state)
-        assert event_driver.advance(state) == "plan"
+        assert event_driver.advance(state) == "pair-plan"
 
     def test_drift_only_emitted_once_per_validation(
         self, event_driver: loops.RpiDriver, loop_ledger: Ledger

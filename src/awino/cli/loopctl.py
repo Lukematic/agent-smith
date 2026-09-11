@@ -390,6 +390,13 @@ def loop_status(
     if role and state.phase != "done":
         _echo(f"role: {role}")
     _echo(f"next: {driver.status_next(state)}")
+    # The spine: the owner's 10-step precondition chain, in order. Read-only
+    # here -- advance()/close enforce it. "missing" names the artifact that
+    # would let the loop advance; "pending" is not yet due or enforced at
+    # its own boundary (work, verdict).
+    _echo("SPINE  precondition status, in owner order:")
+    for name, status, artifact in driver.spine_status(state):
+        _echo(f"  [{status}] {name}: {artifact}")
 
 
 @loop_app.command("back")
@@ -497,6 +504,10 @@ def loop_approve(
     _echo(f"APPROVED  plan by={by}")
     if reason:
         _echo(f"reason: {reason}")
+    # Case law: past similar decisions and their outcomes, surfaced where
+    # the decision was recorded. Advisory only -- never blocks.
+    for line in driver.last_precedents:
+        _echo(f"PRECEDENT  {line}")
     _echo(f"Advance with: awino loop next --id {state.id}")
 
 
@@ -518,6 +529,10 @@ def loop_answer(
         _echo(f"REFUSED  {exc}")
         raise typer.Exit(1) from None
     _echo(f"ANSWERED  {question} by={by}")
+    # Case law: past similar decisions and their outcomes, surfaced where
+    # the decision was recorded. Advisory only -- never blocks.
+    for line in driver.last_precedents:
+        _echo(f"PRECEDENT  {line}")
     remaining = driver.unanswered_questions(state)
     if remaining:
         _echo(f"REMAINING  {', '.join(remaining)}")
@@ -547,6 +562,10 @@ def loop_default(
         _echo(f"REFUSED  {exc}")
         raise typer.Exit(1) from None
     _echo(f"DEFAULTED  {question} by={by}")
+    # Case law: past similar decisions and their outcomes, surfaced where
+    # the decision was recorded. Advisory only -- never blocks.
+    for line in driver.last_precedents:
+        _echo(f"PRECEDENT  {line}")
     remaining = driver.unanswered_questions(state)
     if remaining:
         _echo(f"REMAINING  {', '.join(remaining)}")

@@ -32,6 +32,7 @@ import json
 import re
 import subprocess
 import uuid
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -374,6 +375,368 @@ class ReceiptBlocked(LoopError):
         super().__init__(
             "cannot advance from '" + phase + "': " + "; ".join(problems)
         )
+
+
+# ── the spine ──────────────────────────────────────────────────────────────
+# The owner's 10-step sequence as ONE enforced ordered precondition chain:
+#
+#   1. mission       the mission file with objective + success criteria
+#                    (buddy scaffolds it when missing; nothing proceeds
+#                    without it)
+#   2. pair-plan     the written pair-plan: required-skills declarations,
+#                    effort-marked approaches, answered pairing questions
+#   3. challenge     thinking-mode output, or an explicit human waiver --
+#                    ledger-recorded, never assumed
+#   4. understand    the comprehension record: the human's explanation in
+#                    their own words, plus every probe answered
+#   5. real-problem  the applicability check with the USER-CONFIRMED problem
+#                    statement (the lawyer move)
+#   6. honda-scope   the Honda scope, approved by a human
+#   7. beyond-honda  beyond-Honda options with effort labels, recorded
+#   8. capture       ongoing: ledger events, decisions, working memory
+#                    updated at every boundary (buddy verifies; the spine
+#                    wires the check)
+#   9. work          the loop drivers execute
+#  10. verdict       the outcome verdict (yes/partial/no) -- the loop cannot
+#                    close without it
+#
+# Each step produces a completion artifact; the artifact is the precondition
+# for the next step. advance() evaluates the steps in this order and refuses
+# at the first missing one, naming the missing artifact. Steps 9 and 10 are
+# terminal: work is the implement phase itself (each driver's own phase
+# validation is the existing mechanism), and the verdict is enforced by
+# `awino loop close`. Steps that already had dedicated gates keep their
+# exception types -- ProblemUnconfirmed, PairingIncomplete,
+# ApprovalRequired, ComprehensionRequired -- the spine unifies the ORDER and
+# the EVALUATION POINT, not the vocabulary. A waiver is always explicit,
+# human-only, and ledger-recorded: a skip is a decision, never an oversight.
+#
+# The spine order is documented in docs/architecture.md ("The spine").
+
+
+class SpineBlocked(LoopError):
+    """A spine precondition is unsatisfied: the named artifact is missing.
+
+    The spine refuses to advance past a missing precondition; this names
+    the step and the artifact that would satisfy it. Steps with their own
+    long-standing gates (approval, thinking, comprehension, the lawyer
+    move, pairing) raise those legacy exceptions instead -- the spine
+    unifies the ordering and the evaluation point, not the vocabulary.
+    """
+
+    def __init__(self, step: str, artifact: str, detail: str = "") -> None:
+        self.step = step
+        self.artifact = artifact
+        message = f"spine step '{step}': missing {artifact}"
+        if detail:
+            message += f" -- {detail}"
+        super().__init__(message)
+
+
+@dataclass(frozen=True)
+class SpineStep:
+    """One enforced spine step: a named check plus the refusal it raises.
+
+    check(driver, state) returns None when the step's artifact is present,
+    or the missing artifact's name when it is not. refuse(driver, state,
+    missing) builds the refusal -- a legacy gate exception for steps that
+    already had one, SpineBlocked otherwise.
+    """
+
+    name: str
+    artifact: str
+    check: Callable[[LoopDriver, LoopState], str | None]
+    refuse: Callable[[LoopDriver, LoopState, str], LoopError]
+    # Advance-FROM phases this step gates. () gates every phase; None means
+    # the step is terminal -- enforced at its own boundary (work: the phase
+    # validation; verdict: `awino loop close`), never inside advance().
+    from_phases: tuple[str, ...] | None = ()
+
+
+def _spine_check_mission(driver: LoopDriver, _state: LoopState) -> str | None:
+    """Step 1: the mission file carries objective + success criteria.
+
+    The existing mechanism is heilmeier.validate_mission: Q1 answered and
+    at least one exam wired to a verification command. buddy scaffolds the
+    draft when it is missing entirely.
+    """
+    cat = heilmeier.load(project_state_dir(driver.project_root))
+    if heilmeier.validate_mission(cat):
+        return "mission file with objective + success criteria"
+    return None
+
+
+def _spine_refuse_mission(
+    driver: LoopDriver, _state: LoopState, artifact: str
+) -> LoopError:
+    cat = heilmeier.load(project_state_dir(driver.project_root))
+    problems = heilmeier.validate_mission(cat)
+    return SpineBlocked(
+        "mission",
+        artifact,
+        "; ".join(problems)
+        + " -- nothing proceeds without it; run `awino mission` "
+        "(buddy scaffolds the draft from your stated goals)",
+    )
+
+
+def _spine_check_capture(driver: LoopDriver, state: LoopState) -> str | None:
+    """Step 8: every boundary so far is on the trail and in memory.
+
+    The ledger half needs a phase_started event for the current phase entry
+    (or the loop_closed event once the loop is done -- "done" is a
+    terminal boundary, never a started phase); the working-memory half
+    needs the checklist item tracking the current phase. Either half is
+    vacuous when the driver was built without that wiring (driver-only
+    tests stay deterministic and file-free).
+    """
+    if driver.ledger is not None:
+        trail = driver.ledger.loop_events(state.id)
+        if state.phase == "done":
+            boundary = any(
+                event.kind == "loop_closed" for event in trail
+            )
+        else:
+            boundary = any(
+                event.kind == "phase_started" and event.phase == state.phase
+                for event in trail
+            )
+        if not boundary:
+            return (
+                "capture: the ledger trail has no boundary record for the "
+                f"current position ('{state.phase}')"
+            )
+    checklist = driver._checklist()
+    if checklist is not None:
+        item = next(
+            (
+                entry
+                for entry in checklist.items()
+                if entry.get("loop_id") == state.id
+            ),
+            None,
+        )
+        if item is None:
+            return "capture: working memory has no checklist item for this loop"
+        if state.phase == "done":
+            # The terminal transition marks the item done but keeps the
+            # phase it finished in -- the checklist tracks the loop as
+            # done, which is the boundary that matters here.
+            if item.get("status") != "done":
+                return "capture: the checklist does not show this loop as done"
+        elif item.get("phase") != state.phase:
+            return (
+                "capture: the checklist still shows phase "
+                f"'{item.get('phase')}' but the loop is at '{state.phase}'"
+            )
+    return None
+
+
+def _spine_refuse_capture(
+    _driver: LoopDriver, _state: LoopState, artifact: str
+) -> LoopError:
+    return SpineBlocked(
+        "capture",
+        artifact,
+        "the driver records every boundary itself; repair the trail "
+        "before advancing",
+    )
+
+
+def _spine_check_work(_driver: LoopDriver, state: LoopState) -> str | None:
+    """Step 9 (terminal): the loop drivers executed.
+
+    Not an advance() gate -- work IS the implement phase, and each driver's
+    own phase validation is the existing mechanism (RPI verifies the gate
+    handoff, Ralph runs the check command, Delegate re-verifies claims).
+    Reported by spine_status; satisfied when the loop reached done.
+    """
+    if state.phase == "done":
+        return None
+    return "executed work"
+
+
+def _spine_check_verdict(driver: LoopDriver, state: LoopState) -> str | None:
+    """Step 10 (terminal): the outcome verdict, yes/partial/no.
+
+    Not an advance() gate -- enforced by `awino loop close`, which refuses
+    without --verdict. Reported by spine_status; satisfied when the
+    ledger carries an outcome_verdict event for this loop.
+    """
+    if driver.ledger is not None:
+        if any(
+            event.kind == "outcome_verdict"
+            for event in driver.ledger.loop_events(state.id)
+        ):
+            return None
+        return "outcome verdict (yes/partial/no)"
+    return None
+
+
+def _spine_refuse_terminal(
+    _driver: LoopDriver, _state: LoopState, artifact: str
+) -> LoopError:
+    # Unreachable from advance(): terminal steps have from_phases=None and
+    # are never evaluated there. Defined so every step has a refuse.
+    return SpineBlocked("terminal", artifact, "enforced at its own boundary")
+
+
+def _spine_check_pair_plan(driver: RpiDriver, state: LoopState) -> str | None:
+    """Step 2: the written pair-plan.
+
+    The existing mechanism is the pair-plan phase's own validator:
+    required-skills declarations per phase, effort-marked approaches, one
+    default recommendation (the Honda). Unanswered pairing questions are
+    the same artifact's missing piece and refuse with the legacy
+    PairingIncomplete.
+    """
+    unanswered = driver.unanswered_questions(state)
+    if unanswered:
+        return "pair-plan answers to " + ", ".join(unanswered)
+    problems = PairPlanPhase().validate(driver, state)
+    if problems:
+        return f"the written pair-plan ({problems[0]})"
+    return None
+
+
+def _spine_refuse_pair_plan(
+    driver: RpiDriver, state: LoopState, artifact: str
+) -> LoopError:
+    unanswered = driver.unanswered_questions(state)
+    if unanswered:
+        return PairingIncomplete(unanswered)
+    return SpineBlocked(
+        "pair-plan", artifact, "write the brief, then `awino loop next`"
+    )
+
+
+def _thinking_required_message(state: LoopState) -> str:
+    """The ledger-enforced minimum bar, stated the same everywhere: a plan
+    is approved only after a thinking-mode run, or an explicit human waiver.
+    Shared by approve_plan and the spine's challenge step so the gate asks
+    the same question on both paths."""
+    return (
+        "critical thinking required before plan approval: run one "
+        "mode and record it "
+        f"(`awino loop think --mode premortem --record <file> "
+        f"--id {state.id}`), or waive explicitly with "
+        '`awino loop approve --waive-thinking '
+        '--waive-reason "..."`'
+    )
+
+
+def _spine_check_challenge(driver: RpiDriver, state: LoopState) -> str | None:
+    """Step 3: thinking-mode output, or an explicit human waiver.
+
+    The ledger-enforced minimum bar: at least one thinking-mode run on this
+    loop, or a waiver -- both recorded in the ledger trail, never assumed.
+    """
+    if driver.thinking_satisfied(state):
+        return None
+    return "thinking-mode output or an explicit human waiver (ledger-recorded)"
+
+
+def _spine_refuse_challenge(
+    _driver: RpiDriver, state: LoopState, _artifact: str
+) -> LoopError:
+    return ApprovalRequired(_thinking_required_message(state))
+
+
+def _spine_check_understand(driver: RpiDriver, state: LoopState) -> str | None:
+    """Step 4: the comprehension record.
+
+    "Execute when comfortable and understanding": the human's explanation
+    in their own words, plus every probe answered, before the plan may
+    advance. The existing mechanism is comprehension_missing.
+    """
+    if not driver.comprehension_missing(state):
+        return None
+    return "comprehension record (your explanation + answered probes)"
+
+
+def _spine_refuse_understand(
+    driver: RpiDriver, state: LoopState, _artifact: str
+) -> LoopError:
+    missing = driver.comprehension_missing(state)
+    return ComprehensionRequired(missing, driver._teach_back_lines(state))
+
+
+def _spine_check_real_problem(
+    _driver: RpiDriver, state: LoopState
+) -> str | None:
+    """Step 5: the applicability check with the USER-CONFIRMED problem.
+
+    The lawyer move: research advances only on a problem the user confirmed
+    is the actual problem. The existing mechanism is problem_confirmation,
+    set by `awino loop confirm-problem`.
+    """
+    if state.problem_confirmation is not None:
+        return None
+    return "applicability check with the user-confirmed problem statement"
+
+
+def _spine_refuse_real_problem(
+    driver: RpiDriver, state: LoopState, _artifact: str
+) -> LoopError:
+    return ProblemUnconfirmed(driver.problem_question(state))
+
+
+def _spine_check_honda_scope(driver: RpiDriver, state: LoopState) -> str | None:
+    """Step 6: the Honda scope, approved by a human.
+
+    Approval is the human judgment that the plan is right -- and judgment
+    requires the earlier spine steps (challenge, understand) first, which
+    is why the spine evaluates them before this one.
+    """
+    if driver.plan_approved(state):
+        return None
+    return "the Honda scope, approved (human approval)"
+
+
+def _spine_refuse_honda_scope(
+    _driver: RpiDriver, _state: LoopState, _artifact: str
+) -> LoopError:
+    return ApprovalRequired(
+        "plan is not approved; human approval is required between plan "
+        "and implement -- run `awino loop approve --by NAME --reason ...`"
+    )
+
+
+def _spine_check_beyond_honda(driver: RpiDriver, state: LoopState) -> str | None:
+    """Step 7: beyond-Honda options with effort labels, recorded.
+
+    The existing mechanism is the pairing brief's candidate approaches:
+    every non-default approach is a labeled recommendation with an effort
+    estimate -- options, never the plan. Loops that skip pair-planning
+    have no such record; the step is vacuous there rather than invented.
+    """
+    if not driver._pairing_brief_exists(state):
+        return None
+    alternates = [
+        (name, effort)
+        for name, effort, role in driver.pairing_approaches(state)
+        if role == "alternate"
+    ]
+    if not alternates:
+        return "beyond-Honda options with effort labels, recorded"
+    unlabeled = [name for name, effort in alternates if effort == "unstated"]
+    if unlabeled:
+        return (
+            "beyond-Honda options with effort labels, recorded "
+            f"(no effort label: {', '.join(unlabeled)})"
+        )
+    return None
+
+
+def _spine_refuse_beyond_honda(
+    _driver: RpiDriver, _state: LoopState, artifact: str
+) -> LoopError:
+    return SpineBlocked(
+        "beyond-honda",
+        artifact,
+        "record the non-default approaches with effort labels in the "
+        "pairing brief's candidate approaches",
+    )
 
 
 def slugify(text: str, max_words: int = 6) -> str:
@@ -1582,6 +1945,44 @@ class LoopDriver(abc.ABC):
     # remains". Empty when nothing owns what remains.
     done_note = ""
 
+    # ── the spine ──
+    # The owner's 10-step sequence as ONE enforced ordered precondition
+    # chain (see the module section above). RPI overrides with the full
+    # ten; Ralph and Delegate inherit the kind-agnostic four: mission,
+    # capture, work, verdict. advance() evaluates this tuple in order and
+    # refuses at the first missing precondition, naming the missing
+    # artifact.
+    SPINE: ClassVar[tuple[SpineStep, ...]] = (
+        SpineStep(
+            name="mission",
+            artifact="mission file with objective + success criteria",
+            check=_spine_check_mission,
+            refuse=_spine_refuse_mission,
+            from_phases=(),
+        ),
+        SpineStep(
+            name="capture",
+            artifact="boundary records (ledger trail, decisions, working memory)",
+            check=_spine_check_capture,
+            refuse=_spine_refuse_capture,
+            from_phases=(),
+        ),
+        SpineStep(
+            name="work",
+            artifact="executed work",
+            check=_spine_check_work,
+            refuse=_spine_refuse_terminal,
+            from_phases=None,
+        ),
+        SpineStep(
+            name="verdict",
+            artifact="outcome verdict (yes/partial/no)",
+            check=_spine_check_verdict,
+            refuse=_spine_refuse_terminal,
+            from_phases=None,
+        ),
+    )
+
     def __init__(
         self,
         project_root: Path,
@@ -1618,6 +2019,10 @@ class LoopDriver(abc.ABC):
         self.last_criteria: list[tuple[str, str]] | None = None
         # Set by _complete()/escalate(): the human-facing seed note, or "".
         self.completion_seed_note: str = ""
+        # Set by _note_precedents(): past similar decisions surfaced as case
+        # law where a new decision was just recorded. Transient, advisory,
+        # never load-bearing; the CLI prints these after the recording echo.
+        self.last_precedents: list[str] = []
 
     @abc.abstractmethod
     def phases(self) -> list[Phase]:
@@ -2143,20 +2548,16 @@ class LoopDriver(abc.ABC):
                 )
 
     def approve_plan(self, state: LoopState, by: str, reason: str, waive_reason: str | None = None) -> None:
+        # Case law surfaces on every recording below; reset so a refused
+        # approval never leaks another attempt's precedents.
+        self.last_precedents = []
         # Ledger-enforced minimum bar: a plan cannot be approved until at
         # least one critical-thinking mode has run on it, or the human
         # explicitly waives it. Forgetting is impossible -- the gate asks
         # every time approval is attempted.
         if not state.thinking_runs and state.thinking_waiver is None:
             if waive_reason is None or not waive_reason.strip():
-                raise ApprovalRequired(
-                    "critical thinking required before plan approval: run one "
-                    "mode and record it "
-                    f"(`awino loop think --mode premortem --record <file> "
-                    f"--id {state.id}`), or waive explicitly with "
-                    '`awino loop approve --waive-thinking '
-                    '--waive-reason "..."`'
-                )
+                raise ApprovalRequired(_thinking_required_message(state))
             self.waive_thinking(state, by, waive_reason.strip())
         # "Execute when comfortable and understanding": approval is a human
         # judgment that the plan is right, and judgment requires
@@ -2182,6 +2583,12 @@ class LoopDriver(abc.ABC):
             detail=f"by={by}" + (f" reason={reason}" if reason else ""),
         )
         self.save(state)
+        self._note_precedents(
+            state,
+            area="approval",
+            decision=f"approved {self.loop_kind} loop {state.id} plan",
+            why=reason.strip() or working_memory.WHY_MISSING,
+        )
         decisions = self._decisions()
         if decisions is not None:
             decisions.record(
@@ -2227,6 +2634,11 @@ class LoopDriver(abc.ABC):
     def waive_thinking(self, state: LoopState, by: str, reason: str) -> dict:
         """Record the human's explicit waiver as a conscious decision: the
         ledger event names the reason, and decisions.md records the why."""
+        if not reason or not reason.strip():
+            raise LoopError(
+                "a waiver is a conscious decision, so it needs a reason: "
+                "the human must say why critical thinking is being skipped"
+            )
         waiver = {
             "by": by,
             "reason": reason.strip(),
@@ -2237,6 +2649,12 @@ class LoopDriver(abc.ABC):
             state, "thinking_waived", detail=f"by={by} reason={reason.strip()}"
         )
         self.save(state)
+        self._note_precedents(
+            state,
+            area="thinking-waiver",
+            decision=f"waived critical thinking for loop {state.id} plan",
+            why=reason.strip() or working_memory.WHY_MISSING,
+        )
         decisions = self._decisions()
         if decisions is not None:
             decisions.record(
@@ -2254,15 +2672,92 @@ class LoopDriver(abc.ABC):
         escalate) instead of counting as an artifact validation failure."""
         return True
 
+    def _check_spine(self, state: LoopState) -> None:
+        """Evaluate the spine in owner order; refuse at the first missing
+        precondition, naming the missing artifact.
+
+        Each step gates only the transitions it applies to (from_phases):
+        a step whose artifact is produced later in the loop is pending, not
+        missing. Terminal steps (from_phases=None -- work, verdict) are
+        enforced at their own boundary, never here.
+        """
+        for step in self.SPINE:
+            if step.from_phases is None:
+                continue
+            if step.from_phases and state.phase not in step.from_phases:
+                continue
+            missing = step.check(self, state)
+            if missing is not None:
+                raise step.refuse(self, state, missing)
+
+    def spine_status(self, state: LoopState) -> list[tuple[str, str, str]]:
+        """(step name, status, artifact) for every spine step, in owner order.
+
+        Status is "ok" (the artifact is present), "missing" (an advance()
+        from the current phase would refuse on this step -- or, for a
+        terminal step on a done loop, the loop still owes it), or "pending"
+        (not yet due, or a terminal step enforced at its own boundary).
+        Read-only: the CLI's status view renders this; nothing here refuses.
+        """
+        out: list[tuple[str, str, str]] = []
+        for step in self.SPINE:
+            missing = step.check(self, state)
+            gates_now = step.from_phases is not None and (
+                not step.from_phases or state.phase in step.from_phases
+            )
+            if missing is None:
+                status = "ok"
+            elif gates_now:
+                status = "missing"
+            elif step.from_phases is None and state.phase == "done":
+                # Terminal steps are due once the work is done: a done loop
+                # with no outcome verdict still owes step 10.
+                status = "missing"
+            else:
+                status = "pending"
+            out.append((step.name, status, step.artifact))
+        return out
+
+    def _note_precedents(
+        self, _state: LoopState, *, area: str, decision: str, why: str
+    ) -> None:
+        """Case law, surfaced where the decision is recorded.
+
+        Before a new decision lands in decisions.md, look up past similar
+        decisions and their outcomes ("last time you chose X over Y because
+        Z; outcome was <verdict>") into self.last_precedents for the CLI to
+        print. Informational only: it never blocks, never invents (no match
+        means silence), and any failure inside matching is swallowed --
+        precedent is advisory, never load-bearing.
+        """
+        try:
+            decisions = self._decisions()
+            if decisions is None:
+                return
+            found = working_memory.find_precedents(
+                decisions,
+                decision,
+                why,
+                area=area,
+                loop_kind=self.loop_kind,
+                ledger=self.ledger,
+            )
+            self.last_precedents.extend(
+                working_memory.format_precedent(p) for p in found
+            )
+        except Exception:
+            pass
+
     def advance(self, state: LoopState) -> str:
         """Move to the next phase. The current phase must already validate
-        (the CLI checks first); this enforces the human gates, the skill
-        receipt gate, and transitions.
+        (the CLI checks first); this enforces the spine, the human gates,
+        the skill receipt gate, and transitions.
 
         Raises ApprovalRequired/PairingIncomplete/ProblemUnconfirmed/
-        ComprehensionRequired when a human gate is unsatisfied, ReceiptBlocked
-        when a required skill has no valid receipt, and LoopLocked when the
-        loop is locked.
+        ComprehensionRequired when a human gate is unsatisfied, SpineBlocked
+        when any other spine precondition is missing (naming the missing
+        artifact), ReceiptBlocked when a required skill has no valid
+        receipt, and LoopLocked when the loop is locked.
         """
         if state.locked:
             raise LoopLocked(
@@ -2271,6 +2766,7 @@ class LoopDriver(abc.ABC):
             )
         if state.phase == "done":
             raise LoopError("loop is already done")
+        self._check_spine(state)
         self._check_advance_allowed(state)
         receipt_problems = self.receipt_problems(state)
         if receipt_problems:
@@ -2363,7 +2859,12 @@ class LoopDriver(abc.ABC):
         checklist = self._checklist()
         if checklist is not None:
             checklist.note_unblocked(
-                state.id, f"re-entered {phase!r} from {previous!r}: {note}"
+                state.id,
+                f"re-entered {phase!r} from {previous!r}: {note}",
+                # The checklist is the now: it must track the re-entered
+                # phase, or the spine's capture step (step 8) refuses the
+                # next advance on a stale boundary record.
+                phase=phase,
             )
         return state
 
@@ -2579,6 +3080,86 @@ class RpiDriver(LoopDriver):
     no_artifact_note = "(none -- this phase hands off to the gate ledger)"
     done_note = "the gate ledger owns what remains"
 
+    # The full ten-step spine, in owner order. Each step gates the
+    # advance-FROM phases named in its from_phases; work and verdict are
+    # terminal (enforced by the implement phase's own validation and by
+    # `awino loop close`, respectively).
+    SPINE: ClassVar[tuple[SpineStep, ...]] = (
+        SpineStep(
+            name="mission",
+            artifact="mission file with objective + success criteria",
+            check=_spine_check_mission,
+            refuse=_spine_refuse_mission,
+            from_phases=(),
+        ),
+        SpineStep(
+            name="pair-plan",
+            artifact="the written pair-plan (required-skills declarations, "
+            "effort-marked approaches)",
+            check=_spine_check_pair_plan,
+            refuse=_spine_refuse_pair_plan,
+            from_phases=("pair-plan",),
+        ),
+        SpineStep(
+            name="challenge",
+            artifact="thinking-mode output or an explicit human waiver "
+            "(ledger-recorded)",
+            check=_spine_check_challenge,
+            refuse=_spine_refuse_challenge,
+            from_phases=("plan",),
+        ),
+        SpineStep(
+            name="understand",
+            artifact="comprehension record (your explanation + answered probes)",
+            check=_spine_check_understand,
+            refuse=_spine_refuse_understand,
+            from_phases=("plan",),
+        ),
+        SpineStep(
+            name="real-problem",
+            artifact="applicability check with the user-confirmed problem "
+            "statement",
+            check=_spine_check_real_problem,
+            refuse=_spine_refuse_real_problem,
+            from_phases=("research",),
+        ),
+        SpineStep(
+            name="honda-scope",
+            artifact="the Honda scope, approved (human approval)",
+            check=_spine_check_honda_scope,
+            refuse=_spine_refuse_honda_scope,
+            from_phases=("plan",),
+        ),
+        SpineStep(
+            name="beyond-honda",
+            artifact="beyond-Honda options with effort labels, recorded",
+            check=_spine_check_beyond_honda,
+            refuse=_spine_refuse_beyond_honda,
+            from_phases=("plan",),
+        ),
+        SpineStep(
+            name="capture",
+            artifact="boundary records (ledger trail, decisions, working memory)",
+            check=_spine_check_capture,
+            refuse=_spine_refuse_capture,
+            from_phases=(),
+        ),
+        SpineStep(
+            name="work",
+            artifact="executed work",
+            check=_spine_check_work,
+            refuse=_spine_refuse_terminal,
+            from_phases=None,
+        ),
+        SpineStep(
+            name="verdict",
+            artifact="outcome verdict (yes/partial/no)",
+            check=_spine_check_verdict,
+            refuse=_spine_refuse_terminal,
+            from_phases=None,
+        ),
+    )
+
     loop_purpose = (
         "keep a big change honest: research what is, pair with a human on "
         "what could be, plan the change, then implement against the plan"
@@ -2654,20 +3235,14 @@ class RpiDriver(LoopDriver):
         }.get(phase_name)
 
     def _pairing_brief_exists(self, state: LoopState) -> bool:
-        """Pair-planning is engaged by writing the pairing brief. If the
-        operator advances from research without one, the pair-plan phase is
-        vacuous (no questions to answer) and the loop proceeds directly to
-        plan, preserving the research -> plan -> implement path for loops
-        that don't use pair-planning."""
+        """Whether the pairing brief has been written. Pair-planning is a
+        mandatory spine step: the loop always passes through the pair-plan
+        phase, and the spine refuses to leave it until the brief exists
+        with its questions answered. A skip is a decision, never an
+        oversight -- there is no silent research -> plan shortcut."""
         if not state.pairing_artifact:
             return False
         return (self.project_root / state.pairing_artifact).is_file()
-
-    def _next_phase(self, state: LoopState) -> str | None:
-        nxt = super()._next_phase(state)
-        if nxt == "pair-plan" and not self._pairing_brief_exists(state):
-            return "plan"
-        return nxt
 
     # ── pair-planning ──
     def pairing_questions(self, state: LoopState) -> list[tuple[str, str]]:
@@ -2961,6 +3536,9 @@ class RpiDriver(LoopDriver):
                 f"unknown question {qid!r}: the pairing brief asked "
                 f"{', '.join(asked) if asked else '(nothing yet)'}"
             )
+        # Case law surfaces on the recording below; reset so a refused
+        # answer never leaks another attempt's precedents.
+        self.last_precedents = []
         record = {
             "kind": kind,  # "answer" or "default"
             "text": text,
@@ -2975,11 +3553,17 @@ class RpiDriver(LoopDriver):
             "human_answered",
             detail=f"question={qid} kind={kind} by={by}: {text}",
         )
+        asked_text = dict(self.pairing_questions(state))
+        question = asked_text.get(qid, "(question text not found in brief)")
+        kind_word = "DEFAULT" if kind == "default" else "ANSWER"
+        self._note_precedents(
+            state,
+            area="pairing",
+            decision=f"{qid}: {question} -> {kind_word}: {text}",
+            why=text,
+        )
         decisions = self._decisions()
         if decisions is not None:
-            asked = dict(self.pairing_questions(state))
-            question = asked.get(qid, "(question text not found in brief)")
-            kind_word = "DEFAULT" if kind == "default" else "ANSWER"
             decisions.record(
                 decision=f"{qid}: {question} -> {kind_word}: {text}",
                 why=text,
@@ -3364,32 +3948,13 @@ class RpiDriver(LoopDriver):
             lines.append(f"TEACH_BACK  probe {qid}: {question}")
         return lines
 
-    def _check_advance_allowed(self, state: LoopState) -> None:
-        # The lawyer move: research advances only on a problem the user
-        # confirmed is the actual problem. Pair-planning -- and the direct
-        # research -> plan path when no pairing brief exists -- cannot start
-        # on an unconfirmed problem. Forgetting is impossible: the gate asks
-        # the stated-vs-reframed question every time.
-        if state.phase == "research" and state.problem_confirmation is None:
-            raise ProblemUnconfirmed(self.problem_question(state))
-        if state.phase == "plan" and not self.plan_approved(state):
-            raise ApprovalRequired(
-                "plan is not approved; human approval is required between plan "
-                "and implement -- run `awino loop approve --by NAME --reason ...`"
-            )
-        if state.phase == "pair-plan":
-            unanswered = self.unanswered_questions(state)
-            if unanswered:
-                raise PairingIncomplete(unanswered)
-        # "Execute when comfortable and understanding": approval already
-        # requires comprehension, so this backstop fires only when the
-        # comprehension records were cleared after approval without the
-        # approval going with them. Forgetting is impossible: the gate asks
-        # every time.
-        if state.phase == "plan" and self.plan_approved(state):
-            missing = self.comprehension_missing(state)
-            if missing:
-                raise ComprehensionRequired(missing, self._teach_back_lines(state))
+    def _check_advance_allowed(self, _state: LoopState) -> None:
+        """The human gates live in SPINE now -- evaluated by advance()
+        before this hook, in owner order: the lawyer move (real-problem),
+        pairing completeness (pair-plan), the thinking bar (challenge),
+        comprehension (understand), and plan approval (honda-scope) refuse
+        from there with their long-standing exception types. This hook
+        stays for driver-specific extras; RPI has none beyond the spine."""
 
     def status_next(self, state: LoopState) -> str:
         if state.phase == "pair-plan" and not state.locked:
@@ -3556,6 +4121,10 @@ class RalphDriver(LoopDriver):
                 f"loop {state.id} is locked after 3 failed verifications; "
                 "a human must intervene"
             )
+        # Advancement happens here too (retry routing), so the spine is
+        # evaluated before the check command runs: nothing proceeds -- not
+        # even a retry -- past a missing precondition.
+        self._check_spine(state)
         problems = self.check(state)  # runs the command, records evidence
         if not problems:
             return super().advance(state)  # _next_phase(verify) is None -> done

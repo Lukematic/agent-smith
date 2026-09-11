@@ -292,6 +292,17 @@ def rpi_project(tmp_path: Path) -> Path:
     project = tmp_path / "project"
     (project / "src").mkdir(parents=True)
     (project / "src" / "auth.py").write_text("# auth\n", encoding="utf-8")
+    # The spine (step 1) refuses all advancement without a mission:
+    # objective + at least one exam wired to a verification command.
+    heilmeier.save(
+        project / ".awino",
+        heilmeier.Catechism(
+            answers={
+                "objective": "exercise the test loop honestly",
+                "exams": "the loop advances through its phases -> true",
+            }
+        ),
+    )
     return project
 
 
@@ -513,9 +524,9 @@ def _confirm_problem(driver, state) -> None:
 
 def _comprehend(driver, state) -> None:
     """Satisfy the plan-approval comprehension gate in fixtures. The
-    re-examine plan has no decisions section, so the driver's probes are
-    empty; every suggestion the plan generates still needs deciding, plus
-    an explanation."""
+    re-examine plan's Decisions section yields one probe per decision;
+    every suggestion the plan generates still needs deciding, plus an
+    explanation."""
     for suggestion in driver.plan_suggestions(state):
         driver.record_suggestion_decision(
             state,
@@ -524,10 +535,22 @@ def _comprehend(driver, state) -> None:
             "noted and explicitly set aside for this re-examination",
             by="tester",
         )
+    for pid, _ in driver.comprehension_probes(state):
+        driver.record_probe_answer(
+            state,
+            pid,
+            "the pairing decision stands: the approach is incremental and "
+            "the downtime budget is zero",
+            by="tester",
+        )
     driver.record_explanation(
         state,
         "We migrate auth behind a flag: read the code, write the plan, "
-        "migrate behind a flag, then revert the flag and redeploy.",
+        "migrate behind a flag, then revert the flag and redeploy. "
+        "Key decisions: Q1 -> strangler: followed the default "
+        "recommendation because incremental migration keeps downtime at "
+        "zero. Q2 -> zero downtime budget answered during pair-planning: "
+        "the migration ships in a normal deploy window.",
         by="tester",
     )
 
@@ -631,10 +654,17 @@ class TestPairPlanHonda:
 
 
 @pytest.fixture()
-def crit_driver(rpi_project: Path, tmp_path: Path) -> loops.RpiDriver:
+def crit_driver(tmp_path: Path) -> loops.RpiDriver:
+    # Its own mission-less project: the "no criteria on file" test needs
+    # no mission at all, and the spine would refuse advancement without
+    # one -- check() (artifact validation) is not advancement, so a bare
+    # project is the honest fixture for "nothing on file".
+    project = tmp_path / "crit-project"
+    (project / "src").mkdir(parents=True)
+    (project / "src" / "auth.py").write_text("# auth\n", encoding="utf-8")
     ledger = Ledger(tmp_path / ".awino")
     return loops.RpiDriver(
-        project_root=rpi_project,
+        project_root=project,
         loops_dir=tmp_path / "loops",
         skill_md=SKILL_MD,
         open_rpi_run=lambda: "run-123",
@@ -674,9 +704,9 @@ class TestCriteriaEvaluation:
         assert judged["???"] == "unjudgeable"
 
     def test_check_judges_artifact_and_emits_named_event(
-        self, crit_driver: loops.RpiDriver, rpi_project: Path
+        self, crit_driver: loops.RpiDriver
     ) -> None:
-        _save_measurable_mission(rpi_project)
+        _save_measurable_mission(crit_driver.project_root)
         state = crit_driver.new("migrate auth")
         _write_research(crit_driver, state, RESEARCH_BASE)
         assert crit_driver.check(state) == []
@@ -829,6 +859,26 @@ class TestLoopCloseCriteria:
         )
         assert confirmed.exit_code == 0, confirmed.output
         assert runner.invoke(loop_app, ["next", "--id", loop_id]).exit_code == 0
+        # Pair-planning is mandatory: write the brief, answer the questions,
+        # then move on to plan.
+        state = driver.load(loop_id)
+        assert state.phase == "pair-plan"
+        brief_path = project / state.pairing_artifact
+        brief_path.parent.mkdir(parents=True, exist_ok=True)
+        brief_path.write_text(BRIEF_BASE, encoding="utf-8")
+        for qid, answer in (
+            ("Q1", "strangler: migrate incrementally behind a flag"),
+            ("Q2", "zero downtime budget; a normal deploy window"),
+        ):
+            answered = runner.invoke(
+                loop_app,
+                [
+                    "answer", "--id", loop_id, "--question", qid,
+                    "--answer", answer, "--by", "tester",
+                ],
+            )
+            assert answered.exit_code == 0, answered.output
+        assert runner.invoke(loop_app, ["next", "--id", loop_id]).exit_code == 0
         # Mission moves; close refuses (as proven above).
         save(
             project / ".awino",
@@ -842,15 +892,22 @@ class TestLoopCloseCriteria:
         # Re-examine: write a plan the new criteria can be judged against,
         # then `next` re-validates and re-syncs the recorded hash.
         state = driver.load(loop_id)
-        assert state.phase == "plan"  # no brief: research -> plan
-        # No pair-planning happened, so no Decisions section (an untraced
-        # Q1 reference would fail validation).
-        plan = "\n".join(
-            ln for ln in PLAN_BASE.splitlines() if not ln.startswith("## Decisions")
+        assert state.phase == "plan"
+        # Pair-planning happened, so the plan's Decisions section must trace
+        # the Q1/Q2 answers (an untraced decision would fail validation).
+        # A decision naming a candidate approach must say whether it
+        # followed or overrode the default, with a reason.
+        plan = (
+            PLAN_BASE
+            + "- Q1 -> strangler: followed the default recommendation "
+            "because incremental migration behind a flag keeps downtime "
+            "at zero.\n"
+            "- Q2 -> zero downtime budget: answered during pair-planning; "
+            "the migration ships in a normal deploy window.\n"
         )
         path = project / state.plan_artifact
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(plan + "\n", encoding="utf-8")
+        path.write_text(plan, encoding="utf-8")
         _thinking_run(driver, state)
         # "Execute when comfortable and understanding": comprehension comes
         # BEFORE approval. Once comprehension exists in state, the plan

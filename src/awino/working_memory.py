@@ -34,6 +34,7 @@ from __future__ import annotations
 import copy
 import json
 import re
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -683,6 +684,195 @@ class Decisions:
         )
         self._write(current)
         return new_id
+
+
+# ── precedent (case law) ─────────────────────────────────────────────────
+# When a new decision is recorded (pair-planning answer, plan approval,
+# thinking waiver), A.W.I.N.O. surfaces past similar decisions with their
+# outcomes: "last time you chose X over Y because Z; outcome was <verdict>".
+# Advisory only: it never blocks, never invents -- no match means silence.
+#
+# The matching rule, exactly:
+#   1. Candidates are past decisions.md entries that are not superseded.
+#      Entries without a decision-key are excluded from area-matched lookups
+#      (the key's suffix carries the decision area: Q-ids -> "pairing",
+#      "approval" -> "approval", "thinking-waiver" -> "thinking-waiver").
+#   2. The past entry matches the lookup's decision area -- or, for
+#      area-less lookups, the same loop kind -- AND shares at least two
+#      content keywords with the new decision. (Pairing answers compare
+#      against past pairing answers, approvals against past approvals:
+#      the key's suffix carries the area -- Q-ids -> "pairing",
+#      "approval" -> "approval", "thinking-waiver" -> "thinking-waiver" --
+#      and the key prefix "<kind>-<id>" carries the loop for kind-only
+#      lookups. A keyless entry carries no kind/area context and matches
+#      only context-less lookups.)
+#      Keywords are lowercase alphanumerics of length >= 4 drawn from the new
+#      decision's decision + why text; stopwords ("with", "from", "this",
+#      "that", "were", "have", "your", "they", "their", "which", "what",
+#      "will", "over", "under", "than", "then", "into", "when", "loop") are
+#      excluded. (The owner's example uses "over"; it still matches through
+#      the other shared keywords.)
+#   3. A past decision's outcome is the verdict of the latest
+#      outcome_verdict ledger event for the loop the entry was recorded for
+#      (the key's "<kind>-<id>" portion), if any.
+#   4. Candidates are ranked deterministically: more shared keywords first,
+#      then more recent entries first, then lower decision ids.
+#   5. At most three precedents are returned; zero is a normal result and
+#      means "no related past decision" -- the caller prints nothing.
+#
+# Documented in docs/architecture.md ("Precedent: case law").
+
+_PRECEDENT_STOPWORDS = frozenset(
+    {
+        "with", "from", "this", "that", "were", "have", "your", "they",
+        "their", "which", "what", "will", "over", "under", "than", "then",
+        "into", "when", "loop",
+    }
+)
+
+
+@dataclass
+class Precedent:
+    """One past similar decision and its outcome, ready to surface."""
+
+    id: str  # the past decision's D-NNNN id
+    decision: str  # its decision text
+    why: str  # its why text
+    outcome: str | None  # its loop's latest outcome verdict, if any
+    shared_keywords: tuple[str, ...]  # the keywords that matched
+
+
+def _precedent_keywords(text: str) -> frozenset[str]:
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    return frozenset(
+        word
+        for word in words
+        if len(word) >= 4 and word not in _PRECEDENT_STOPWORDS
+    )
+
+
+def _decision_area(key: str | None) -> str | None:
+    """The decision area carried in a decisions.md key ("<kind>-<id>:<area>")."""
+    if not key or ":" not in key:
+        return None
+    suffix = key.rsplit(":", 1)[1]
+    if suffix.startswith("Q"):
+        return "pairing"
+    return suffix or None
+
+
+def _decision_loop_id(key: str | None) -> str | None:
+    """The "<kind>-<id>" loop the decision was recorded for, if any."""
+    if not key or ":" not in key:
+        return None
+    return key.rsplit(":", 1)[0] or None
+
+
+def _verdict_for_loop(ledger: object, loop_id: str) -> str | None:
+    """The loop's latest outcome verdict from the ledger, if any."""
+    if ledger is None:
+        return None
+    try:
+        events = ledger.loop_events(loop_id)  # type: ignore[union-attr]
+    except Exception:
+        return None
+    verdict: str | None = None
+    for event in reversed(events):
+        if getattr(event, "kind", None) == "outcome_verdict":
+            detail = getattr(event, "detail", "") or ""
+            match = re.search(r"\bverdict:\s*(yes|partial|no)\b", detail)
+            if match:
+                verdict = match.group(1)
+                break
+    return verdict
+
+
+def find_precedents(
+    decisions: Decisions,
+    decision: str,
+    why: str,
+    *,
+    area: str | None = None,
+    loop_kind: str | None = None,
+    ledger: object | None = None,
+    limit: int = 3,
+) -> list[Precedent]:
+    """Find past similar decisions to surface as case law.
+
+    Pure and deterministic: same inputs -> same outputs. Ranked by more
+    shared keywords first, then newer entries first, then lower decision
+    ids. Returns [] when nothing related exists -- the caller stays silent.
+    Raises nothing on unreadable input.
+    """
+    try:
+        wanted = _precedent_keywords(f"{decision} {why}")
+        if not wanted:
+            return []
+        candidates: list[tuple[int, Decision, frozenset[str]]] = []
+        for entry in decisions.entries():
+            if entry.superseded_by is not None or not entry.decision.strip():
+                continue
+            entry_area = _decision_area(entry.key)
+            if area is not None:
+                # Area-scoped lookup: the past decision must carry the same
+                # decision area. Unkeyed entries carry no area context and
+                # cannot match.
+                if entry_area != area:
+                    continue
+            elif loop_kind is not None:
+                # Area-less lookup: fall back to the loop kind read from the
+                # key prefix ("<kind>-<id>"); a keyless entry carries no kind
+                # context, so it cannot match.
+                past_loop = _decision_loop_id(entry.key)
+                if past_loop is None or not past_loop.startswith(
+                    loop_kind + "-"
+                ):
+                    continue
+            shared = wanted & _precedent_keywords(
+                f"{entry.decision} {entry.why}"
+            )
+            if len(shared) < 2:
+                continue
+            candidates.append((len(shared), entry, shared))
+        # Deterministic rank, three stable passes: more shared keywords
+        # first, then more recent entries first, then lower decision ids.
+        # (One key with reverse=True would flip every component -- the
+        # keyword count must descend while the id ascends.)
+        candidates.sort(key=lambda c: c[1].id)
+        candidates.sort(key=lambda c: c[1].date, reverse=True)
+        candidates.sort(key=lambda c: -c[0])
+        out: list[Precedent] = []
+        for _, entry, shared in candidates[: max(limit, 0)]:
+            loop_id = _decision_loop_id(entry.key)
+            out.append(
+                Precedent(
+                    id=entry.id,
+                    decision=entry.decision,
+                    why=entry.why,
+                    outcome=(
+                        _verdict_for_loop(ledger, loop_id)
+                        if ledger is not None and loop_id is not None
+                        else None
+                    ),
+                    shared_keywords=tuple(sorted(shared)),
+                )
+            )
+        return out
+    except Exception:
+        return []
+
+
+def format_precedent(precedent: Precedent) -> str:
+    """One human line: "last time you chose X over Y because Z; outcome was
+    <verdict>." Omits the outcome clause when the past loop never closed
+    with a verdict -- no invented outcomes."""
+    line = (
+        f"last time you chose {precedent.decision} "
+        f"because {precedent.why}"
+    )
+    if precedent.outcome is not None:
+        line += f"; outcome was {precedent.outcome}"
+    return line.rstrip(". ") + "."
 
 
 # ── user model ───────────────────────────────────────────────────────────────

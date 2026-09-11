@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from awino import loops
+from awino import heilmeier, loops
 from awino.cli.loopctl import loop_app
 from awino.enforce import Ledger, LedgerError
 
@@ -102,6 +102,10 @@ Delete the three new files and drop the registration lines.
 ## Acceptance criteria
 - `awino loop run rpi --task ...` prints the phase-1 prompt
 - `awino loop next` advances only on valid artifacts
+
+## Decisions
+- Q1 -> extract a spine module: followed the default recommendation because one ordered list owns the whole chain.
+- Q2 -> Luke owns the spine module: answered during pair-planning.
 """
 
 PREMORTEM_OK = """# Premortem: rpi loop driver
@@ -132,14 +136,27 @@ def _confirm_problem(driver: loops.RpiDriver, state: loops.LoopState) -> None:
 
 
 def _comprehend(driver: loops.RpiDriver, state: loops.LoopState) -> None:
-    """Satisfy the plan-approval comprehension gate in fixtures. PLAN_OK has
-    no decisions section, so the driver's probes are empty and a recorded
-    explanation is the whole bar."""
+    """Satisfy the plan-approval comprehension gate in fixtures. PAIRING_OK
+    asks two questions, so the plan's decisions section yields two probes
+    (P1, P2); the explanation references the key decisions by name."""
     driver.record_explanation(
         state,
-        "We will validate the driver shape per phase, persist state on disk, "
-        "and wire the CLI to typer commands, advancing only when each "
-        "artifact validates.",
+        "We will extract a spine module owning the ordered precondition chain. "
+        "Chose to extract a spine module (Q1); followed the default "
+        "recommendation because one ordered list owns the whole chain. "
+        "Luke owns the spine module long-term (Q2).",
+        by="Luke",
+    )
+    driver.record_probe_answer(
+        state,
+        "P1",
+        "one list owns the order; if the extraction is wrong, gates scatter again",
+        by="Luke",
+    )
+    driver.record_probe_answer(
+        state,
+        "P2",
+        "Luke reviews spine changes; if ownership is wrong, no one tends the order",
         by="Luke",
     )
 
@@ -154,6 +171,21 @@ def _paste_comprehension_block(driver: loops.RpiDriver, state: loops.LoopState) 
     path.write_text(text.rstrip("\n") + "\n\n" + block, encoding="utf-8")
 
 
+def _write_mission(project: Path) -> None:
+    """A valid mission: objective + at least one exam wired to a
+    verification command. The spine (step 1) refuses all advancement
+    without it."""
+    heilmeier.save(
+        project / ".awino",
+        heilmeier.Catechism(
+            answers={
+                "objective": "exercise the test loop honestly",
+                "exams": "the loop advances through its phases -> true",
+            }
+        ),
+    )
+
+
 def _project(tmp_path: Path) -> Path:
     """A fake project with the files the plan fixture claims are in scope."""
     project = tmp_path / "project"
@@ -165,6 +197,7 @@ def _project(tmp_path: Path) -> Path:
         "tests/test_loops.py",
     ):
         (project / rel).write_text("# placeholder\n", encoding="utf-8")
+    _write_mission(project)
     return project
 
 
@@ -212,6 +245,73 @@ def _write_plan(driver: loops.RpiDriver, state: loops.LoopState, text: str) -> N
     path = driver.project_root / state.plan_artifact
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+PAIRING_OK = """# Pairing brief: RPI loop driver
+
+## Sub-problems
+- Validate the driver shape per phase
+- Persist state on disk and wire the CLI to typer commands
+
+## Candidate approaches
+
+### Extend the existing driver
+Build the spine on the current driver in place.
+trade-off: less code but couples the new gates to the old paths.
+pro: smaller diff. con: harder to isolate the spine.
+effort: two days
+
+### Extract a spine module
+Default recommendation: the precondition chain becomes its own ordered
+list -- exactly what was asked, no more.
+trade-off: cleaner boundary but touches every advance path.
+pro: one place owns the order. con: every driver opts in.
+effort: three days
+
+## Questions
+Q1: Which approach do you prefer, extend or extract?
+Q2: Who owns the spine module long-term?
+
+## Required skills
+
+- research: awino-rpi
+- pair-plan: awino-rpi
+- plan: awino-rpi
+"""
+
+
+def _write_pairing(
+    driver: loops.RpiDriver, state: loops.LoopState, text: str = PAIRING_OK
+) -> None:
+    path = driver.project_root / state.pairing_artifact
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def _answer_all(driver: loops.RpiDriver, state: loops.LoopState) -> None:
+    """Answer every pairing question, satisfying the pair-plan spine step."""
+    for qid, _ in driver.pairing_questions(state):
+        driver.record_pair_answer(
+            state, qid, "answer", "use the default recommendation", by="Luke"
+        )
+
+
+def _advance_to_plan(
+    driver: loops.RpiDriver, state: loops.LoopState
+) -> loops.LoopState:
+    """research -> pair-plan -> plan through the mandatory pair-plan step.
+
+    The spine's pair-plan step is not skippable: the brief is written, its
+    questions answered, and the loop advances through pair-plan on the way
+    to plan. A skip is a decision, never an oversight.
+    """
+    assert driver.advance(state) == "pair-plan"
+    state = driver.load(state.id)
+    _write_pairing(driver, state)
+    assert driver.check(state) == []
+    _answer_all(driver, state)
+    assert driver.advance(state) == "plan"
+    return driver.load(state.id)
 
 
 class TestPromptImport:
@@ -363,7 +463,9 @@ class TestLawyerMove:
             encoding="utf-8",
         )
         assert driver.check(state) == []
-        assert driver.advance(state) == "plan"
+        # The spine's pair-plan step is mandatory: confirmed research leads
+        # to pair-plan, never straight to plan.
+        assert driver.advance(state) == "pair-plan"
         reloaded = driver.load(state.id)
         assert (
             reloaded.problem_confirmation["solve"] == "Users never reach the page."
@@ -379,8 +481,7 @@ class TestLawyerMove:
         _write_research(driver, state, RESEARCH_OK)
         assert driver.check(state) == []
         _confirm_problem(driver, state)
-        driver.advance(state)
-        state = driver.load(state.id)
+        state = _advance_to_plan(driver, state)
         assert state.phase == "plan"
         driver.reenter_phase(state, "research", reason="recheck the sources")
         state = driver.load(state.id)
@@ -395,8 +496,7 @@ class TestPlanValidation:
         _write_research(driver, state, RESEARCH_OK)
         assert driver.check(state) == []
         _confirm_problem(driver, state)
-        driver.advance(state)
-        return driver.load(state.id)
+        return _advance_to_plan(driver, state)
 
     def test_valid_plan_passes(self, driver: loops.RpiDriver) -> None:
         state = self._research_done(driver)
@@ -431,15 +531,24 @@ class TestPlanValidation:
 
 
 class TestApprovalGate:
-    def _at_plan(self, driver: loops.RpiDriver) -> loops.LoopState:
+    def _at_plan(
+        self, driver: loops.RpiDriver, *, understood: bool = True
+    ) -> loops.LoopState:
         state = driver.new("add an RPI loop driver")
         _write_research(driver, state, RESEARCH_OK)
         assert driver.check(state) == []
         _confirm_problem(driver, state)
-        driver.advance(state)
-        state = driver.load(state.id)
+        state = _advance_to_plan(driver, state)
         _write_plan(driver, state, PLAN_OK)
         assert driver.check(state) == []
+        # The spine evaluates challenge (thinking) and understand
+        # (comprehension) before honda-scope (approval), so the fixture
+        # satisfies them to isolate the approval gate.
+        _thinking_run(driver, state)
+        if understood:
+            _comprehend(driver, state)
+            _paste_comprehension_block(driver, state)
+            assert driver.check(state) == []
         return state
 
     def test_next_past_plan_without_approval_is_refused(
@@ -452,11 +561,6 @@ class TestApprovalGate:
 
     def test_approval_then_advance(self, driver: loops.RpiDriver) -> None:
         state = self._at_plan(driver)
-        _thinking_run(driver, state)
-        # "Execute when comfortable and understanding": comprehension comes
-        # BEFORE approval -- the plan document records the check.
-        _comprehend(driver, state)
-        _paste_comprehension_block(driver, state)
         driver.approve_plan(state, by="Luke", reason="plan is explicit enough")
         reloaded = driver.load(state.id)
         assert driver.plan_approved(reloaded)
@@ -472,8 +576,7 @@ class TestApprovalGate:
     ) -> None:
         """A plan approved without understanding is a rubber stamp: the
         approval gate refuses until the human has explained the plan back."""
-        state = self._at_plan(driver)
-        _thinking_run(driver, state)
+        state = self._at_plan(driver, understood=False)
         with pytest.raises(
             loops.ComprehensionRequired, match="comprehension check incomplete"
         ):
@@ -490,8 +593,7 @@ class TestThinkingGate:
         _write_research(driver, state, RESEARCH_OK)
         assert driver.check(state) == []
         _confirm_problem(driver, state)
-        driver.advance(state)
-        state = driver.load(state.id)
+        state = _advance_to_plan(driver, state)
         _write_plan(driver, state, PLAN_OK)
         assert driver.check(state) == []
         return state
@@ -555,8 +657,7 @@ class TestImplementHandoff:
         _write_research(driver, state, RESEARCH_OK)
         assert driver.check(state) == []
         _confirm_problem(driver, state)
-        driver.advance(state)
-        state = driver.load(state.id)
+        state = _advance_to_plan(driver, state)
         _write_plan(driver, state, PLAN_OK)
         _thinking_run(driver, state)
         _comprehend(driver, state)
@@ -583,8 +684,7 @@ class TestImplementHandoff:
         _write_research(driver, state, RESEARCH_OK)
         assert driver.check(state) == []
         _confirm_problem(driver, state)
-        driver.advance(state)
-        state = driver.load(state.id)
+        state = _advance_to_plan(driver, state)
         _write_plan(driver, state, PLAN_OK)
         _thinking_run(driver, state)
         _comprehend(driver, state)
@@ -705,11 +805,42 @@ class TestLoopCli:
 
         next_result = runner.invoke(loop_app, ["next"])
         assert next_result.exit_code == 0, next_result.output
-        assert "ADVANCED  phase=plan" in next_result.output
+        # The spine's pair-plan step is mandatory: research leads to
+        # pair-plan, never straight to plan.
+        assert "ADVANCED  phase=pair-plan" in next_result.output
         assert "Phase 2" in next_result.output
-        plan_path = project / _artifact_path(next_result.output)
+        pairing_path = project / _artifact_path(next_result.output)
+        pairing_path.parent.mkdir(parents=True, exist_ok=True)
+        pairing_path.write_text(PAIRING_OK, encoding="utf-8")
 
-        # Plan validates but the approval gate refuses the advance.
+        # The brief validates, but the pairing questions are unanswered --
+        # the spine refuses to leave pair-plan, naming them.
+        unanswered = runner.invoke(loop_app, ["next"])
+        assert unanswered.exit_code == 1, unanswered.output
+        assert "REFUSED" in unanswered.output
+        assert "Q1" in unanswered.output
+
+        answered = runner.invoke(
+            loop_app,
+            ["answer", "--question", "Q1", "--answer", "extract a spine module"],
+        )
+        assert answered.exit_code == 0, answered.output
+        assert "ANSWERED  Q1" in answered.output
+        answered = runner.invoke(
+            loop_app,
+            ["answer", "--question", "Q2", "--answer", "Luke owns it long-term"],
+        )
+        assert answered.exit_code == 0, answered.output
+        assert "All questions answered" in answered.output
+
+        plan_result = runner.invoke(loop_app, ["next"])
+        assert plan_result.exit_code == 0, plan_result.output
+        assert "ADVANCED  phase=plan" in plan_result.output
+        assert "Phase 3" in plan_result.output
+        plan_path = project / _artifact_path(plan_result.output)
+
+        # Plan validates but the spine refuses the advance: the challenge
+        # step (thinking) comes before the honda-scope step (approval).
         plan_path.parent.mkdir(parents=True, exist_ok=True)
         plan_path.write_text(PLAN_OK, encoding="utf-8")
         refused = runner.invoke(loop_app, ["next"])
@@ -749,15 +880,29 @@ class TestLoopCli:
         assert "comprehension" in approved.output.lower()
         assert "MISSING" in approved.output
 
-        # Explain the plan back, then paste the comprehension-check record
-        # the status command prints into the plan's decisions section.
+        # Explain the plan back -- the explanation must reference the key
+        # decisions by name -- then answer the plan's probes.
         explained = runner.invoke(
             loop_app,
-            ["explain", "--text", "We validate the driver shape per phase, "
-             "persist state on disk, and wire the CLI to typer commands."],
+            ["explain", "--text", "We will extract a spine module owning the "
+             "ordered precondition chain. Chose to extract a spine module "
+             "(Q1); followed the default recommendation because one ordered "
+             "list owns the whole chain. Luke owns the spine module "
+             "long-term (Q2)."],
         )
         assert explained.exit_code == 0, explained.output
+        for qid, answer in (
+            ("P1", "one list owns the order; if wrong, gates scatter again"),
+            ("P2", "Luke reviews spine changes; if wrong, no one tends it"),
+        ):
+            probed = runner.invoke(
+                loop_app, ["probe-answer", "--question", qid, "--answer", answer]
+            )
+            assert probed.exit_code == 0, probed.output
 
+        # Paste the comprehension-check record the status command prints
+        # into the plan's decisions section, as the documented workflow
+        # requires.
         status = runner.invoke(loop_app, ["status"])
         assert status.exit_code == 0, status.output
         assert "COMPREHENSION_RECORD" in status.output
@@ -931,13 +1076,32 @@ class TestLedgerTrail:
 
         next_result = runner.invoke(loop_app, ["next"])
         assert next_result.exit_code == 0, next_result.output
-        assert "ADVANCED  phase=plan" in next_result.output
-        plan_path = project / _artifact_path(next_result.output)
+        # The spine's pair-plan step is mandatory: research leads to
+        # pair-plan, never straight to plan.
+        assert "ADVANCED  phase=pair-plan" in next_result.output
+        pairing_path = project / _artifact_path(next_result.output)
+        pairing_path.parent.mkdir(parents=True, exist_ok=True)
+        pairing_path.write_text(PAIRING_OK, encoding="utf-8")
+
+        for qid, answer in (
+            ("Q1", "extract a spine module"),
+            ("Q2", "Luke owns it long-term"),
+        ):
+            answered = runner.invoke(
+                loop_app, ["answer", "--question", qid, "--answer", answer]
+            )
+            assert answered.exit_code == 0, answered.output
+
+        plan_result = runner.invoke(loop_app, ["next"])
+        assert plan_result.exit_code == 0, plan_result.output
+        assert "ADVANCED  phase=plan" in plan_result.output
+        plan_path = project / _artifact_path(plan_result.output)
 
         plan_path.parent.mkdir(parents=True, exist_ok=True)
         plan_path.write_text(PLAN_OK, encoding="utf-8")
 
-        # The plan validates, but the approval gate refuses the advance.
+        # The plan validates, but the spine refuses the advance: the
+        # challenge step (thinking) comes before honda-scope (approval).
         refused = runner.invoke(loop_app, ["next"])
         assert refused.exit_code == 1
         assert "REFUSED" in refused.output
@@ -957,13 +1121,25 @@ class TestLedgerTrail:
         assert recorded.exit_code == 0, recorded.output
 
         # "Execute when comfortable and understanding": comprehension comes
-        # BEFORE approval.
+        # BEFORE approval -- the explanation references the key decisions
+        # by name, and every probe is answered.
         explained = runner.invoke(
             loop_app,
-            ["explain", "--text", "We validate the driver shape per phase, "
-             "persist state on disk, and wire the CLI to typer commands."],
+            ["explain", "--text", "We will extract a spine module owning the "
+             "ordered precondition chain. Chose to extract a spine module "
+             "(Q1); followed the default recommendation because one ordered "
+             "list owns the whole chain. Luke owns the spine module "
+             "long-term (Q2)."],
         )
         assert explained.exit_code == 0, explained.output
+        for qid, answer in (
+            ("P1", "one list owns the order; if wrong, gates scatter again"),
+            ("P2", "Luke reviews spine changes; if wrong, no one tends it"),
+        ):
+            probed = runner.invoke(
+                loop_app, ["probe-answer", "--question", qid, "--answer", answer]
+            )
+            assert probed.exit_code == 0, probed.output
 
         # The plan document records the comprehension check: paste the block
         # the status command prints.
@@ -1013,16 +1189,27 @@ class TestLedgerTrail:
             ("phase_started", "research"),
             ("problem_confirmed", "research"),
             ("artifact_validated", "research"),
+            ("success_criteria_evaluated", "research"),
             ("skill_receipt", "research"),
+            ("phase_started", "pair-plan"),
+            ("human_answered", "pair-plan"),
+            ("human_answered", "pair-plan"),
+            ("artifact_validated", "pair-plan"),
+            ("success_criteria_evaluated", "pair-plan"),
+            ("skill_receipt", "pair-plan"),
             ("phase_started", "plan"),
             ("artifact_validated", "plan"),
+            ("success_criteria_evaluated", "plan"),
             ("skill_receipt", "plan"),
             ("thinking_run", "plan"),
+            ("comprehension_recorded", "plan"),
+            ("comprehension_recorded", "plan"),
             ("comprehension_recorded", "plan"),
             ("approval_granted", "plan"),
             # The plan artifact changed after the first validation (the
             # comprehension-check block was pasted in), so the receipt was
             # refreshed -- the receipt attests the artifact's live content.
+            # No duplicate artifact_validated: the plan was already valid.
             ("skill_receipt", "plan"),
             ("phase_started", "implement"),
             ("loop_closed", "implement"),
@@ -1061,8 +1248,7 @@ class TestArtifactRejection:
         _write_research(event_driver, state, RESEARCH_OK)
         assert event_driver.check(state) == []
         _confirm_problem(event_driver, state)
-        event_driver.advance(state)
-        state = event_driver.load(state.id)
+        state = _advance_to_plan(event_driver, state)
         text = "\n".join(
             line for line in PLAN_OK.splitlines() if line.strip() != "## Rollback"
         )
@@ -1085,8 +1271,7 @@ class TestBackDriver:
         _write_research(driver, state, RESEARCH_OK)
         assert driver.check(state) == []
         _confirm_problem(driver, state)
-        driver.advance(state)
-        return driver.load(state.id)
+        return _advance_to_plan(driver, state)
 
     def test_back_reenters_earlier_phase_with_fresh_attempts(
         self, event_driver: loops.RpiDriver, loop_ledger: Ledger
@@ -1103,9 +1288,11 @@ class TestBackDriver:
         assert len(reentered) == 1
         assert "recheck the sources" in reentered[0].detail
         assert "'research'" in reentered[0].detail
-        # The artifact file is kept and re-validates on next.
+        # The artifact file is kept and re-validates on next; the mission's
+        # success criteria are judged right after each validation.
         assert event_driver.check(state) == []
-        assert loop_ledger.loop_events(state.id)[-1].kind == "artifact_validated"
+        tail_kinds = [e.kind for e in loop_ledger.loop_events(state.id)[-2:]]
+        assert tail_kinds == ["artifact_validated", "success_criteria_evaluated"]
 
     def test_back_refuses_unknown_phase(self, event_driver: loops.RpiDriver) -> None:
         state = event_driver.new("add an RPI loop driver")
@@ -1144,8 +1331,7 @@ class TestBackDriver:
         _write_research(event_driver, state, RESEARCH_OK)
         assert event_driver.check(state) == []
         _confirm_problem(event_driver, state)
-        event_driver.advance(state)
-        state = event_driver.load(state.id)
+        state = _advance_to_plan(event_driver, state)
         _write_plan(event_driver, state, "too short\n")
         for _ in range(loops.MAX_ATTEMPTS):
             assert event_driver.check(state)
@@ -1165,7 +1351,10 @@ class TestBackDriver:
 
 
 class TestBackCli:
-    def _to_plan(self, project: Path) -> None:
+    def _past_research(self, project: Path) -> None:
+        """Past research: the loop sits in pair-plan. The spine's pair-plan
+        step is mandatory -- research always leads to pair-plan, never
+        straight to plan."""
         run_result = runner.invoke(
             loop_app, ["run", "rpi", "--task", "add an RPI loop driver"]
         )
@@ -1176,11 +1365,13 @@ class TestBackCli:
         # The lawyer move: confirm the problem before research may advance.
         confirmed = runner.invoke(loop_app, ["confirm-problem", "--confirmed"])
         assert confirmed.exit_code == 0, confirmed.output
-        assert runner.invoke(loop_app, ["next"]).exit_code == 0
+        advanced = runner.invoke(loop_app, ["next"])
+        assert advanced.exit_code == 0, advanced.output
+        assert "ADVANCED  phase=pair-plan" in advanced.output
 
     def test_back_reenters_and_reprints_the_prompt(self, cli_env: Path) -> None:
         project = cli_env
-        self._to_plan(project)
+        self._past_research(project)
         result = runner.invoke(loop_app, ["back", "research", "--reason", "recheck"])
         assert result.exit_code == 0, result.output
         assert "REENTERED  phase=research" in result.output
@@ -1195,7 +1386,7 @@ class TestBackCli:
         self, cli_env: Path
     ) -> None:
         project = cli_env
-        self._to_plan(project)
+        self._past_research(project)
         assert runner.invoke(loop_app, ["back", "research"]).exit_code == 0
         # Re-entering research clears the problem confirmation: the lawyer
         # move asks again on re-examined research instead of planning on a
@@ -1207,23 +1398,27 @@ class TestBackCli:
         assert confirmed.exit_code == 0, confirmed.output
         advanced = runner.invoke(loop_app, ["next"])
         assert advanced.exit_code == 0, advanced.output
-        assert "ADVANCED  phase=plan" in advanced.output
+        assert "ADVANCED  phase=pair-plan" in advanced.output
         ledger = Ledger(project / ".awino")
         kinds = [event.kind for event in ledger.loop_events()]
         tail = kinds[kinds.index("phase_reentered") :]
         assert tail == [
             "phase_reentered",
             "phase_started",
-            # The refused `next` re-validated the kept artifact before the
-            # lawyer-move gate stopped the advance.
+            # The refused `next` re-validated the kept artifact (and judged
+            # it against the mission's success criteria) before the
+            # lawyer-move gate stopped the advance. The advancing `next`
+            # does not re-validate the unchanged artifact -- it just moves
+            # through the mandatory pair-plan step.
             "artifact_validated",
+            "success_criteria_evaluated",
             "problem_confirmed",
             "phase_started",
         ]
 
     def test_back_refuses_unknown_phase(self, cli_env: Path) -> None:
         project = cli_env
-        self._to_plan(project)
+        self._past_research(project)
         result = runner.invoke(loop_app, ["back", "deploy"])
         assert result.exit_code == 1
         assert "REFUSED" in result.output
@@ -1231,7 +1426,7 @@ class TestBackCli:
 
     def test_back_refuses_a_phase_ahead_of_current(self, cli_env: Path) -> None:
         project = cli_env
-        self._to_plan(project)
+        self._past_research(project)
         result = runner.invoke(loop_app, ["back", "implement"])
         assert result.exit_code == 1
         assert "REFUSED" in result.output
