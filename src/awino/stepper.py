@@ -69,7 +69,7 @@ def _locate(m: Machine, ctx: StepContext) -> str:
     objective = cat.answers.get("objective", "").strip()
     if objective:
         ctx.say(
-            f"MISSION  {objective[:100]}  ({answered}/8 answered, {len(cat.exam_commands())} exam(s))"
+            f"MISSION  {objective[:100]}  ({answered}/8 answered, {len(cat.exam_commands_valid())} exam(s))"
         )
     else:
         ctx.say("MISSION  unanswered - the plan has nothing to serve; awino mission --heilmeier")

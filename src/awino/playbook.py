@@ -161,7 +161,7 @@ def _step_mission_gap(ctx: Context) -> list[str]:
     cat = heilmeier.load(ctx.state_root)
     gap = cat.next_gap()
     answered = sum(1 for q in heilmeier.QUESTIONS if cat.answers.get(q.key, "").strip())
-    out = [f"heilmeier {answered}/8; exams wired: {len(cat.exam_commands())}"]
+    out = [f"heilmeier {answered}/8; exams wired: {len(cat.exam_commands_valid())}"]
     if gap is not None:
         out.append(f"QUESTION  [{gap.key}] {gap.text}  (stance: {gap.stance})")
         out.append(f'          awino mission --set "{gap.key}=<answer>"')

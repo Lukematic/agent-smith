@@ -23,7 +23,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import shlex
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -65,6 +68,27 @@ _JARGON = re.compile(
 _EXAM_ARROW = re.compile(r"^(.*?)\s*->\s*(.+)$")
 
 
+def command_is_executable(cmd: str) -> bool:
+    """True when cmd starts with something the machine can actually run.
+
+    This is the prose-masquerading-as-command guard: an exam like
+    "tests green -> the tests all pass" wires English, not a command, and
+    must never count as a verification. The first token has to resolve to a
+    real executable on PATH (``shutil.which``) or be an executable file path.
+    """
+    try:
+        parts = shlex.split(cmd, posix=True)
+    except ValueError:
+        return False
+    if not parts:
+        return False
+    head = parts[0]
+    if "/" in head or os.path.isabs(head):
+        p = Path(head)
+        return p.is_file() and os.access(p, os.X_OK)
+    return shutil.which(head) is not None
+
+
 @dataclass
 class Catechism:
     answers: dict[str, str]
@@ -84,7 +108,23 @@ class Catechism:
         return self._exam_lines()
 
     def exam_commands(self) -> list[str]:
+        """Raw wired commands: everything after '->', executable or not.
+
+        Parsing only - use exam_commands_valid() when the gate matters.
+        """
         return [m.group(2).strip() for ln in self._exam_lines() if (m := _EXAM_ARROW.match(ln))]
+
+    def exam_commands_valid(self) -> list[str]:
+        """Wired commands that are actually executable: the gate-ready set."""
+        return [c for c in self.exam_commands() if command_is_executable(c)]
+
+    def exam_command_problems(self) -> list[str]:
+        """Wired exam lines whose 'command' is prose, not something runnable."""
+        return [
+            ln
+            for ln in self._exam_lines()
+            if (m := _EXAM_ARROW.match(ln)) and not command_is_executable(m.group(2).strip())
+        ]
 
     def exams_without_commands(self) -> list[str]:
         return [ln for ln in self._exam_lines() if not _EXAM_ARROW.match(ln)]
@@ -144,6 +184,9 @@ def insights(cat: Catechism, *, open_seeds: list[str]) -> list[str]:
     for exam in cat.exams_without_commands():
         out.append(f"Exam without a command (cannot be gated): '{exam}'.")
 
+    for bad in cat.exam_command_problems():
+        out.append(f"Exam wires prose instead of a command (cannot be gated): '{bad}'.")
+
     if cat.answers.get("cost") and not re.search(
         r"mid[- ]?term|midterm|week|sprint|phase", exams_text
     ):
@@ -179,7 +222,7 @@ def render(state_root: Path, cat: Catechism, *, open_seeds: list[str]) -> Path:
     lines += ["## Derived insights", ""]
     found = insights(cat, open_seeds=open_seeds)
     lines += [f"- {i}" for i in found] or ["- none yet"]
-    cmds = cat.exam_commands()
+    cmds = cat.exam_commands_valid()
     if cmds:
         lines += ["", "## Exam commands (gate-ready)", ""] + [f"- `{c}`" for c in cmds]
     path = state_root / "MISSION.md"
@@ -212,13 +255,14 @@ def missing_mission_fields(cat: Catechism) -> list[str]:
     """Required mission fields without a usable answer.
 
     `objective` is missing when Q1 is unanswered. `success_criteria` is
-    missing when no exam line wires a verification command: prose-only exams
-    cannot be measured, so they do not count.
+    missing when no exam line wires an *executable* verification command:
+    prose-only exams, and exams whose 'command' is prose, cannot be measured,
+    so they do not count.
     """
     missing: list[str] = []
     if not cat.answers.get("objective", "").strip():
         missing.append("objective")
-    if not cat.exam_commands():
+    if not cat.exam_commands_valid():
         missing.append("success_criteria")
     return missing
 
@@ -236,7 +280,7 @@ def validate_mission(cat: Catechism) -> list[str]:
             "what are you trying to do? No jargon. "
             'Fix with: awino mission --set "objective=<one sentence>"'
         )
-    if not cat.exam_commands():
+    if not cat.exam_commands_valid():
         if not cat.exam_lines():
             out.append(
                 "mission is missing required field 'success_criteria': how "
@@ -244,12 +288,21 @@ def validate_mission(cat: Catechism) -> list[str]:
                 "'exams' question with measurable lines. "
                 'Fix with: awino mission --set "exams=<claim> -> <verify command>"'
             )
-        else:
+        elif not cat.exam_commands():
             out.append(
                 "mission field 'success_criteria' is not measurable: every "
                 "exam is prose with no verification command. Wire at least "
                 "one 'claim -> command' line so success is a command, not a "
                 "sentence."
+            )
+        else:
+            bad = cat.exam_command_problems()
+            out.append(
+                "mission field 'success_criteria' is not measurable: "
+                f"{len(bad)} wired exam(s) point at prose, not executable "
+                "commands: " + "; ".join(f"'{ln}'" for ln in bad) + ". "
+                "Rewrite each 'claim -> command' with a real command the "
+                "machine can run, or the gate cannot verify it."
             )
     return out
 

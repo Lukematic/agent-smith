@@ -4,15 +4,21 @@ commands, and derived insights that surface what the answers imply."""
 
 from __future__ import annotations
 
+import shlex
+import subprocess
+import sys
 from pathlib import Path
 
 from awino.heilmeier import (
     QUESTIONS,
     Catechism,
+    command_is_executable,
     insights,
     load,
+    missing_mission_fields,
     render,
     save,
+    validate_mission,
 )
 
 
@@ -114,3 +120,79 @@ class TestLivingDocument:
         p = _project(tmp_path)
         save(p, Catechism(answers={"risks": "r1\nr2"}, source={"risks": "human"}))
         assert load(p).answers["risks"] == "r1\nr2"
+
+
+class TestProseCommandsRejected:
+    """The Heilmeier prose bug: English descriptions after '->' were once
+    called gate-ready. A wired exam must be an executable command."""
+
+    PROSE_EXAMS = (
+        "deployment works -> the app deploys cleanly\n"
+        "tests pass -> all tests are green\n"
+        "users adopt it -> people actually use the thing"
+    )
+
+    def _cat(self, exams: str) -> Catechism:
+        return Catechism(
+            answers={"objective": "make agents trustworthy", "exams": exams},
+            source={},
+        )
+
+    def test_prose_after_arrow_is_not_a_valid_command(self) -> None:
+        cat = self._cat(self.PROSE_EXAMS)
+        assert cat.exam_commands() != []  # raw parse still sees the wiring
+        assert cat.exam_commands_valid() == []
+        assert len(cat.exam_command_problems()) == 3
+
+    def test_prose_commands_do_not_satisfy_success_criteria(self) -> None:
+        cat = self._cat(self.PROSE_EXAMS)
+        assert "success_criteria" in missing_mission_fields(cat)
+        problems = validate_mission(cat)
+        assert any("prose" in p and "success_criteria" in p for p in problems)
+
+    def test_prose_commands_are_not_rendered_gate_ready(self, tmp_path: Path) -> None:
+        p = _project(tmp_path)
+        path = render(p, self._cat(self.PROSE_EXAMS), open_seeds=[])
+        text = path.read_text(encoding="utf-8")
+        # the user's answers are still recorded verbatim, but nothing is
+        # labeled gate-ready and no prose is listed as a verify command
+        assert "## Exam commands (gate-ready)" not in text
+        assert "`the app deploys cleanly`" not in text
+
+    def test_insights_flag_prose_commands(self) -> None:
+        cat = self._cat(self.PROSE_EXAMS)
+        out = insights(cat, open_seeds=[])
+        assert any("prose instead of a command" in i for i in out)
+
+    def test_nonexistent_binary_is_rejected(self) -> None:
+        assert not command_is_executable("frobnicate --fast")
+
+    def test_unbalanced_quote_is_rejected(self) -> None:
+        assert not command_is_executable('echo "oops')
+
+    def test_empty_command_is_rejected(self) -> None:
+        assert not command_is_executable("   ")
+
+    def test_real_executable_is_accepted_and_runs(self) -> None:
+        cmd = f"{shlex.quote(sys.executable)} -c \"print('ok')\""
+        assert command_is_executable(cmd)
+        cat = self._cat(f"report builds -> {cmd}")
+        assert cat.exam_commands_valid() == [cmd]
+        assert "success_criteria" not in missing_mission_fields(cat)
+        assert validate_mission(cat) == []
+        # the wired command actually executes: gate-ready means runnable
+        proc = subprocess.run(
+            shlex.split(cmd), capture_output=True, text=True, timeout=30
+        )
+        assert proc.returncode == 0
+        assert proc.stdout.strip() == "ok"
+
+    def test_absolute_executable_path_is_accepted(self) -> None:
+        assert command_is_executable(sys.executable)
+
+    def test_mixed_prose_and_real_commands(self) -> None:
+        cmd = f"{shlex.quote(sys.executable)} -c \"print('ok')\""
+        cat = self._cat(f"tests pass -> all tests are green\nreport builds -> {cmd}")
+        assert cat.exam_commands_valid() == [cmd]
+        assert len(cat.exam_command_problems()) == 1
+        assert "success_criteria" not in missing_mission_fields(cat)

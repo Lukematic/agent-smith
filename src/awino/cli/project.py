@@ -1454,12 +1454,15 @@ def start_command(
                     _echo(f"Recall: {hit[:140]}")
     _echo(f"Stance: {stance.load_default(workspace.project.root)}")
     cat = heilmeier.load(workspace.state_root)
-    if not cat.exam_commands():
+    wired = cat.exam_commands_valid()
+    if not wired:
         _echo(
             "Mission exams: none wired - run 'awino mission --heilmeier' so success is a command, not a sentence"
         )
     else:
-        _echo(f"Mission exams: {len(cat.exam_commands())} command(s) wired")
+        _echo(f"Mission exams: {len(wired)} command(s) wired")
+    for bad in cat.exam_command_problems():
+        _echo(f"Mission exam wires prose, not a command: '{bad}'")
 
     if failing:
         _echo("")
