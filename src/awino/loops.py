@@ -1,4 +1,4 @@
-"""owns: awino loop run rpi|ralph|delegate, awino loop next, awino loop status, awino loop approve, awino loop back, awino loop answer, awino loop default
+"""owns: awino loop run rpi|ralph|delegate, awino loop next, awino loop status, awino loop approve, awino loop back, awino loop answer, awino loop default, awino loop think, awino loop explain, awino loop probe-answer, awino loop suggest, awino loop suggest-answer
 
 The loop drivers. The machine drives phases; the model thinks inside them.
 
@@ -78,10 +78,18 @@ PAIRING_SECTIONS = ("sub-problems", "candidate approaches", "questions")
 # -- a problem breakdown, assumptions challenged (named explicitly), and
 # angles considered -- before any solution. The driver checks the shape of
 # the work, not its quality.
+#
+# The applicability check is the lawyer move, run before solving anything:
+# state the problem as given, then ask "is this the actual problem?" --
+# like the lawyer who doesn't defend the charge but asks whether the charge
+# applies at all. Stated problem vs. reframed problem, with the evidence for
+# the reframe -- and the user's confirmation recorded. Planning cannot
+# proceed on a problem the user hasn't confirmed is the right one.
 RESEARCH_SECTIONS: dict[str, tuple[str, ...]] = {
     "problem breakdown": ("problem breakdown", "breakdown"),
     "assumptions challenged": ("assumptions challenged", "assumptions"),
     "angles considered": ("angles considered", "angles"),
+    "applicability check": ("applicability check", "the lawyer move", "applicability"),
 }
 # Headings that read as a proposed solution. Research documents what exists;
 # the required first-principles sections must come before any of these --
@@ -90,6 +98,22 @@ RESEARCH_SECTIONS: dict[str, tuple[str, ...]] = {
 _SOLUTION_HEADING_RE = re.compile(r"(?i)\b(solution|proposal|proposed|recommendation)\b")
 # An explicitly named assumption: a list item, or prose using the word.
 _ASSUMPTION_ITEM_RE = re.compile(r"(?m)^\s*(?:[-*+]|\d+[.)])\s+\S")
+# The applicability check (lawyer move) content rules: the section must name
+# the problem as given, the reframe (or that the stated problem stands), the
+# evidence for it, and the user's recorded confirmation.
+_STATED_PROBLEM_RE = re.compile(
+    r"(?i)\b(stated problem|problem as given|as asked)\b"
+)
+_REFRAMED_PROBLEM_RE = re.compile(
+    r"(?i)\b(reframed problem|the real problem|reframe|actual problem)\b"
+)
+_STANDS_CONFIRMED_RE = re.compile(
+    r"(?i)\b(the stated problem stands|no reframe|confirmed as stated|stands confirmed)\b"
+)
+_EVIDENCE_RE = re.compile(r"(?i)\bevidence\b")
+_USER_CONFIRMATION_RE = re.compile(
+    r"(?i)\b(user confirmed|confirmed by|confirmation:)\b"
+)
 
 _HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.MULTILINE)
 
@@ -296,8 +320,43 @@ class PairingIncomplete(LoopError):
         )
 
 
+class ProblemUnconfirmed(LoopError):
+    """Research validated but the human has not confirmed the problem.
+
+    The lawyer move: before anything is solved, the driver asks whether the
+    charge applies at all -- stated problem vs. reframed problem, with the
+    evidence. Planning cannot proceed on a problem the user hasn't confirmed
+    is the right one. Carries the driver's question (stated vs. reframed)
+    so the CLI can put it to the user directly.
+    """
+
+    def __init__(self, question: str) -> None:
+        self.question = question
+        super().__init__(
+            "cannot advance from research: the problem is not confirmed -- " + question
+        )
+
+
 class LoopLocked(LoopError):
     """A phase failed validation three times; a human must intervene."""
+
+
+class ComprehensionRequired(LoopError):
+    """The human has not demonstrated understanding of the plan.
+
+    Comprehension (explain it back in your own words, answer the probes)
+    is required BEFORE plan approval -- comfortable, understanding, reasons
+    recorded. A plan approved without understanding is a rubber stamp.
+    Carries the exactly-what-is-missing list and the teach-back lines (the
+    concept re-explained, then asked back).
+    """
+
+    def __init__(self, missing: list[str], teach_back: list[str]) -> None:
+        self.missing = missing
+        self.teach_back = teach_back
+        super().__init__(
+            "comprehension check incomplete: " + "; ".join(missing)
+        )
 
 
 class ReceiptBlocked(LoopError):
@@ -438,6 +497,16 @@ class LoopState:
     # Delegate
     decompose_artifact: str = ""
     execute_artifact: str = ""
+    # Critical thinking (awino think modes): runs recorded on the loop, an
+    # explicit human waiver, and the comprehension check ("execute when
+    # comfortable and understanding").
+    thinking_runs: list[dict] = field(default_factory=list)
+    thinking_waiver: dict | None = None
+    comprehension: dict = field(default_factory=dict)
+    # The lawyer move: the problem the user confirmed is the actual problem
+    # ({"verdict": "confirmed"|"reframed", "solve": <text>, "by": ..., "at": ...}).
+    # Set by `awino loop confirm-problem`; research cannot advance without it.
+    problem_confirmation: dict | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -527,6 +596,39 @@ def _validate_research_sections(text: str) -> list[str]:
                 "research artifact section 'assumptions challenged' names no "
                 "assumption explicitly: list each assumption you started with "
                 "and what the code actually showed"
+            )
+    # The lawyer move: the section must state the problem as given, answer
+    # "is this the actual problem?" (reframe with evidence, or confirm the
+    # stated problem stands), and record the user's confirmation. Each
+    # failure names the missing part.
+    if "applicability check" not in "".join(missing):
+        body = _section_text(text, RESEARCH_SECTIONS["applicability check"])
+        if not _STATED_PROBLEM_RE.search(body):
+            missing.append(
+                "research artifact section 'applicability check' names no stated "
+                "problem: state the problem as given before asking whether it "
+                "is the actual problem"
+            )
+        if not _REFRAMED_PROBLEM_RE.search(body) and not _STANDS_CONFIRMED_RE.search(
+            body
+        ):
+            missing.append(
+                "research artifact section 'applicability check' neither reframes "
+                "the problem nor confirms the stated one stands: 'is this the "
+                "actual problem?' must be answered, with evidence"
+            )
+        if not _EVIDENCE_RE.search(body):
+            missing.append(
+                "research artifact section 'applicability check' cites no evidence: "
+                "the reframe (or the confirmation) must rest on evidence, not "
+                "a hunch"
+            )
+        if not _USER_CONFIRMATION_RE.search(body):
+            missing.append(
+                "research artifact section 'applicability check' records no user "
+                "confirmation: planning cannot proceed on a problem the user "
+                "hasn't confirmed -- run `awino loop confirm-problem` and paste "
+                "the confirmation line it prints"
             )
     return missing
 
@@ -672,6 +774,12 @@ class PlanPhase(Phase):
                 missing.append(f"scope path does not exist in repo: '{scope_path}'")
         if any("decision" in h for h in headings):
             missing.extend(_validate_decision_trace(text, driver, state))
+        # Once comprehension work exists in loop state, the plan's decisions
+        # section must record it: explanation summary, probes asked and
+        # answered, suggestions made and accepted/rejected with reasons.
+        comp = state.comprehension or {}
+        if comp.get("explanation") or comp.get("probes") or comp.get("suggestions"):
+            missing.extend(_validate_comprehension_record(text, state))
         return missing
 
 
@@ -690,7 +798,7 @@ def _validate_decision_trace(
     whether it followed the default recommendation or overrode it, with a
     reason -- the plan records which was chosen and why.
     """
-    entries = _decision_entries(_section_text(plan_text, ("decisions",)))
+    entries = _decision_entries(_decisions_section_text(plan_text))
     if not entries:
         return [
             "decisions section has no decision entries: record one per pairing "
@@ -698,6 +806,7 @@ def _validate_decision_trace(
         ]
     brief_qids = [qid for qid, _ in driver.pairing_questions(state)]
     known = ", ".join(brief_qids) if brief_qids else "(none recorded)"
+    recorded_modes = {run.get("mode") for run in state.thinking_runs}
     approach_names = [name for name, _, _ in driver.pairing_approaches(state)]
     missing: list[str] = []
     for entry in entries:
@@ -709,6 +818,20 @@ def _validate_decision_trace(
                 f"decision '{head}' references unknown question '{unknown[0]}' "
                 f"(questions asked: {known})"
             )
+            continue
+        # A decision may cite a recorded thinking-mode run
+        # (e.g. "per devil (thinking:devil)"): it traces to the run the same
+        # way a Q id traces to a pairing answer.
+        thinking_refs = _THINKING_CITE_RE.findall(entry)
+        if thinking_refs:
+            unknown_modes = [m for m in thinking_refs if m not in recorded_modes]
+            if unknown_modes:
+                missing.append(
+                    f"decision '{head}' cites thinking run "
+                    f"'{unknown_modes[0]}' with no recorded run: record one "
+                    f"with `awino loop think --mode {unknown_modes[0]} "
+                    f"--record <file> --id {state.id}`"
+                )
             continue
         mentioned = [n for n in approach_names if n.lower() in entry.lower()]
         if mentioned:
@@ -786,6 +909,124 @@ def _decision_entries(section_text: str) -> list[str]:
             current.append(stripped)  # continuation of the current entry
     flush()
     return entries
+
+
+# ── critical thinking: comprehension helpers ─────────────────────────────
+# The plan's decisions section carries a "comprehension check" subsection
+# once comprehension work exists in state. Probe generation and decision
+# tracing ignore that subsection (it records the check; it is not itself a
+# decision), while the plan validator requires it to be complete.
+
+_COMPREHENSION_HEADING_RE = re.compile(r"(?im)^#{1,6}\s+comprehension check\b.*$")
+
+
+def _strip_comprehension_subsection(section_text: str) -> str:
+    """Remove the comprehension-check subsection from decisions text."""
+    match = _COMPREHENSION_HEADING_RE.search(section_text)
+    if not match:
+        return section_text
+    return section_text[: match.start()]
+
+
+def _decisions_section_text(plan_text: str) -> str:
+    """The plan's decisions section, minus any comprehension-check record."""
+    return _strip_comprehension_subsection(_section_text(plan_text, ("decisions",)))
+
+
+_THINKING_CITE_RE = re.compile(r"\bthinking:([a-z][a-z-]*)\b")
+
+
+def _references_decision(explanation: str, head: str) -> bool:
+    """Whether the explanation references a decision by name.
+
+    Deterministic: any four consecutive words of the decision's head
+    appearing in the explanation counts as a reference. Short heads match
+    on the whole head.
+    """
+    words = [w.strip(".,:;!?()[]{}\"'").lower() for w in head.split()]
+    words = [w for w in words if w]
+    low = re.sub(r"\s+", " ", explanation.lower())
+    if len(words) < 4:
+        return " ".join(words) in low if words else False
+    return any(
+        " ".join(words[i : i + 4]) in low for i in range(len(words) - 3)
+    )
+
+
+_CRITERION_STOPWORDS = frozenset(
+    {
+        "the", "a", "an", "and", "or", "of", "to", "in", "for", "with", "on",
+        "is", "are", "be", "by", "as", "at", "it", "this", "that", "from",
+        "will", "must", "should", "when", "into", "over", "under", "all",
+    }
+)
+
+
+def _criterion_covered(criterion: str, plan_text: str) -> bool:
+    """Whether a mission success criterion is addressed in the plan.
+
+    Deterministic word-overlap heuristic: at least half of the criterion's
+    significant words (5+ letters, not stopwords) must appear in the plan.
+    """
+    words = [
+        w
+        for w in re.findall(r"[a-z]{5,}", criterion.lower())
+        if w not in _CRITERION_STOPWORDS
+    ]
+    if not words:
+        return True
+    low = plan_text.lower()
+    hits = sum(1 for w in words if w in low)
+    return hits / len(words) >= 0.5
+
+
+def _validate_comprehension_record(plan_text: str, state: LoopState) -> list[str]:
+    """The decisions section must record the comprehension check.
+
+    Once explanation/probes/suggestions exist in loop state, the plan's
+    decisions section carries a "comprehension check" subsection naming them.
+    Each failure names the missing part, never just "incomplete".
+    """
+    comp = state.comprehension or {}
+    block = _section_text(plan_text, ("comprehension check", "comprehension"))
+    if not block.strip():
+        return [
+            "plan has comprehension work recorded in loop state but the "
+            "decisions section has no 'comprehension check' subsection -- "
+            f"paste the block shown by `awino loop status --id {state.id}`"
+        ]
+    missing: list[str] = []
+    low = block.lower()
+    if comp.get("explanation") and "explanation" not in low:
+        missing.append(
+            "comprehension check subsection does not summarize the explanation"
+        )
+    for qid in (comp.get("probes") or {}):
+        if qid.lower() not in low:
+            missing.append(
+                f"comprehension check subsection does not record probe {qid}"
+            )
+    for sid in (comp.get("suggestions") or {}):
+        if sid.lower() not in low:
+            missing.append(
+                "comprehension check subsection does not record suggestion "
+                f"{sid} (accepted/rejected with reason)"
+            )
+    return missing
+
+
+@dataclass(frozen=True)
+class PlanSuggestion:
+    """One driver-made suggestion on the plan: goals clarity, a missing
+    objective, or an alternative worth considering (Honda-first with effort
+    labels). `changes_plan` marks suggestions whose acceptance revises the
+    plan -- accepting one invalidates the plan approval and the comprehension
+    records, so the revised plan re-validates."""
+
+    id: str
+    kind: str  # "objective" | "alternative" | "clarity"
+    text: str
+    changes_plan: bool
 
 
 class ImplementPhase(Phase):
@@ -1901,7 +2142,31 @@ class LoopDriver(abc.ABC):
                     "a human must intervene",
                 )
 
-    def approve_plan(self, state: LoopState, by: str, reason: str) -> None:
+    def approve_plan(self, state: LoopState, by: str, reason: str, waive_reason: str | None = None) -> None:
+        # Ledger-enforced minimum bar: a plan cannot be approved until at
+        # least one critical-thinking mode has run on it, or the human
+        # explicitly waives it. Forgetting is impossible -- the gate asks
+        # every time approval is attempted.
+        if not state.thinking_runs and state.thinking_waiver is None:
+            if waive_reason is None or not waive_reason.strip():
+                raise ApprovalRequired(
+                    "critical thinking required before plan approval: run one "
+                    "mode and record it "
+                    f"(`awino loop think --mode premortem --record <file> "
+                    f"--id {state.id}`), or waive explicitly with "
+                    '`awino loop approve --waive-thinking '
+                    '--waive-reason "..."`'
+                )
+            self.waive_thinking(state, by, waive_reason.strip())
+        # "Execute when comfortable and understanding": approval is a human
+        # judgment that the plan is right, and judgment requires
+        # understanding. The comprehension check (explain it back in your
+        # own words, answer the probes) must complete BEFORE approval -- a
+        # plan approved without understanding is a rubber stamp. Forgetting
+        # is impossible: the gate asks every time approval is attempted.
+        missing = self.comprehension_missing(state)
+        if missing:
+            raise ComprehensionRequired(missing, self._teach_back_lines(state))
         state.approvals.append(
             {
                 "phase": "plan",
@@ -1929,6 +2194,59 @@ class LoopDriver(abc.ABC):
     def plan_approved(self, state: LoopState) -> bool:
         return any(a.get("phase") == "plan" for a in state.approvals)
 
+    # ── critical thinking ──
+    # The minimum bar lives on the base driver so every approval path
+    # enforces it: a plan is approved only after a thinking-mode run or an
+    # explicit human waiver, both recorded in the ledger trail.
+
+    def thinking_satisfied(self, state: LoopState) -> bool:
+        """The ledger-enforced minimum bar: at least one thinking-mode run
+        on this loop, or an explicit human waiver."""
+        return bool(state.thinking_runs) or state.thinking_waiver is not None
+
+    def record_thinking_run(
+        self, state: LoopState, mode: str, by: str, memory_id: str
+    ) -> dict:
+        """Record a thinking-mode run as a loop step: state, ledger event,
+        and the working-memory id the run's insights landed under."""
+        run = {
+            "mode": mode,
+            "by": by,
+            "at": datetime.now(UTC).isoformat(timespec="seconds"),
+            "memory_id": memory_id,
+        }
+        state.thinking_runs.append(run)
+        self._emit(
+            state,
+            "thinking_run",
+            detail=f"mode={mode} by={by} memory={memory_id}",
+        )
+        self.save(state)
+        return run
+
+    def waive_thinking(self, state: LoopState, by: str, reason: str) -> dict:
+        """Record the human's explicit waiver as a conscious decision: the
+        ledger event names the reason, and decisions.md records the why."""
+        waiver = {
+            "by": by,
+            "reason": reason.strip(),
+            "at": datetime.now(UTC).isoformat(timespec="seconds"),
+        }
+        state.thinking_waiver = waiver
+        self._emit(
+            state, "thinking_waived", detail=f"by={by} reason={reason.strip()}"
+        )
+        self.save(state)
+        decisions = self._decisions()
+        if decisions is not None:
+            decisions.record(
+                decision=f"waived critical thinking for loop {state.id} plan",
+                why=reason.strip() or working_memory.WHY_MISSING,
+                source=f"loop approve --waive-thinking --by {by} for loop {state.id}",
+                key=f"{state.id}:thinking-waiver",
+            )
+        return waiver
+
     def check_before_advance(self, _state: LoopState) -> bool:
         """Whether the CLI should run check() before advance(). Ralph's
         verify phase returns False: its check command runs inside advance()
@@ -1941,9 +2259,10 @@ class LoopDriver(abc.ABC):
         (the CLI checks first); this enforces the human gates, the skill
         receipt gate, and transitions.
 
-        Raises ApprovalRequired/PairingIncomplete when a human gate is
-        unsatisfied, ReceiptBlocked when a required skill has no valid
-        receipt, and LoopLocked when the loop is locked.
+        Raises ApprovalRequired/PairingIncomplete/ProblemUnconfirmed/
+        ComprehensionRequired when a human gate is unsatisfied, ReceiptBlocked
+        when a required skill has no valid receipt, and LoopLocked when the
+        loop is locked.
         """
         if state.locked:
             raise LoopLocked(
@@ -2007,7 +2326,10 @@ class LoopDriver(abc.ABC):
 
         The phase's artifact file is kept on disk but must re-validate on the
         next `awino loop next`. Re-entry is a human intervention, so it also
-        clears a three-strikes lock. Approvals are left untouched.
+        clears a three-strikes lock. Approvals are left untouched
+        (RpiDriver additionally clears the problem confirmation when
+        re-entering research, since the confirmation attested the old
+        research).
         """
         if phase not in self.phase_order:
             raise LoopError(
@@ -2395,6 +2717,156 @@ class RpiDriver(LoopDriver):
         asked = [qid for qid, _ in self.pairing_questions(state)]
         return [qid for qid in asked if qid not in state.pair_answers]
 
+    # ── the lawyer move: applicability check ─────────────────────────────
+    # Before anything is solved, the driver asks whether the charge applies
+    # at all: stated problem vs. reframed problem, with the evidence. The
+    # research artifact's applicability-check section carries the four parts
+    # (validator-checked); the user's answer is recorded here, on state, and
+    # research cannot advance without it -- so pair-planning (and the direct
+    # research -> plan path) cannot start on an unconfirmed problem.
+
+    def _research_text(self, state: LoopState) -> str:
+        if not state.research_artifact:
+            return ""
+        path = self.project_root / state.research_artifact
+        if not path.is_file():
+            return ""
+        return path.read_text(encoding="utf-8", errors="replace")
+
+    def _applicability_lines(self, state: LoopState) -> list[str]:
+        body = _section_text(
+            self._research_text(state), RESEARCH_SECTIONS["applicability check"]
+        )
+        return [ln.strip() for ln in body.splitlines() if ln.strip()]
+
+    def _problem_after_marker(
+        self, state: LoopState, marker: re.Pattern[str]
+    ) -> str | None:
+        """The first non-empty line after a marker line in the
+        applicability-check section: the stated (or reframed) problem as the
+        research wrote it."""
+        lines = self._applicability_lines(state)
+        for i, line in enumerate(lines):
+            if marker.search(line) and i + 1 < len(lines):
+                return re.sub(r"^[-*+#>\s]+", "", lines[i + 1]).strip() or None
+        return None
+
+    def stated_problem(self, state: LoopState) -> str | None:
+        """The problem as given, from the applicability-check section."""
+        return self._problem_after_marker(state, _STATED_PROBLEM_RE)
+
+    def reframed_problem(self, state: LoopState) -> str | None:
+        """The reframed problem, when the research names one."""
+        return self._problem_after_marker(state, _REFRAMED_PROBLEM_RE)
+
+    def confirm_problem(
+        self, state: LoopState, by: str, reframed: str | None = None
+    ) -> dict:
+        """Record the user's answer to the lawyer move: which problem do we solve?
+
+        Verdict "confirmed": the stated problem stands -- solve is the stated
+        problem from the research artifact. Verdict "reframed": the evidence
+        says the real problem is the reframe -- solve is the reframed text.
+        Emits a problem_confirmed ledger event. Research cannot advance until
+        this is recorded; the artifact's applicability-check section must
+        also carry the confirmation line (the validator checks).
+        """
+        if reframed is None:
+            stated = self.stated_problem(state)
+            if stated is None:
+                raise LoopError(
+                    "cannot confirm: the research artifact's applicability-check "
+                    "section names no stated problem to confirm -- write the "
+                    "section first, then confirm"
+                )
+            verdict, solve = "confirmed", stated
+        else:
+            reframed = reframed.strip()
+            if not reframed:
+                raise LoopError(
+                    "cannot confirm: --reframed needs the reframed problem text"
+                )
+            verdict, solve = "reframed", reframed
+        confirmation = {
+            "verdict": verdict,
+            "solve": solve,
+            "by": by,
+            "at": datetime.now(UTC).isoformat(timespec="seconds"),
+        }
+        state.problem_confirmation = confirmation
+        self._emit(
+            state,
+            "problem_confirmed",
+            detail=f"verdict={verdict} by={by} solve={solve}",
+        )
+        self.save(state)
+        return confirmation
+
+    def reenter_phase(
+        self, state: LoopState, phase: str, reason: str = ""
+    ) -> LoopState:
+        """Re-entering research clears the problem confirmation.
+
+        The confirmation attested the old research ("the stated problem
+        stands" for that artifact). Re-entry means the research is under
+        re-examination -- planning on the old attestation would be a stale
+        confirmation, so the lawyer move asks again. Forgetting is
+        impossible.
+        """
+        if phase == "research":
+            state.problem_confirmation = None
+        return super().reenter_phase(state, phase, reason=reason)
+
+    def problem_confirmation_line(self, state: LoopState) -> str:
+        """The exact line to paste into the research artifact's
+        applicability-check section, recording the user's confirmation."""
+        conf = state.problem_confirmation or {}
+        word = "reframed" if conf.get("verdict") == "reframed" else "stated"
+        return (
+            f"User confirmed by {conf.get('by', '?')}: solve the {word} "
+            f"problem -- \"{conf.get('solve', '?')}\"."
+        )
+
+    def problem_line(self, state: LoopState) -> str:
+        """One status line for the research phase: which problem is confirmed."""
+        conf = state.problem_confirmation
+        if conf is None:
+            return (
+                "problem: unconfirmed -- planning cannot proceed until you confirm "
+                "the problem: `awino loop confirm-problem --reframed \"...\" | "
+                f"--confirmed --id {state.id}`"
+            )
+        word = "reframed" if conf["verdict"] == "reframed" else "stated"
+        return (
+            f"problem: {conf['verdict']} -- solve the {word} problem: "
+            f"{conf['solve']} (by={conf['by']})"
+        )
+
+    def problem_question(self, state: LoopState) -> str:
+        """The lawyer move put to the user directly: stated vs. reframed,
+        with the evidence pointer. This is what the gate asks every time."""
+        stated = self.stated_problem(state)
+        reframed = self.reframed_problem(state)
+        if stated and reframed:
+            return (
+                f"you asked me to solve '{stated}', but the evidence says the real "
+                f"problem is '{reframed}' -- which do we solve? Run "
+                f"`awino loop confirm-problem --reframed \"...\"` or "
+                f"`awino loop confirm-problem --confirmed --id {state.id}`."
+            )
+        if stated:
+            return (
+                f"the research states the problem as '{stated}' but you have not "
+                f"confirmed it is the actual problem -- which do we solve? Run "
+                f"`awino loop confirm-problem --confirmed --id {state.id}` "
+                f"(or `--reframed \"...\"` if the evidence points elsewhere)."
+            )
+        return (
+            "the research names no stated problem yet -- write the applicability "
+            "check section, then run `awino loop confirm-problem --reframed \"...\" "
+            f"| --confirmed --id {state.id}`."
+        )
+
     def pairing_decisions_block(self, state: LoopState | None) -> str:
         """The driver-injected 'Human decisions so far' section of the plan
         prompt: recorded Q&A plus declared defaults. Marked as injected so
@@ -2516,7 +2988,390 @@ class RpiDriver(LoopDriver):
             )
         return record
 
+    # ── critical thinking: offers, comprehension, suggestions ──
+    # Woven into the loop, not opt-in-only: the driver offers
+    # context-relevant modes at each checkpoint, gates plan approval on a
+    # thinking run or explicit waiver, and gates plan advancement on the
+    # comprehension check ("execute when comfortable and understanding").
+
+    _THINKING_OFFERS: ClassVar[dict[str, tuple[str, str]]] = {
+        "research": (
+            "assumption-destroyer",
+            "want me to surface the five biggest assumptions?",
+        ),
+        "pair-plan": (
+            "devil",
+            "want me to devil's-advocate this before you decide?",
+        ),
+        "plan": (
+            "premortem",
+            "want a pre-mortem on the chosen approach?",
+        ),
+    }
+
+    def thinking_offer_for_phase(self, phase: str) -> tuple[str, str] | None:
+        """The context-relevant thinking mode offered at a checkpoint: the
+        mode name and the plain-language offer. None where no checkpoint
+        offers one. The human accepts by running it, or declines by not."""
+        return self._THINKING_OFFERS.get(phase)
+
+    def _plan_text(self, state: LoopState) -> str:
+        if not state.plan_artifact:
+            return ""
+        path = self.project_root / state.plan_artifact
+        if not path.is_file():
+            return ""
+        return path.read_text(encoding="utf-8", errors="replace")
+
+    def comprehension_probes(self, state: LoopState) -> list[tuple[str, str]]:
+        """2-3 targeted probe questions derived from the plan's decisions
+        section and stated risks. Deterministic: the same plan always yields
+        the same probes."""
+        text = self._plan_text(state)
+        if not text:
+            return []
+        probes: list[tuple[str, str]] = []
+        for i, entry in enumerate(
+            _decision_entries(_decisions_section_text(text))[:2], 1
+        ):
+            head = re.sub(r"\s+", " ", entry.splitlines()[0]).strip()[:80]
+            probes.append(
+                (
+                    f"P{i}",
+                    f"Decision '{head}': why this choice, and what breaks "
+                    "if it is wrong?",
+                )
+            )
+        if len(probes) < 3:
+            risks = _decision_entries(_section_text(text, ("risk", "risks")))
+            if risks:
+                head = re.sub(r"\s+", " ", risks[0].splitlines()[0]).strip()[:80]
+                probes.append(
+                    (
+                        f"P{len(probes) + 1}",
+                        f"Risk '{head}': how would you detect it early, "
+                        "before it costs you?",
+                    )
+                )
+        return probes
+
+    def probed_decision_heads(self, state: LoopState) -> list[str]:
+        """The key decisions the probes cover, for the reference check and
+        the teach-back."""
+        text = self._plan_text(state)
+        if not text:
+            return []
+        return [
+            re.sub(r"\s+", " ", entry.splitlines()[0]).strip()[:80]
+            for entry in _decision_entries(_decisions_section_text(text))[:2]
+        ]
+
+    def comprehension_missing(self, state: LoopState) -> list[str]:
+        """Exactly what is missing before the plan may advance: the human's
+        explanation, every probe answered, and the explanation referencing
+        the plan's key decisions by name. Empty means the human demonstrated
+        understanding -- comfortable, understanding, reasons recorded."""
+        probes = self.comprehension_probes(state)
+        comp = state.comprehension or {}
+        explanation = (comp.get("explanation") or {}).get("text") or ""
+        missing: list[str] = []
+        if not explanation.strip():
+            missing.append(
+                "no explanation recorded: write the plan in your own words -- "
+                f"`awino loop explain --text \"...\" --id {state.id}`"
+            )
+        answered = comp.get("probes") or {}
+        for qid, question in probes:
+            if qid not in answered:
+                missing.append(
+                    f"probe {qid} unanswered: {question} -- "
+                    f"`awino loop probe-answer --question {qid} "
+                    f'--answer "..." --id {state.id}`'
+                )
+        heads = self.probed_decision_heads(state)
+        if heads and explanation.strip():
+            referenced = sum(
+                1 for head in heads if _references_decision(explanation, head)
+            )
+            required = max(1, (len(heads) + 1) // 2)
+            if referenced < required:
+                missing.append(
+                    f"explanation references {referenced} of {len(heads)} key "
+                    f"decisions by name (need at least {required}): name the "
+                    "decisions your probes covered"
+                )
+        return missing
+
+    def record_explanation(
+        self, state: LoopState, text: str, by: str = "human"
+    ) -> dict:
+        """Record the human's explanation of the plan, in their own words."""
+        text = text.strip()
+        if not text:
+            raise LoopError("cannot record an empty explanation")
+        comp = state.comprehension or {}
+        comp["explanation"] = {
+            "text": text,
+            "by": by,
+            "at": datetime.now(UTC).isoformat(timespec="seconds"),
+        }
+        state.comprehension = comp
+        self.save(state)
+        self._emit(
+            state,
+            "comprehension_recorded",
+            detail=f"explanation recorded by={by} ({len(text)} chars)",
+        )
+        return comp["explanation"]
+
+    def record_probe_answer(
+        self, state: LoopState, qid: str, answer: str, by: str = "human"
+    ) -> dict:
+        """Record the human's answer to a comprehension probe."""
+        asked = [q for q, _ in self.comprehension_probes(state)]
+        if qid not in asked:
+            raise LoopError(
+                f"unknown probe {qid!r}: the plan's probes are "
+                f"{', '.join(asked) if asked else '(none yet -- write the plan first)'}"
+            )
+        comp = state.comprehension or {}
+        probes = comp.get("probes") or {}
+        probes[qid] = {
+            "answer": answer.strip(),
+            "by": by,
+            "at": datetime.now(UTC).isoformat(timespec="seconds"),
+        }
+        comp["probes"] = probes
+        state.comprehension = comp
+        self.save(state)
+        self._emit(
+            state, "comprehension_recorded", detail=f"probe {qid} answered by={by}"
+        )
+        return probes[qid]
+
+    def plan_suggestions(self, state: LoopState) -> list[PlanSuggestion]:
+        """Driver-made suggestions on the plan: goals clarity, missing
+        objectives (mission criteria the plan never addresses), and
+        alternatives worth considering (pairing approaches not chosen,
+        Honda-first with effort labels). Deterministic from plan, mission,
+        and pairing brief."""
+        text = self._plan_text(state)
+        if not text:
+            return []
+        out: list[PlanSuggestion] = []
+
+        def add(kind: str, suggestion_text: str, changes_plan: bool) -> None:
+            out.append(
+                PlanSuggestion(
+                    id=f"S{len(out) + 1}",
+                    kind=kind,
+                    text=suggestion_text,
+                    changes_plan=changes_plan,
+                )
+            )
+
+        for criterion in mission_success_criteria(self.project_root):
+            if not _criterion_covered(criterion, text):
+                add(
+                    "objective",
+                    "Missing objective: the plan never addresses the mission "
+                    f"criterion '{criterion}'. Add it, or record why it is "
+                    "out of scope.",
+                    True,
+                )
+        decided = _decisions_section_text(text).lower()
+        for name, effort, role in self.pairing_approaches(state):
+            if role == "default" or name.lower() in decided:
+                continue
+            add(
+                "alternative",
+                "Alternative worth considering: "
+                f"{name} (effort: {effort}) -- the pairing brief's alternate. "
+                "The plan takes another path; record why this one loses.",
+                True,
+            )
+        if len(_section_text(text, ("scope",)).strip()) < 120:
+            add(
+                "clarity",
+                "Goals clarity: the scope section is thin. State the goal in "
+                "one sentence so the plan can be judged against it.",
+                False,
+            )
+        return out
+
+    def record_suggestion_decision(
+        self,
+        state: LoopState,
+        sid: str,
+        verdict: str,
+        reason: str,
+        by: str = "human",
+    ) -> dict:
+        """Record accepted/rejected + reason for a driver suggestion.
+
+        Accepting a plan-changing suggestion revises the plan: the approval
+        was for the old plan and the comprehension records described it, so
+        both are cleared -- the revised plan re-validates and the gates ask
+        again. Forgetting is impossible.
+        """
+        verdict = verdict.strip().lower()
+        if verdict not in ("accepted", "rejected"):
+            raise LoopError(
+                f"bad verdict {verdict!r}: expected accepted or rejected"
+            )
+        suggestion = next(
+            (s for s in self.plan_suggestions(state) if s.id == sid), None
+        )
+        if suggestion is None:
+            raise LoopError(
+                f"unknown suggestion {sid!r}: list them with "
+                f"`awino loop suggest --id {state.id}`"
+            )
+        comp = state.comprehension or {}
+        decided = comp.get("suggestions") or {}
+        decided[sid] = {
+            "verdict": verdict,
+            "reason": reason.strip(),
+            "by": by,
+            "at": datetime.now(UTC).isoformat(timespec="seconds"),
+            "text": suggestion.text,
+            "changes_plan": suggestion.changes_plan,
+        }
+        comp["suggestions"] = decided
+        state.comprehension = comp
+        self._emit(
+            state,
+            "suggestion_decided",
+            detail=f"suggestion={sid} verdict={verdict} by={by}: {reason.strip()}",
+        )
+        if verdict == "accepted" and suggestion.changes_plan:
+            state.approvals = [
+                a for a in state.approvals if a.get("phase") != "plan"
+            ]
+            comp.pop("explanation", None)
+            (comp.get("probes") or {}).clear()
+            self._emit(
+                state,
+                "approval_invalidated",
+                phase="plan",
+                detail=(
+                    f"suggestion {sid} accepted and changes the plan: "
+                    "approval cleared, comprehension reset -- revise the "
+                    "plan, then the gates ask again"
+                ),
+            )
+        self.save(state)
+        return decided[sid]
+
+    def comprehension_record_block(self, state: LoopState) -> str:
+        """The exact 'comprehension check' subsection to paste at the end of
+        the plan's decisions section: explanation summary, probes asked and
+        answered, suggestions made and accepted/rejected with reasons."""
+        comp = state.comprehension or {}
+        lines = ["### Comprehension check"]
+        explanation = (comp.get("explanation") or {}).get("text", "")
+        if explanation:
+            summary = re.sub(r"\s+", " ", explanation).strip()[:200]
+            lines.append(f"Explanation (human's own words): {summary}")
+        probes = comp.get("probes") or {}
+        if probes:
+            lines.append("Probes asked and answered:")
+            for qid, question in self.comprehension_probes(state):
+                record = probes.get(qid)
+                if record is None:
+                    lines.append(f"{qid}: {question} -> unanswered")
+                else:
+                    answer = re.sub(r"\s+", " ", record.get("answer", ""))
+                    lines.append(
+                        f"{qid}: {question} -> answered: {answer[:120]}"
+                    )
+        suggestions = comp.get("suggestions") or {}
+        if suggestions:
+            lines.append("Suggestions:")
+            for sid in sorted(suggestions):
+                record = suggestions[sid]
+                lines.append(
+                    f"{sid}: {record.get('text', '')[:100]} -> "
+                    f"{record.get('verdict')}: {record.get('reason', '')[:120]}"
+                )
+        lines.append("")
+        return "\n".join(lines)
+
+    def describe_comprehension(self, state: LoopState) -> list[str]:
+        """Status lines for the plan gate: thinking runs or waiver, probes,
+        explanation, and suggestions with their accepted/rejected state."""
+        lines: list[str] = []
+        if state.thinking_runs:
+            modes = ", ".join(r.get("mode", "?") for r in state.thinking_runs)
+            lines.append(f"THINKING  ran: {modes}")
+        elif state.thinking_waiver is not None:
+            waiver = state.thinking_waiver
+            lines.append(
+                f"THINKING  waived by={waiver.get('by')}: {waiver.get('reason')}"
+            )
+        else:
+            lines.append(
+                "THINKING  none recorded: run one mode "
+                f"(`awino loop think --mode premortem --record <file> --id {state.id}`) "
+                "or waive explicitly at approve"
+            )
+        for qid, question in self.comprehension_probes(state):
+            answered = (state.comprehension.get("probes") or {}).get(qid)
+            mark = "ANSWERED" if answered else "PROBE"
+            lines.append(f"{mark} {qid}: {question}")
+        if (state.comprehension.get("explanation") or {}).get("text"):
+            lines.append("EXPLAINED  human explanation recorded")
+        else:
+            lines.append(
+                "EXPLAIN  write the plan in your own words: "
+                f'`awino loop explain --text "..." --id {state.id}`'
+            )
+        for suggestion in self.plan_suggestions(state):
+            decided = (state.comprehension.get("suggestions") or {}).get(
+                suggestion.id
+            )
+            if decided:
+                lines.append(
+                    f"SUGGESTION {suggestion.id} {decided['verdict']}: "
+                    f"{suggestion.text[:80]}"
+                )
+            else:
+                lines.append(
+                    f"SUGGESTION {suggestion.id} [{suggestion.kind}]: "
+                    f"{suggestion.text[:100]}"
+                )
+        return lines
+
+    def _teach_back_lines(self, state: LoopState) -> list[str]:
+        """Entering teach-back: the driver explains the concept in its own
+        words, then asks the human to explain it back. The plan does not
+        advance."""
+        lines = [
+            "TEACH_BACK  the plan does not advance until you can explain it back"
+        ]
+        heads = self.probed_decision_heads(state)
+        if heads:
+            lines.append(
+                "TEACH_BACK  the concept, in the driver's words (not yours):"
+            )
+            for head in heads:
+                lines.append(f"TEACH_BACK    - {head}")
+        lines.append(
+            "TEACH_BACK  explain it back: "
+            f'`awino loop explain --text "..." --id {state.id}`'
+        )
+        for qid, question in self.comprehension_probes(state):
+            lines.append(f"TEACH_BACK  probe {qid}: {question}")
+        return lines
+
     def _check_advance_allowed(self, state: LoopState) -> None:
+        # The lawyer move: research advances only on a problem the user
+        # confirmed is the actual problem. Pair-planning -- and the direct
+        # research -> plan path when no pairing brief exists -- cannot start
+        # on an unconfirmed problem. Forgetting is impossible: the gate asks
+        # the stated-vs-reframed question every time.
+        if state.phase == "research" and state.problem_confirmation is None:
+            raise ProblemUnconfirmed(self.problem_question(state))
         if state.phase == "plan" and not self.plan_approved(state):
             raise ApprovalRequired(
                 "plan is not approved; human approval is required between plan "
@@ -2526,6 +3381,15 @@ class RpiDriver(LoopDriver):
             unanswered = self.unanswered_questions(state)
             if unanswered:
                 raise PairingIncomplete(unanswered)
+        # "Execute when comfortable and understanding": approval already
+        # requires comprehension, so this backstop fires only when the
+        # comprehension records were cleared after approval without the
+        # approval going with them. Forgetting is impossible: the gate asks
+        # every time.
+        if state.phase == "plan" and self.plan_approved(state):
+            missing = self.comprehension_missing(state)
+            if missing:
+                raise ComprehensionRequired(missing, self._teach_back_lines(state))
 
     def status_next(self, state: LoopState) -> str:
         if state.phase == "pair-plan" and not state.locked:

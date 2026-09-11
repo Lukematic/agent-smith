@@ -377,6 +377,17 @@ LOOP_EVENT_KINDS: tuple[str, ...] = (
     "human_answered",
     "outcome_verdict",
     "skill_receipt",
+    # Critical thinking: a mode run recorded on a loop, an explicit human
+    # waiver (a conscious decision, with its reason), comprehension records
+    # (explanation, probe answers), suggestion verdicts, approval
+    # invalidated when an accepted suggestion revises the plan, and the
+    # lawyer move: the user's problem confirmation (stated vs. reframed).
+    "thinking_run",
+    "thinking_waived",
+    "comprehension_recorded",
+    "suggestion_decided",
+    "approval_invalidated",
+    "problem_confirmed",
     # State hygiene: buddy --fix archiving a stale session. Not a loop, so it
     # travels under the pseudo-loop "hygiene"; the audit trail stays the one
     # place that records what happened to state.

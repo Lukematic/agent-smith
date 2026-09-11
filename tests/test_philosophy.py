@@ -337,6 +337,18 @@ Use the existing session store.
 - The inverse: leave auth.py untouched and migrate callers instead.
 - Conventions from the existing flag-gated rollout in the session store.
 
+## Applicability check (the lawyer move)
+### Stated problem
+Migrate auth with zero downtime.
+### Reframed problem (or: the stated problem stands)
+The stated problem stands: the migration is the work; the question was
+never whether to migrate, only how.
+### Evidence
+src/auth.py:42 shows token validation is stateless, so the migration path
+is a flag-gated rollout -- the problem is the cutover mechanism.
+### User confirmation
+User confirmed by tester: solve the stated problem -- "Migrate auth with zero downtime.".
+
 ## Open questions
 None.
 """
@@ -360,6 +372,7 @@ class TestResearchFirstPrinciples:
             "## Problem breakdown",
             "## Assumptions challenged",
             "## Angles considered",
+            "## Applicability check",
         ):
             bare = "\n".join(
                 ln for ln in bare.splitlines() if not ln.startswith(section)
@@ -370,6 +383,7 @@ class TestResearchFirstPrinciples:
         assert any("'problem breakdown'" in m for m in missing)
         assert any("'assumptions challenged'" in m for m in missing)
         assert any("'angles considered'" in m for m in missing)
+        assert any("'applicability check'" in m for m in missing)
 
     def test_solution_before_sections_is_rejected(
         self, rpi_driver: loops.RpiDriver
@@ -446,6 +460,7 @@ def _at_pair_plan(
     state = driver.new("migrate auth")
     _write_research(driver, state, RESEARCH_BASE)
     assert driver.check(state) == []
+    _confirm_problem(driver, state)
     path = driver.project_root / state.pairing_artifact
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(brief, encoding="utf-8")
@@ -485,6 +500,38 @@ Revert the flag and redeploy.
 """
 
 
+def _thinking_run(driver, state) -> None:
+    """Satisfy the plan-approval thinking gate in fixtures."""
+    driver.record_thinking_run(state, "premortem", by="tester", memory_id="D-0001")
+
+
+def _confirm_problem(driver, state) -> None:
+    """Satisfy the lawyer-move gate in fixtures: the user confirmed the
+    stated problem (the fixture research confirms it stands)."""
+    driver.confirm_problem(state, by="tester")
+
+
+def _comprehend(driver, state) -> None:
+    """Satisfy the plan-approval comprehension gate in fixtures. The
+    re-examine plan has no decisions section, so the driver's probes are
+    empty; every suggestion the plan generates still needs deciding, plus
+    an explanation."""
+    for suggestion in driver.plan_suggestions(state):
+        driver.record_suggestion_decision(
+            state,
+            suggestion.id,
+            "rejected",
+            "noted and explicitly set aside for this re-examination",
+            by="tester",
+        )
+    driver.record_explanation(
+        state,
+        "We migrate auth behind a flag: read the code, write the plan, "
+        "migrate behind a flag, then revert the flag and redeploy.",
+        by="tester",
+    )
+
+
 class TestPairPlanHonda:
     def test_brief_without_effort_rejected(
         self, rpi_driver: loops.RpiDriver
@@ -498,6 +545,7 @@ class TestPairPlanHonda:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(no_effort, encoding="utf-8")
         assert rpi_driver.check(state) == []
+        _confirm_problem(rpi_driver, state)
         rpi_driver.advance(state)
         state = rpi_driver.load(state.id)
         missing = rpi_driver.check(state)
@@ -734,6 +782,10 @@ class TestLoopCloseCriteria:
         state = driver.load(loop_id)
         _write_research_cli(driver, state)
         # Validate the artifact: the loop now stands against criteria A.
+        confirmed = runner.invoke(
+            loop_app, ["confirm-problem", "--id", loop_id, "--confirmed"]
+        )
+        assert confirmed.exit_code == 0, confirmed.output
         result = runner.invoke(loop_app, ["next", "--id", loop_id])
         assert result.exit_code == 0, result.output
         assert "CRITERIA" in result.output
@@ -772,6 +824,10 @@ class TestLoopCloseCriteria:
         driver = _cli_driver(project)
         state = driver.load(loop_id)
         _write_research_cli(driver, state)
+        confirmed = runner.invoke(
+            loop_app, ["confirm-problem", "--id", loop_id, "--confirmed"]
+        )
+        assert confirmed.exit_code == 0, confirmed.output
         assert runner.invoke(loop_app, ["next", "--id", loop_id]).exit_code == 0
         # Mission moves; close refuses (as proven above).
         save(
@@ -795,6 +851,18 @@ class TestLoopCloseCriteria:
         path = project / state.plan_artifact
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(plan + "\n", encoding="utf-8")
+        _thinking_run(driver, state)
+        # "Execute when comfortable and understanding": comprehension comes
+        # BEFORE approval. Once comprehension exists in state, the plan
+        # document must record it -- paste the check block into the plan.
+        _comprehend(driver, state)
+        plan_text = path.read_text(encoding="utf-8")
+        path.write_text(
+            plan_text.rstrip("\n")
+            + "\n\n"
+            + driver.comprehension_record_block(state),
+            encoding="utf-8",
+        )
         approved = runner.invoke(
             loop_app,
             ["approve", "--id", loop_id, "--by", "tester", "--reason", "re-examined"],

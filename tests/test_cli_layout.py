@@ -25,7 +25,10 @@ CLI_PACKAGE = SRC / "cli"
 # afterwards: buddy (Phase 1), loop run ralph / loop run delegate / loop
 # answer / loop default (Phase 2), loop close (outcome verdict), brief
 # (stakeholder brief, Phase 2), proof export / proof verify (FAIR proof
-# packs, Phase 2), buddy health (repo hygiene, Phase 2). 104 names.
+# packs, Phase 2), buddy health (repo hygiene, Phase 2), think + loop think /
+# loop explain / loop probe-answer / loop suggest / loop suggest-answer
+# (critical thinking modes, Phase 2), loop confirm-problem (the lawyer move:
+# applicability check, Phase 2). 111 names.
 PRE_SPLIT_COMMANDS = frozenset(
     {
         "ask",
@@ -86,13 +89,19 @@ PRE_SPLIT_COMMANDS = frozenset(
         "loop approve",
         "loop back",
         "loop close",
+        "loop confirm-problem",
         "loop answer",
         "loop default",
+        "loop explain",
         "loop next",
+        "loop probe-answer",
         "loop run delegate",
         "loop run ralph",
         "loop run rpi",
         "loop status",
+        "loop suggest",
+        "loop suggest-answer",
+        "loop think",
         "mission",
         "mode-status",
         "note",
@@ -120,6 +129,7 @@ PRE_SPLIT_COMMANDS = frozenset(
         "step",
         "start",
         "status",
+        "think",
         "tidy",
         "update",
         "update-preflight",
@@ -221,8 +231,8 @@ class TestCommandSurfaceIsUnchanged:
         )
 
     def test_command_count_is_exactly_the_registered_set(self) -> None:
-        assert len(PRE_SPLIT_COMMANDS) == 104
-        assert len(_registered(cli.app)) == 104
+        assert len(PRE_SPLIT_COMMANDS) == 111
+        assert len(_registered(cli.app)) == 111
 
     def test_public_entry_points_survive(self) -> None:
         assert isinstance(cli.app, typer.Typer)

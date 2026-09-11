@@ -1,4 +1,4 @@
-"""owns: loop run rpi, loop run ralph, loop run delegate, loop next, loop status, loop approve, loop back, loop answer, loop default, loop close
+"""owns: loop run rpi, loop run ralph, loop run delegate, loop next, loop status, loop approve, loop back, loop answer, loop default, loop close, loop think, loop explain, loop probe-answer, loop suggest, loop suggest-answer, loop confirm-problem
 
 The loop CLI: the machine drives phases, the model thinks inside them.
 Every command here is deterministic -- the model calls these rather than
@@ -18,7 +18,7 @@ from pathlib import Path
 
 import typer
 
-from awino import heilmeier, loops, working_memory
+from awino import heilmeier, loops, think, working_memory
 from awino.cli import _echo, _ledger, _workspace
 from awino.enforce import LoopEvent
 from awino.paths import AwinoPaths
@@ -162,6 +162,19 @@ def _print_phase_start(driver: loops.LoopDriver, state: loops.LoopState) -> None
     if isinstance(driver, loops.RpiDriver) and state.phase == "pair-plan":
         for line in driver.describe_pairing(state):
             _echo(line)
+    # Woven in, not opt-in-only: each checkpoint offers its context-relevant
+    # thinking mode in plain language. The human accepts by running it, or
+    # declines by not -- and the approval gate asks again regardless.
+    if isinstance(driver, loops.RpiDriver) and not driver.thinking_satisfied(state):
+        offer = driver.thinking_offer_for_phase(state.phase)
+        if offer and not _terse_narration():
+            mode, text = offer
+            _echo(f"SUGGEST  {text}")
+            _echo(f"         run it: awino loop think --mode {mode} --id {state.id}")
+            _echo(
+                "         or ask the driver to run one and share its take "
+                "(always labeled as the driver's, never yours)"
+            )
 
 
 def _print_run_opened(
@@ -295,6 +308,23 @@ def loop_next(
                 f"--answer \"...\" --id {state.id}"
             )
         raise typer.Exit(1) from None
+    except loops.ComprehensionRequired as exc:
+        # "Execute when comfortable and understanding": the driver enters
+        # teach-back -- explains the concept, then asks the human to explain
+        # it back -- and does NOT advance.
+        for line in exc.teach_back:
+            _echo(line)
+        _echo("MISSING  before the plan advances:")
+        for item in exc.missing:
+            _echo(f"  - {item}")
+        raise typer.Exit(1) from None
+    except loops.ProblemUnconfirmed as exc:
+        # The lawyer move, put to the user directly: you asked me to solve
+        # X, but the evidence says the real problem is Y -- which do we
+        # solve? The loop does NOT advance until answered.
+        _echo(f"REFUSED  {exc}")
+        _echo(f"ANSWER  {exc.question}")
+        raise typer.Exit(1) from None
     except loops.ReceiptBlocked as exc:
         _echo(f"REFUSED  {exc}")
         for problem in exc.problems:
@@ -330,9 +360,27 @@ def loop_status(
     attempts = " ".join(f"{name}={state.attempts.get(name, 0)}" for name in driver.phase_order)
     _echo(f"attempts: {attempts}")
     _echo(driver.approval_line(state))
+    if isinstance(driver, loops.RpiDriver) and state.phase == "research":
+        _echo(driver.problem_line(state))
     if isinstance(driver, loops.RpiDriver) and state.phase == "pair-plan":
         for line in driver.describe_pairing(state):
             _echo(line)
+    if (
+        isinstance(driver, loops.RpiDriver)
+        and state.phase == "plan"
+        and state.plan_artifact
+        and (driver.project_root / state.plan_artifact).is_file()
+    ):
+        for line in driver.describe_comprehension(state):
+            _echo(line)
+        comp = state.comprehension or {}
+        if comp.get("explanation") or comp.get("probes") or comp.get("suggestions"):
+            _echo(
+                "COMPREHENSION_RECORD  paste at the end of the plan's "
+                "decisions section:"
+            )
+            for line in driver.comprehension_record_block(state).splitlines():
+                _echo(f"  {line}")
     if state.seed_id:
         _echo(f"seed: {state.seed_id}")
     _echo(f"locked: {'yes' if state.locked else 'no'}")
@@ -380,9 +428,34 @@ def loop_back(
 def loop_approve(
     by: str = typer.Option(..., "--by", help="Person approving the plan"),
     reason: str = typer.Option("", "--reason", help="Why the plan is approved"),
+    waive_thinking: bool = typer.Option(
+        False,
+        "--waive-thinking",
+        help="Explicitly waive the critical-thinking requirement; recorded "
+        "in the ledger as a conscious decision with --waive-reason.",
+    ),
+    waive_reason: str = typer.Option(
+        "",
+        "--waive-reason",
+        help="Why critical thinking is waived; required with --waive-thinking.",
+    ),
     loop_id: str = typer.Option(None, "--id", help="Loop id; defaults to the current one"),
 ) -> None:
-    """Record human approval of the plan. Required before implement starts (RPI)."""
+    """Record human approval of the plan. Required before implement starts (RPI).
+
+    Ledger-enforced minimum bar: approval is BLOCKED until at least one
+    critical-thinking mode has run on the loop (``awino loop think --mode
+    <mode> --record <file>``) or the human explicitly waives it with
+    --waive-thinking --waive-reason "...". The waiver is recorded in the
+    ledger as a conscious decision ("thinking waived by human, reason:
+    ..."). Forgetting is impossible -- the gate asks every time.
+
+    "Execute when comfortable and understanding": the comprehension check
+    (``awino loop explain --text "..."`` plus answering every probe with
+    ``awino loop probe-answer``) must ALSO complete before approval -- a
+    plan approved without understanding is a rubber stamp. Approval is
+    refused until the human has explained the plan back.
+    """
     driver, state = _resolve_driver_and_state(loop_id)
     if state.locked:
         _echo(f"REFUSED  LOOP_LOCKED  loop {state.id} is locked; a human must intervene")
@@ -396,7 +469,31 @@ def loop_approve(
     if not isinstance(driver, loops.RpiDriver):
         _echo(f"REFUSED  loop {state.id} is not an RPI loop; only RPI plans need approval")
         raise typer.Exit(1)
-    driver.approve_plan(state, by, reason)
+    if waive_thinking and not waive_reason.strip():
+        _echo(
+            "REFUSED  --waive-thinking requires --waive-reason <text>: "
+            "a waiver without a reason is not a conscious decision"
+        )
+        raise typer.Exit(2)
+    try:
+        driver.approve_plan(
+            state, by, reason, waive_reason=waive_reason if waive_thinking else None
+        )
+    except loops.ApprovalRequired as exc:
+        _echo(f"REFUSED  {exc}")
+        raise typer.Exit(1) from None
+    except loops.ComprehensionRequired as exc:
+        # "Execute when comfortable and understanding": comprehension comes
+        # BEFORE approval. The driver enters teach-back -- explains the
+        # concept, then asks the human to explain it back -- and does NOT
+        # approve.
+        _echo("REFUSED  comprehension check incomplete: the plan cannot be approved")
+        for line in exc.teach_back:
+            _echo(line)
+        _echo("MISSING  before the plan can be approved:")
+        for item in exc.missing:
+            _echo(f"  - {item}")
+        raise typer.Exit(1) from None
     _echo(f"APPROVED  plan by={by}")
     if reason:
         _echo(f"reason: {reason}")
@@ -459,6 +556,290 @@ def loop_default(
         )
     else:
         _echo(f"All questions answered. Advance with: awino loop next --id {state.id}")
+
+
+# ── critical thinking, woven into the loop ─────────────────────────────────
+
+
+@loop_app.command("think")
+def loop_think(
+    mode: str = typer.Option(..., "--mode", help="Thinking mode to run"),
+    record: str = typer.Option(
+        None,
+        "--record",
+        help="File with the mode's output: validates it structurally, writes "
+        "its insights to working memory, and records the run on the loop.",
+    ),
+    by: str = typer.Option("human", "--by", help="Who ran the thinking"),
+    loop_id: str = typer.Option(None, "--id", help="Loop id; defaults to the current one"),
+) -> None:
+    """Run a critical-thinking mode as a loop step (RPI).
+
+    Without --record, prints the mode's prompt template (the structure of
+    the thinking). With --record <file>, validates the output, records its
+    insights in working memory, and records the run on the loop with a
+    ledger event -- this is what satisfies the plan-approval thinking gate.
+    The plan's decisions section may cite the run as thinking:<mode>. After
+    recording, the driver shares its take as a suggestion, always attributed
+    as the driver's -- never as the human's judgment.
+    """
+    driver, state = _resolve_driver_and_state(loop_id)
+    if not isinstance(driver, loops.RpiDriver):
+        _echo(
+            f"REFUSED  loop {state.id} is not an RPI loop; "
+            "thinking runs attach to RPI plans"
+        )
+        raise typer.Exit(1)
+    try:
+        item = think.by_name(mode)
+    except ValueError:
+        _echo(
+            f"REFUSED  unknown thinking mode {mode!r}: "
+            f"one of {', '.join(think.MODE_NAMES)}"
+        )
+        raise typer.Exit(2) from None
+    if record is None:
+        _echo(f"THINK  {item.name}")
+        _echo(f"LOOP  {state.id}")
+        _echo("")
+        _echo(item.prompt)
+        _echo("")
+        _echo(f"REQUIRED SECTIONS  {', '.join(name for name, _ in item.sections)}")
+        _echo(
+            f"RECORD  awino loop think --mode {item.name} "
+            f"--record <file> --id {state.id}"
+        )
+        return
+    try:
+        text = Path(record).read_text(encoding="utf-8")
+    except OSError as exc:
+        _echo(f"REFUSED  cannot read {record}: {exc}")
+        raise typer.Exit(2) from None
+    failures = think.validate(item.name, text)
+    if failures:
+        _echo(f"THINK_VERIFY  {item.name}  NON-COMPLIANT")
+        for failure in failures:
+            _echo(f"  - {failure}")
+        raise typer.Exit(1)
+    workspace = _workspace()
+    filename, entry_id = think.record_insight(
+        item.name,
+        text,
+        workspace.state_root,
+        source=f"awino loop think {item.name} --id {state.id}",
+    )
+    driver.record_thinking_run(state, item.name, by, entry_id)
+    _echo(f"THINK_RECORDED  {item.name}  loop={state.id}")
+    _echo(f"MEMORY  {filename} {entry_id}")
+    _echo(
+        "DRIVER_VIEW  the driver's take (a suggestion, never your judgment): "
+        f"{think.headline(text)}"
+    )
+
+
+@loop_app.command("explain")
+def loop_explain(
+    text: str = typer.Option(..., "--text", help="The plan in your own words"),
+    by: str = typer.Option("human", "--by", help="Who is explaining"),
+    loop_id: str = typer.Option(None, "--id", help="Loop id; defaults to the current one"),
+) -> None:
+    """Record your explanation of the plan, in your own words (RPI).
+
+    "Execute when comfortable and understanding": the plan advances to
+    implementation only when you can explain it back. Without a recorded
+    explanation the gate waits; if the probes go unanswered or the
+    explanation doesn't reference the plan's key decisions, the driver
+    enters teach-back and does not advance.
+    """
+    driver, state = _resolve_driver_and_state(loop_id)
+    if not isinstance(driver, loops.RpiDriver):
+        _echo(
+            f"REFUSED  loop {state.id} is not an RPI loop; "
+            "explanations only apply to RPI plans"
+        )
+        raise typer.Exit(1)
+    try:
+        driver.record_explanation(state, text, by=by)
+    except loops.LoopError as exc:
+        _echo(f"REFUSED  {exc}")
+        raise typer.Exit(1) from None
+    _echo(f"EXPLAINED  by={by} ({len(text.strip())} chars)")
+    remaining = driver.comprehension_missing(state)
+    if remaining:
+        _echo("REMAINING  before the plan advances:")
+        for item in remaining:
+            _echo(f"  - {item}")
+    else:
+        _echo(f"Comprehension complete. Advance with: awino loop next --id {state.id}")
+
+
+@loop_app.command("probe-answer")
+def loop_probe_answer(
+    question: str = typer.Option(..., "--question", help="Probe id, e.g. P1"),
+    answer: str = typer.Option(..., "--answer", help="Your answer, recorded verbatim"),
+    by: str = typer.Option("human", "--by", help="Who answered"),
+    loop_id: str = typer.Option(None, "--id", help="Loop id; defaults to the current one"),
+) -> None:
+    """Answer one of the driver's comprehension probes on the plan (RPI).
+
+    Probes are 2-3 targeted questions derived from the plan's decisions
+    section and stated risks; see them with `awino loop status`. The plan
+    advances only when every probe is answered and your explanation
+    references the plan's key decisions by name.
+    """
+    driver, state = _resolve_driver_and_state(loop_id)
+    if not isinstance(driver, loops.RpiDriver):
+        _echo(
+            f"REFUSED  loop {state.id} is not an RPI loop; "
+            "probes only apply to RPI plans"
+        )
+        raise typer.Exit(1)
+    try:
+        driver.record_probe_answer(state, question, answer, by=by)
+    except loops.LoopError as exc:
+        _echo(f"REFUSED  {exc}")
+        raise typer.Exit(1) from None
+    _echo(f"PROBE_ANSWERED  {question} by={by}")
+    remaining = driver.comprehension_missing(state)
+    if remaining:
+        _echo("REMAINING  before the plan advances:")
+        for item in remaining:
+            _echo(f"  - {item}")
+    else:
+        _echo(f"Comprehension complete. Advance with: awino loop next --id {state.id}")
+
+
+@loop_app.command("suggest")
+def loop_suggest(
+    loop_id: str = typer.Option(None, "--id", help="Loop id; defaults to the current one"),
+) -> None:
+    """List the driver's suggestions on the plan (RPI).
+
+    Goals clarity, missing objectives, and alternatives worth considering
+    (Honda-first with effort labels). Decide each with `awino loop
+    suggest-answer --suggestion S1 --verdict accepted|rejected --reason ...`.
+    Accepting a plan-changing suggestion revises the plan: the approval is
+    cleared and the revised plan re-validates.
+    """
+    driver, state = _resolve_driver_and_state(loop_id)
+    if not isinstance(driver, loops.RpiDriver):
+        _echo(
+            f"REFUSED  loop {state.id} is not an RPI loop; "
+            "suggestions only apply to RPI plans"
+        )
+        raise typer.Exit(1)
+    suggestions = driver.plan_suggestions(state)
+    if not suggestions:
+        _echo("SUGGESTIONS  none: the driver has nothing to add to this plan")
+        return
+    _echo("SUGGESTIONS  the driver's suggestions (decide each one):")
+    for suggestion in suggestions:
+        decided = (state.comprehension.get("suggestions") or {}).get(suggestion.id)
+        status = decided["verdict"] if decided else "open"
+        _echo(f"  {suggestion.id} [{suggestion.kind}] [{status}] {suggestion.text}")
+        if suggestion.changes_plan:
+            _echo("      accepting this revises the plan (approval clears, plan re-validates)")
+    _echo(
+        "Decide with: awino loop suggest-answer --suggestion S1 "
+        f"--verdict accepted|rejected --reason \"...\" --id {state.id}"
+    )
+
+
+@loop_app.command("suggest-answer")
+def loop_suggest_answer(
+    suggestion: str = typer.Option(..., "--suggestion", help="Suggestion id, e.g. S1"),
+    verdict: str = typer.Option(..., "--verdict", help="accepted or rejected"),
+    reason: str = typer.Option(..., "--reason", help="Why"),
+    by: str = typer.Option("human", "--by", help="Who decided"),
+    loop_id: str = typer.Option(None, "--id", help="Loop id; defaults to the current one"),
+) -> None:
+    """Record accepted/rejected + reason for a driver suggestion (RPI).
+
+    Suggestions are recorded, never silently dropped. Accepting a
+    plan-changing suggestion clears the plan approval and the comprehension
+    records: revise the plan, then the gates ask again.
+    """
+    driver, state = _resolve_driver_and_state(loop_id)
+    if not isinstance(driver, loops.RpiDriver):
+        _echo(
+            f"REFUSED  loop {state.id} is not an RPI loop; "
+            "suggestions only apply to RPI plans"
+        )
+        raise typer.Exit(1)
+    try:
+        decided = driver.record_suggestion_decision(state, suggestion, verdict, reason, by=by)
+    except loops.LoopError as exc:
+        _echo(f"REFUSED  {exc}")
+        raise typer.Exit(1) from None
+    _echo(f"SUGGESTION_DECIDED  {suggestion} {decided['verdict']} by={by}")
+    if decided["verdict"] == "accepted" and decided["changes_plan"]:
+        _echo(
+            "REVISED  plan-changing suggestion accepted: the plan approval "
+            "was cleared and comprehension reset"
+        )
+        _echo(
+            f"REVISED  revise the plan, then `awino loop next --id {state.id}` "
+            "(it re-validates), explain it back, and approve again"
+        )
+
+
+@loop_app.command("confirm-problem")
+def loop_confirm_problem(
+    reframed: str = typer.Option(
+        None,
+        "--reframed",
+        help="The real problem, when the evidence says the stated problem is "
+        "wrong: records that the user chose the reframe.",
+    ),
+    confirmed: bool = typer.Option(
+        False,
+        "--confirmed",
+        help="The stated problem stands: records that the user confirmed the "
+        "problem as given is the actual problem.",
+    ),
+    by: str = typer.Option("human", "--by", help="Who confirmed the problem"),
+    loop_id: str = typer.Option(None, "--id", help="Loop id; defaults to the current one"),
+) -> None:
+    """Answer the lawyer move: which problem do we solve? (RPI, research phase).
+
+    Before anything is solved, the research must ask whether the charge
+    applies at all: stated problem vs. reframed problem, with the evidence.
+    Exactly one of --reframed "..." / --confirmed. The confirmation is
+    recorded on the loop (ledger event problem_confirmed) and research
+    cannot advance -- to pair-planning or straight to plan -- without it.
+    The command also prints the exact line to paste into the research
+    artifact's applicability-check section, which the validator requires.
+    """
+    driver, state = _resolve_driver_and_state(loop_id)
+    if not isinstance(driver, loops.RpiDriver):
+        _echo(
+            f"REFUSED  loop {state.id} is not an RPI loop; "
+            "problem confirmation only applies to RPI research"
+        )
+        raise typer.Exit(1)
+    if state.phase != "research":
+        _echo(
+            f"REFUSED  nothing to confirm: current phase is '{state.phase}'; "
+            "the problem is confirmed during research, before planning"
+        )
+        raise typer.Exit(1)
+    if (reframed is None) == (not confirmed):
+        _echo(
+            "REFUSED  exactly one of --reframed \"...\" / --confirmed: "
+            "answer the question -- which problem do we solve?"
+        )
+        raise typer.Exit(2)
+    try:
+        confirmation = driver.confirm_problem(state, by, reframed=reframed)
+    except loops.LoopError as exc:
+        _echo(f"REFUSED  {exc}")
+        raise typer.Exit(1) from None
+    word = "reframed" if confirmation["verdict"] == "reframed" else "stated"
+    _echo(f"PROBLEM_CONFIRMED  {confirmation['verdict']} by={by}")
+    _echo(f"SOLVE  the {word} problem: {confirmation['solve']}")
+    _echo("PASTE  into the research artifact's applicability-check section:")
+    _echo(f"  {driver.problem_confirmation_line(state)}")
+    _echo(f"Then advance: awino loop next --id {state.id}")
 
 
 # ── outcome verdict ──────────────────────────────────────────────────────────

@@ -332,6 +332,10 @@ def test_driver_new_advance_lock_update_checklist(tmp_path: Path, state_root: Pa
 def test_driver_approve_feeds_decisions_with_why(tmp_path: Path, state_root: Path) -> None:
     driver = _driver(_project(tmp_path), tmp_path, state_root)
     state = driver.new("refactor the parser")
+    driver.record_thinking_run(state, "premortem", by="human", memory_id="D-0001")
+    # "Execute when comfortable and understanding": approval requires the
+    # comprehension check first, even in this decisions-memory test.
+    driver.record_explanation(state, "Refactor the parser in small steps.", by="human")
     driver.approve_plan(state, by="human", reason="small and safe")
     decisions = working_memory.Decisions(state_root)
     entry = decisions.by_key(f"{state.id}:approval")
@@ -341,6 +345,8 @@ def test_driver_approve_feeds_decisions_with_why(tmp_path: Path, state_root: Pat
 
     # An empty reason stays flagged as missing -- buddy prompts, never invents.
     state2 = driver.new("another task")
+    driver.record_thinking_run(state2, "premortem", by="human", memory_id="D-0002")
+    driver.record_explanation(state2, "Do the other task carefully.", by="human")
     driver.approve_plan(state2, by="human", reason="")
     entry2 = decisions.by_key(f"{state2.id}:approval")
     assert entry2 is not None
@@ -355,6 +361,11 @@ def test_driver_without_state_root_stays_file_free(tmp_path: Path) -> None:
         skill_md=SKILL_MD,
     )
     state = driver.new("refactor the parser")
+    driver.record_thinking_run(state, "premortem", by="human", memory_id="D-0003")
+    # Approval requires comprehension first ("execute when comfortable and
+    # understanding"); no plan artifact exists, so the explanation alone is
+    # the whole bar.
+    driver.record_explanation(state, "Refactor the parser in small steps.", by="human")
     driver.approve_plan(state, by="human", reason="fine")
     assert not (tmp_path / ".awino" / "checklist.json").exists()
 

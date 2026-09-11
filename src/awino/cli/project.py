@@ -1074,7 +1074,7 @@ def stance_command(
         None, "--for", help="Print the stance this message calls for, and why"
     ),
     verify_name: str = typer.Option(
-        None, "--verify", help="Check an agent response against a stance's rules"
+        None, "--verify", help="Check an agent response against a stance's rules, or a thinking mode's structure"
     ),
     response_path: str = typer.Option(
         None, "--response", help="File containing the agent response to check with --verify"
@@ -1089,7 +1089,9 @@ def stance_command(
 
     --verify runs the layer-3 critic: a deterministic keyword check of an
     agent response against a stance's rules, which is heuristic by design
-    (see the stance_verify module).
+    (see the stance_verify module). It also accepts thinking-mode names
+    (``awino think <mode>``): each mode's structural requirements are
+    verified the same way, with the missing part named on failure.
     """
     workspace = _workspace()
     project = workspace.project.root
@@ -1137,8 +1139,8 @@ def _stance_verify(stance_name: str, response_path: str | None) -> None:
     """Run the layer-3 stance critic on a response file.
 
     Exits 0 when the response passes every check, 1 when it fails any (one
-    line per failed rule), 2 when the stance is unknown or the file is
-    unreadable.
+    line per failed rule), 2 when the stance or thinking mode is unknown or
+    the file is unreadable.
     """
     if response_path is None:
         _echo("REFUSED  --verify requires --response <file>")
@@ -1151,7 +1153,7 @@ def _stance_verify(stance_name: str, response_path: str | None) -> None:
     try:
         failures = stance_verify.verify(stance_name, response_text)
     except ValueError:
-        _echo(f"REFUSED  unknown stance: {stance_name}")
+        _echo(f"REFUSED  unknown stance or thinking mode: {stance_name}")
         raise typer.Exit(2) from None
     if not failures:
         _echo(f"STANCE_VERIFY  {stance_name}  compliant")

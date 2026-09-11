@@ -727,7 +727,7 @@ _CLUTTER_SUFFIXES = (".tmp", ".bak", ".swp", ".orig", ".pyc")
 
 @dataclass(frozen=True)
 class HygieneFinding:
-    kind: str  # stale_session | orphaned_loop | partial_loop | clutter | duplicate_marker
+    kind: str  # stale_session | orphaned_loop | partial_loop | clutter | duplicate_marker | unexamined_plan
     target: str  # session id, loop id, or file name: what the finding is about
     path: str  # filesystem path ("; "-joined when several)
     detail: str
@@ -844,6 +844,65 @@ def _loop_state_findings(
                     detail=f"invalid phase {state.phase!r}",
                 )
             )
+    return out
+
+
+# ── unexamined plans ───────────────────────────────────────────────────
+# A plan approved long ago with no thinking-mode output and no waiver never
+# got challenged. Buddy flags it and prompts the exact command to run one
+# retroactively -- it never invents the thinking itself.
+
+UNEXAMINED_PLAN_AGE_DAYS = 7
+
+
+def _unexamined_plan_findings(state_root: Path) -> list[HygieneFinding]:
+    """RPI loops whose plan was approved long ago with no thinking-mode run
+    and no waiver on record."""
+    out: list[HygieneFinding] = []
+    loops_dir = state_root / "loops"
+    if not loops_dir.is_dir():
+        return out
+    now = datetime.now(UTC).timestamp()
+    for child in sorted(loops_dir.iterdir(), key=lambda p: p.name):
+        if not child.is_file() or child.suffix != ".json":
+            continue
+        loop_id = child.stem
+        try:
+            kind = loops.kind_of(loop_id)
+        except loops.LoopError:
+            continue
+        if kind != "rpi":
+            continue
+        try:
+            state = loops.LoopState.from_dict(
+                json.loads(child.read_text(encoding="utf-8"))
+            )
+        except (OSError, ValueError, TypeError):
+            continue
+        plan_approvals = [a for a in state.approvals if a.get("phase") == "plan"]
+        if not plan_approvals or state.phase == "done":
+            continue
+        if state.thinking_runs or state.thinking_waiver is not None:
+            continue
+        latest = plan_approvals[-1]
+        approved_epoch = _parse_epoch(latest.get("at"))
+        if approved_epoch is None:
+            continue
+        age_days = (now - approved_epoch) / 86400
+        if age_days < UNEXAMINED_PLAN_AGE_DAYS:
+            continue
+        out.append(
+            HygieneFinding(
+                kind="unexamined_plan",
+                target=loop_id,
+                path=str(child),
+                detail=(
+                    f"plan approved {str(latest.get('at'))[:10]} "
+                    f"({age_days:.0f}d ago) with no thinking-mode output "
+                    "and no waiver"
+                ),
+            )
+        )
     return out
 
 
@@ -1239,6 +1298,29 @@ def _run_report() -> None:
     # 8. repo hygiene ("one clean"): dead code (fast tier), docs coverage,
     # docs drift. The deep coverage tier is `buddy health --deep`.
     _report_repo_hygiene(workspace.project.root)
+    _echo("")
+
+    # 9. unexamined plans: approved long ago with no thinking-mode output
+    # and no waiver. Buddy flags them and prompts the exact command to run
+    # one retroactively -- it never invents the thinking itself.
+    _echo(
+        "UNEXAMINED PLANS  (approved long ago, no thinking-mode output, no waiver)"
+    )
+    unexamined = _unexamined_plan_findings(workspace.state_root)
+    if not unexamined:
+        _echo("  none found")
+    else:
+        for finding in unexamined:
+            _echo(f"  UNEXAMINED_PLAN  loop {finding.target}: {finding.detail}")
+            _echo(
+                "  PROMPT  run one retroactively -- the thinking is yours to "
+                "do, never the driver's:"
+            )
+            _echo(
+                f"          awino loop think --mode premortem "
+                f"--record thoughts/thinking/{finding.target}-premortem.md "
+                f"--id {finding.target}"
+            )
 
 
 def _backfill_unrecorded_decisions(

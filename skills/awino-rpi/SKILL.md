@@ -86,15 +86,39 @@ At least two different angles on the problem (other repos' conventions, the
 inverse framing, what the code does not do). When stuck, reframe the problem
 from a different angle; this section is where the reframes are recorded.
 
+## Applicability check (the lawyer move)
+Before solving anything, ask whether the charge applies at all -- like the
+lawyer who doesn't defend the charge but asks whether it is the right
+charge. State the problem as given, then state the reframed problem (or
+confirm the stated one stands), with the evidence for it.
+
+### Stated problem
+The problem as given.
+
+### Reframed problem (or: the stated problem stands)
+The actual problem, if the evidence says the stated one is wrong -- or the
+explicit confirmation that the stated problem stands.
+
+### Evidence
+What the code, data, or users showed that justifies the reframe (or the
+confirmation). A hunch is not evidence.
+
+### User confirmation
+The user's recorded answer to "which do we solve?" -- paste the line from
+`awino loop confirm-problem --reframed "..." | --confirmed`. Planning cannot
+proceed on a problem the user hasn't confirmed is the right one: the driver
+refuses to advance from research until the confirmation is recorded.
+
 ## Open questions
 Things the code does not answer. Do not guess.
 ```
 
 The three first-principles sections are required **before** any proposed
 solution: the document breaks the problem down, challenges its assumptions,
-and records the angles considered first. The driver rejects an artifact that
-jumps to a solution (a "Solution"/"Proposal" heading) without them, naming
-the missing part.
+and records the angles considered first. The applicability check is required
+too -- it is the fourth first-principles section, and the driver rejects an
+artifact that jumps to a solution (a "Solution"/"Proposal" heading) without
+them, naming the missing part.
 
 **Missing-input protocol.** If research needs an input, category, or capability
 that appears absent (an empty output directory, a category with no prior run,

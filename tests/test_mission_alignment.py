@@ -54,6 +54,18 @@ Use the existing session store.
 - The inverse: leave auth.py untouched and migrate callers instead.
 - Conventions from the existing flag-gated rollout in the session store.
 
+## Applicability check (the lawyer move)
+### Stated problem
+Migrate auth with zero downtime.
+### Reframed problem (or: the stated problem stands)
+The stated problem stands: the migration is the work; the question was
+never whether to migrate, only how.
+### Evidence
+src/auth.py:42 shows token validation is stateless, so the migration path
+is a flag-gated rollout -- the problem is the cutover mechanism.
+### User confirmation
+User confirmed by Luke: solve the stated problem -- "Migrate auth with zero downtime.".
+
 ## Open questions
 None.
 """
@@ -96,6 +108,12 @@ def _write_research(driver: loops.RpiDriver, state: loops.LoopState, text: str) 
     path = driver.project_root / state.research_artifact
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+def _confirm_problem(driver: loops.RpiDriver, state: loops.LoopState) -> None:
+    """Satisfy the lawyer-move gate in fixtures: the user confirmed the
+    stated problem (the fixture research confirms it stands)."""
+    driver.confirm_problem(state, by="Luke")
 
 
 def _write_mission_md(project: Path, text: str) -> None:
@@ -225,6 +243,7 @@ class TestDriftFlaggedNotBlocking:
         _write_research(event_driver, state, RESEARCH_OK)
         assert event_driver.check(state) == []
         # Drift is flagged, but the loop advances anyway.
+        _confirm_problem(event_driver, state)
         assert event_driver.advance(state) == "plan"
 
     def test_drift_only_emitted_once_per_validation(

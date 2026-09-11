@@ -62,6 +62,18 @@ _gate.py_ helpers _echo/_workspace are reused by loopctl.
 - Conventions from src/awino/enforce.py, which already emits named events
   the driver reuses for phase transitions.
 
+## Applicability check (the lawyer move)
+### Stated problem
+Add an RPI loop driver.
+### Reframed problem (or: the stated problem stands)
+The stated problem stands: the repo has gate phases but no loop driver
+sequencing research -> plan -> implement above them.
+### Evidence
+src/awino/enforce.py:381 shows the gate ledger with no loop state machine
+driving phases; loops.py does not exist yet.
+### User confirmation
+User confirmed by Luke: solve the stated problem -- "Add an RPI loop driver.".
+
 ## Open questions
 None; the ledger layout was read from src/awino/enforce.py:381.
 """
@@ -91,6 +103,55 @@ Delete the three new files and drop the registration lines.
 - `awino loop run rpi --task ...` prints the phase-1 prompt
 - `awino loop next` advances only on valid artifacts
 """
+
+PREMORTEM_OK = """# Premortem: rpi loop driver
+
+## Failure reasons
+1. The per-phase validators drift out of sync with the phase list.
+   Warning signs: `loop next` advances on an invalid artifact; the CLI
+   phase prompt names a phase the driver no longer has.
+2. Loop state persists without the ledger trail.
+   Warning signs: `buddy` shows a loop with no matching ledger events;
+   `loops_dir` holds state files newer than the last ledger write.
+3. The handoff to the gate ledger names the wrong run.
+   Warning signs: the run ledger has no entry for the loop id; the gate
+   receipt names a different task.
+"""
+
+
+def _thinking_run(driver: loops.RpiDriver, state: loops.LoopState) -> None:
+    """Satisfy the plan-approval thinking gate in fixtures: a recorded
+    premortem run (memory id only; working memory is not written here)."""
+    driver.record_thinking_run(state, "premortem", by="Luke", memory_id="D-0001")
+
+
+def _confirm_problem(driver: loops.RpiDriver, state: loops.LoopState) -> None:
+    """Satisfy the lawyer-move gate in fixtures: the user confirmed the
+    stated problem (the fixture research confirms it stands)."""
+    driver.confirm_problem(state, by="Luke")
+
+
+def _comprehend(driver: loops.RpiDriver, state: loops.LoopState) -> None:
+    """Satisfy the plan-approval comprehension gate in fixtures. PLAN_OK has
+    no decisions section, so the driver's probes are empty and a recorded
+    explanation is the whole bar."""
+    driver.record_explanation(
+        state,
+        "We will validate the driver shape per phase, persist state on disk, "
+        "and wire the CLI to typer commands, advancing only when each "
+        "artifact validates.",
+        by="Luke",
+    )
+
+
+def _paste_comprehension_block(driver: loops.RpiDriver, state: loops.LoopState) -> None:
+    """Paste the comprehension-check record into the plan artifact -- the
+    documented workflow: once comprehension work exists in loop state, the
+    plan document itself records it (the validator requires the block)."""
+    path = driver.project_root / state.plan_artifact
+    text = path.read_text(encoding="utf-8")
+    block = driver.comprehension_record_block(state)
+    path.write_text(text.rstrip("\n") + "\n\n" + block, encoding="utf-8")
 
 
 def _project(tmp_path: Path) -> Path:
@@ -207,11 +268,133 @@ class TestResearchValidation:
         assert "file:line" in missing[0]
 
 
+WRONG_PROBLEM_RESEARCH = """# Research: slow dashboard page
+
+## Metadata
+- date 2026-09-11, branch challenge/tested-fixes, commit abc123
+- scope: the dashboard page and the login funnel, analytics read only
+
+## Where it lives
+| Concern | File | Lines |
+|---|---|---|
+| dashboard | src/web/dashboard.py | 1-200 |
+| login | src/web/login.py | 1-80 |
+
+## How it works
+The dashboard renders after login; the funnel is tracked in
+src/web/analytics.py:10.
+
+## Flow
+login -> dashboard render -> user task.
+
+## Existing conventions to imitate
+Analytics events are named per src/web/analytics.py:10.
+
+## Problem breakdown
+1. The dashboard page loads in 4.2s (src/web/dashboard.py:50).
+2. 92% of sessions end at /login before the dashboard ever loads.
+3. Support tickets: 41 of 50 mention login failures, 2 mention speed.
+
+## Assumptions challenged
+- "The page is slow, so speed is the problem": challenged -- analytics in
+  src/web/analytics.py:10 show 92% of users never reach the page; speed
+  affects only the 8% who get through.
+- "Users complain about speed": challenged -- 41 of 50 tickets mention
+  login failures, not speed.
+
+## Angles considered
+- The inverse: optimize the dashboard first anyway.
+- Fixing login first, then measuring whether speed still matters.
+
+## Applicability check (the lawyer move)
+### Stated problem
+Make the slow page faster.
+
+### Reframed problem (or: the stated problem stands)
+Users never reach the page -- 92% drop off at login before the dashboard
+ever loads. The real problem is the login funnel, not page speed.
+
+### Evidence
+- Analytics (src/web/analytics.py:10): 92% of sessions end at /login;
+  dashboard pageviews are 3% of logins.
+- Support tickets: 41 of 50 mention login failures, 2 mention speed.
+
+### User confirmation
+<!-- no confirmation yet -->
+"""
+
+
+class TestLawyerMove:
+    """The lawyer move: research asks 'is this the actual problem?' and
+    planning waits for the user's answer -- stated problem vs. reframed
+    problem, with the evidence."""
+
+    def test_reframe_blocks_planning_until_user_confirms(
+        self, driver: loops.RpiDriver
+    ) -> None:
+        state = driver.new("make the slow page faster")
+        _write_research(driver, state, WRONG_PROBLEM_RESEARCH)
+        # The research is otherwise valid, but the user hasn't confirmed.
+        missing = driver.check(state)
+        assert len(missing) == 1
+        assert "no user confirmation" in missing[0]
+        # The gate puts the stated-vs-reframed question to the user directly:
+        # you asked me to solve X, but the evidence says the real problem
+        # is Y -- which do we solve?
+        with pytest.raises(loops.ProblemUnconfirmed) as exc_info:
+            driver.advance(state)
+        question = exc_info.value.question
+        assert "make the slow page faster" in question.lower()
+        assert "users never reach the page" in question.lower()
+        assert "which do we solve" in question.lower()
+        # The user picks the reframe: the confirmation records the real
+        # problem, and the artifact carries the confirmation line.
+        confirmation = driver.confirm_problem(
+            state, by="Luke", reframed="Users never reach the page."
+        )
+        assert confirmation["verdict"] == "reframed"
+        assert confirmation["solve"] == "Users never reach the page."
+        line = driver.problem_confirmation_line(state)
+        assert "reframed" in line
+        path = driver.project_root / state.research_artifact
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            text.replace("<!-- no confirmation yet -->", line),
+            encoding="utf-8",
+        )
+        assert driver.check(state) == []
+        assert driver.advance(state) == "plan"
+        reloaded = driver.load(state.id)
+        assert (
+            reloaded.problem_confirmation["solve"] == "Users never reach the page."
+        )
+
+    def test_reentering_research_clears_the_confirmation(
+        self, driver: loops.RpiDriver
+    ) -> None:
+        """The confirmation attested the old research. Re-entry means the
+        research is under re-examination, so the lawyer move asks again
+        instead of planning on a stale attestation."""
+        state = driver.new("add an RPI loop driver")
+        _write_research(driver, state, RESEARCH_OK)
+        assert driver.check(state) == []
+        _confirm_problem(driver, state)
+        driver.advance(state)
+        state = driver.load(state.id)
+        assert state.phase == "plan"
+        driver.reenter_phase(state, "research", reason="recheck the sources")
+        state = driver.load(state.id)
+        assert state.problem_confirmation is None
+        with pytest.raises(loops.ProblemUnconfirmed):
+            driver.advance(state)
+
+
 class TestPlanValidation:
     def _research_done(self, driver: loops.RpiDriver) -> loops.LoopState:
         state = driver.new("add an RPI loop driver")
         _write_research(driver, state, RESEARCH_OK)
         assert driver.check(state) == []
+        _confirm_problem(driver, state)
         driver.advance(state)
         return driver.load(state.id)
 
@@ -252,6 +435,7 @@ class TestApprovalGate:
         state = driver.new("add an RPI loop driver")
         _write_research(driver, state, RESEARCH_OK)
         assert driver.check(state) == []
+        _confirm_problem(driver, state)
         driver.advance(state)
         state = driver.load(state.id)
         _write_plan(driver, state, PLAN_OK)
@@ -268,6 +452,11 @@ class TestApprovalGate:
 
     def test_approval_then_advance(self, driver: loops.RpiDriver) -> None:
         state = self._at_plan(driver)
+        _thinking_run(driver, state)
+        # "Execute when comfortable and understanding": comprehension comes
+        # BEFORE approval -- the plan document records the check.
+        _comprehend(driver, state)
+        _paste_comprehension_block(driver, state)
         driver.approve_plan(state, by="Luke", reason="plan is explicit enough")
         reloaded = driver.load(state.id)
         assert driver.plan_approved(reloaded)
@@ -275,7 +464,89 @@ class TestApprovalGate:
         assert approval["by"] == "Luke"
         assert approval["reason"] == "plan is explicit enough"
         assert "at" in approval
+        assert driver.check(reloaded) == []
         assert driver.advance(reloaded) == "implement"
+
+    def test_approval_without_comprehension_is_refused(
+        self, driver: loops.RpiDriver
+    ) -> None:
+        """A plan approved without understanding is a rubber stamp: the
+        approval gate refuses until the human has explained the plan back."""
+        state = self._at_plan(driver)
+        _thinking_run(driver, state)
+        with pytest.raises(
+            loops.ComprehensionRequired, match="comprehension check incomplete"
+        ):
+            driver.approve_plan(state, by="Luke", reason="ok")
+        assert not driver.plan_approved(driver.load(state.id))
+
+
+class TestThinkingGate:
+    """The plan-approval thinking gate: a plan is approved only after a
+    thinking-mode run, or an explicit human waiver that names its reason."""
+
+    def _at_plan(self, driver: loops.RpiDriver) -> loops.LoopState:
+        state = driver.new("add an RPI loop driver")
+        _write_research(driver, state, RESEARCH_OK)
+        assert driver.check(state) == []
+        _confirm_problem(driver, state)
+        driver.advance(state)
+        state = driver.load(state.id)
+        _write_plan(driver, state, PLAN_OK)
+        assert driver.check(state) == []
+        return state
+
+    def _understood(self, driver: loops.RpiDriver, state: loops.LoopState) -> None:
+        _comprehend(driver, state)
+        _paste_comprehension_block(driver, state)
+
+    def test_approval_without_thinking_is_refused(
+        self, driver: loops.RpiDriver
+    ) -> None:
+        state = self._at_plan(driver)
+        self._understood(driver, state)
+        with pytest.raises(loops.ApprovalRequired, match="critical thinking required"):
+            driver.approve_plan(state, by="Luke", reason="looks good")
+        assert not driver.thinking_satisfied(driver.load(state.id))
+
+    def test_waiver_records_the_reason(
+        self, event_driver: loops.RpiDriver, loop_ledger: Ledger
+    ) -> None:
+        state = self._at_plan(event_driver)
+        self._understood(event_driver, state)
+        waiver = event_driver.waive_thinking(
+            state, by="Luke", reason="trivial two-line change; premortem would add nothing"
+        )
+        assert waiver["reason"].startswith("trivial two-line change")
+        assert waiver["by"] == "Luke"
+        reloaded = event_driver.load(state.id)
+        assert event_driver.thinking_satisfied(reloaded)
+        kinds = [event.kind for event in loop_ledger.loop_events(state.id)]
+        assert "thinking_waived" in kinds
+        # The waiver satisfies the gate: approval proceeds.
+        event_driver.approve_plan(reloaded, by="Luke", reason="waived, understood")
+        assert event_driver.plan_approved(event_driver.load(state.id))
+
+    def test_inline_waiver_on_approve(self, driver: loops.RpiDriver) -> None:
+        state = self._at_plan(driver)
+        self._understood(driver, state)
+        driver.approve_plan(
+            state,
+            by="Luke",
+            reason="waived, understood",
+            waive_reason="spike already premortemed yesterday",
+        )
+        reloaded = driver.load(state.id)
+        assert reloaded.thinking_waiver["reason"] == "spike already premortemed yesterday"
+        assert driver.plan_approved(reloaded)
+
+    def test_thinking_run_satisfies_the_gate(self, driver: loops.RpiDriver) -> None:
+        state = self._at_plan(driver)
+        self._understood(driver, state)
+        _thinking_run(driver, state)
+        assert driver.thinking_satisfied(state)
+        driver.approve_plan(state, by="Luke", reason="premortem run, understood")
+        assert driver.plan_approved(driver.load(state.id))
 
 
 class TestImplementHandoff:
@@ -283,9 +554,13 @@ class TestImplementHandoff:
         state = driver.new("add an RPI loop driver")
         _write_research(driver, state, RESEARCH_OK)
         assert driver.check(state) == []
+        _confirm_problem(driver, state)
         driver.advance(state)
         state = driver.load(state.id)
         _write_plan(driver, state, PLAN_OK)
+        _thinking_run(driver, state)
+        _comprehend(driver, state)
+        _paste_comprehension_block(driver, state)
         driver.approve_plan(state, by="Luke", reason="ok")
         assert driver.check(state) == []
         driver.advance(state)
@@ -307,9 +582,13 @@ class TestImplementHandoff:
         state = driver.new("add an RPI loop driver")
         _write_research(driver, state, RESEARCH_OK)
         assert driver.check(state) == []
+        _confirm_problem(driver, state)
         driver.advance(state)
         state = driver.load(state.id)
         _write_plan(driver, state, PLAN_OK)
+        _thinking_run(driver, state)
+        _comprehend(driver, state)
+        _paste_comprehension_block(driver, state)
         driver.approve_plan(state, by="Luke", reason="ok")
         assert driver.check(state) == []
         driver.advance(state)
@@ -409,6 +688,21 @@ class TestLoopCli:
         research_path.parent.mkdir(parents=True, exist_ok=True)
         research_path.write_text(RESEARCH_OK, encoding="utf-8")
 
+        # The lawyer move: research validates, but the problem is unconfirmed --
+        # the gate puts the stated-vs-reframed question to the user directly.
+        unconfirmed = runner.invoke(loop_app, ["next"])
+        assert unconfirmed.exit_code == 1, unconfirmed.output
+        assert "which do we solve" in unconfirmed.output
+
+        status = runner.invoke(loop_app, ["status"])
+        assert status.exit_code == 0, status.output
+        assert "problem: unconfirmed" in status.output
+
+        confirmed = runner.invoke(loop_app, ["confirm-problem", "--confirmed"])
+        assert confirmed.exit_code == 0, confirmed.output
+        assert "PROBLEM_CONFIRMED" in confirmed.output
+        assert "PASTE" in confirmed.output
+
         next_result = runner.invoke(loop_app, ["next"])
         assert next_result.exit_code == 0, next_result.output
         assert "ADVANCED  phase=plan" in next_result.output
@@ -427,6 +721,60 @@ class TestLoopCli:
         assert status.exit_code == 0
         assert "phase: plan" in status.output
         assert "approval: pending" in status.output
+
+        approved = runner.invoke(
+            loop_app, ["approve", "--by", "Luke", "--reason", "explicit enough"]
+        )
+        assert approved.exit_code == 1, approved.output
+        assert "thinking" in approved.output.lower()
+
+        # The minimum bar: one recorded thinking run. --record validates the
+        # premortem, writes its insights to working memory, and records the
+        # run on the loop.
+        thinking_path = project / "thoughts" / "thinking" / "premortem.md"
+        thinking_path.parent.mkdir(parents=True, exist_ok=True)
+        thinking_path.write_text(PREMORTEM_OK, encoding="utf-8")
+        recorded = runner.invoke(
+            loop_app, ["think", "--mode", "premortem", "--record", str(thinking_path)]
+        )
+        assert recorded.exit_code == 0, recorded.output
+        assert "THINK_RECORDED" in recorded.output
+
+        approved = runner.invoke(
+            loop_app, ["approve", "--by", "Luke", "--reason", "explicit enough"]
+        )
+        assert approved.exit_code == 1, approved.output
+        # "Execute when comfortable and understanding": comprehension comes
+        # BEFORE approval -- the driver enters teach-back instead of approving.
+        assert "comprehension" in approved.output.lower()
+        assert "MISSING" in approved.output
+
+        # Explain the plan back, then paste the comprehension-check record
+        # the status command prints into the plan's decisions section.
+        explained = runner.invoke(
+            loop_app,
+            ["explain", "--text", "We validate the driver shape per phase, "
+             "persist state on disk, and wire the CLI to typer commands."],
+        )
+        assert explained.exit_code == 0, explained.output
+
+        status = runner.invoke(loop_app, ["status"])
+        assert status.exit_code == 0, status.output
+        assert "COMPREHENSION_RECORD" in status.output
+        block_lines = []
+        copying = False
+        for line in status.output.splitlines():
+            if line.startswith("COMPREHENSION_RECORD"):
+                copying = True
+                continue
+            if copying:
+                if line.startswith("  "):
+                    block_lines.append(line[2:])
+                else:
+                    break
+        assert block_lines, status.output
+        with plan_path.open("a", encoding="utf-8") as handle:
+            handle.write("\n" + "\n".join(block_lines))
 
         approved = runner.invoke(
             loop_app, ["approve", "--by", "Luke", "--reason", "explicit enough"]
@@ -576,6 +924,11 @@ class TestLedgerTrail:
         research_path.parent.mkdir(parents=True, exist_ok=True)
         research_path.write_text(RESEARCH_OK, encoding="utf-8")
 
+        # The lawyer move first: the problem is confirmed before planning.
+        confirmed = runner.invoke(loop_app, ["confirm-problem", "--confirmed"])
+        assert confirmed.exit_code == 0, confirmed.output
+        assert "PROBLEM_CONFIRMED" in confirmed.output
+
         next_result = runner.invoke(loop_app, ["next"])
         assert next_result.exit_code == 0, next_result.output
         assert "ADVANCED  phase=plan" in next_result.output
@@ -588,6 +941,49 @@ class TestLedgerTrail:
         refused = runner.invoke(loop_app, ["next"])
         assert refused.exit_code == 1
         assert "REFUSED" in refused.output
+
+        approved = runner.invoke(
+            loop_app, ["approve", "--by", "Luke", "--reason", "explicit enough"]
+        )
+        assert approved.exit_code == 1, approved.output
+        assert "thinking" in approved.output.lower()
+
+        thinking_path = project / "thoughts" / "thinking" / "premortem.md"
+        thinking_path.parent.mkdir(parents=True, exist_ok=True)
+        thinking_path.write_text(PREMORTEM_OK, encoding="utf-8")
+        recorded = runner.invoke(
+            loop_app, ["think", "--mode", "premortem", "--record", str(thinking_path)]
+        )
+        assert recorded.exit_code == 0, recorded.output
+
+        # "Execute when comfortable and understanding": comprehension comes
+        # BEFORE approval.
+        explained = runner.invoke(
+            loop_app,
+            ["explain", "--text", "We validate the driver shape per phase, "
+             "persist state on disk, and wire the CLI to typer commands."],
+        )
+        assert explained.exit_code == 0, explained.output
+
+        # The plan document records the comprehension check: paste the block
+        # the status command prints.
+        status = runner.invoke(loop_app, ["status"])
+        assert status.exit_code == 0, status.output
+        assert "COMPREHENSION_RECORD" in status.output
+        block_lines = []
+        copying = False
+        for line in status.output.splitlines():
+            if line.startswith("COMPREHENSION_RECORD"):
+                copying = True
+                continue
+            if copying:
+                if line.startswith("  "):
+                    block_lines.append(line[2:])
+                else:
+                    break
+        assert block_lines, status.output
+        with plan_path.open("a", encoding="utf-8") as handle:
+            handle.write("\n" + "\n".join(block_lines))
 
         approved = runner.invoke(
             loop_app, ["approve", "--by", "Luke", "--reason", "explicit enough"]
@@ -615,12 +1011,19 @@ class TestLedgerTrail:
         assert [(event.kind, event.phase) for event in events] == [
             ("loop_started", "research"),
             ("phase_started", "research"),
+            ("problem_confirmed", "research"),
             ("artifact_validated", "research"),
             ("skill_receipt", "research"),
             ("phase_started", "plan"),
             ("artifact_validated", "plan"),
             ("skill_receipt", "plan"),
+            ("thinking_run", "plan"),
+            ("comprehension_recorded", "plan"),
             ("approval_granted", "plan"),
+            # The plan artifact changed after the first validation (the
+            # comprehension-check block was pasted in), so the receipt was
+            # refreshed -- the receipt attests the artifact's live content.
+            ("skill_receipt", "plan"),
             ("phase_started", "implement"),
             ("loop_closed", "implement"),
         ]
@@ -657,6 +1060,7 @@ class TestArtifactRejection:
         state = event_driver.new("add an RPI loop driver")
         _write_research(event_driver, state, RESEARCH_OK)
         assert event_driver.check(state) == []
+        _confirm_problem(event_driver, state)
         event_driver.advance(state)
         state = event_driver.load(state.id)
         text = "\n".join(
@@ -680,6 +1084,7 @@ class TestBackDriver:
         assert driver.check(state)  # no artifact yet: attempt 1, rejected
         _write_research(driver, state, RESEARCH_OK)
         assert driver.check(state) == []
+        _confirm_problem(driver, state)
         driver.advance(state)
         return driver.load(state.id)
 
@@ -719,6 +1124,9 @@ class TestBackDriver:
     def test_back_refuses_a_finished_loop(self, event_driver: loops.RpiDriver) -> None:
         state = self._at_plan(event_driver)
         _write_plan(event_driver, state, PLAN_OK)
+        _thinking_run(event_driver, state)
+        _comprehend(event_driver, state)
+        _paste_comprehension_block(event_driver, state)
         event_driver.approve_plan(state, by="Luke", reason="ok")
         assert event_driver.check(state) == []
         event_driver.advance(state)
@@ -735,6 +1143,7 @@ class TestBackDriver:
         state = event_driver.new("add an RPI loop driver")
         _write_research(event_driver, state, RESEARCH_OK)
         assert event_driver.check(state) == []
+        _confirm_problem(event_driver, state)
         event_driver.advance(state)
         state = event_driver.load(state.id)
         _write_plan(event_driver, state, "too short\n")
@@ -764,6 +1173,9 @@ class TestBackCli:
         research_path = project / _artifact_path(run_result.output)
         research_path.parent.mkdir(parents=True, exist_ok=True)
         research_path.write_text(RESEARCH_OK, encoding="utf-8")
+        # The lawyer move: confirm the problem before research may advance.
+        confirmed = runner.invoke(loop_app, ["confirm-problem", "--confirmed"])
+        assert confirmed.exit_code == 0, confirmed.output
         assert runner.invoke(loop_app, ["next"]).exit_code == 0
 
     def test_back_reenters_and_reprints_the_prompt(self, cli_env: Path) -> None:
@@ -785,6 +1197,14 @@ class TestBackCli:
         project = cli_env
         self._to_plan(project)
         assert runner.invoke(loop_app, ["back", "research"]).exit_code == 0
+        # Re-entering research clears the problem confirmation: the lawyer
+        # move asks again on re-examined research instead of planning on a
+        # stale attestation.
+        refused = runner.invoke(loop_app, ["next"])
+        assert refused.exit_code == 1
+        assert "which do we solve" in refused.output
+        confirmed = runner.invoke(loop_app, ["confirm-problem", "--confirmed"])
+        assert confirmed.exit_code == 0, confirmed.output
         advanced = runner.invoke(loop_app, ["next"])
         assert advanced.exit_code == 0, advanced.output
         assert "ADVANCED  phase=plan" in advanced.output
@@ -794,7 +1214,10 @@ class TestBackCli:
         assert tail == [
             "phase_reentered",
             "phase_started",
+            # The refused `next` re-validated the kept artifact before the
+            # lawyer-move gate stopped the advance.
             "artifact_validated",
+            "problem_confirmed",
             "phase_started",
         ]
 

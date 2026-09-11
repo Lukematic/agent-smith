@@ -5,10 +5,16 @@ scans, so a pass means "no known violation found", not "the response is
 genuinely in the stance's spirit". Sycophancy in new vocabulary passes this;
 that is the documented limit of a keyword critic, and why it is layer 3
 (verification of the response) rather than layer 1 (selection of the stance).
+
+The critic also verifies thinking-mode outputs (``awino think <mode>``):
+mode names are accepted wherever a stance name is. Each mode's structural
+requirements live in ``awino.think``; the critic composes them with the
+shared no-validation-phrases check every stance carries.
 """
 
 from __future__ import annotations
 
+from awino import think
 from awino.stance import Stance
 
 # Shared across every stance: the stances all forbid sycophantic agreement.
@@ -110,13 +116,60 @@ _SHARED_CHECK_ONLY: frozenset[str] = frozenset(
 )
 
 
-def verify(stance_name: str, response_text: str) -> list[str]:
-    """The stance rules a response fails; empty means compliant.
+# ── thinking modes ─────────────────────────────────────────────────────
+# Structural requirements per mode, composed with the shared check. Modes
+# that map onto stances inherit the stance's shape (devil = steel-man's
+# opposing-case-first); the genuinely new modes define their own.
+#
+# - feynman (teach-back): simple explanation + ELI5 + a drawn diagram of the
+#   core variables and their relationships + where it breaks + self-check.
+#   The teaching side is structural: a missing ELI5 or a diagram section
+#   with no boxes-and-arrows fails with the part named.
+# - blindspot (assumption-audit): assumptions checked + blind spots, each
+#   blind spot saying why it was invisible.
+# - devil (steel-man): the opposing case, what to take seriously, and the
+#   steel-man ordering rule -- the opposing case must come before any own
+#   view.
+# - premortem: at least 3 failure reasons, each with warning signs.
+# - uncomfortable: the avoided question must be asked (a real question) and
+#   answered (a real answer).
+# - thought-experiment: scenario + push to the extreme + what it reveals.
+# - first-principles (first-principles): facts separated from assumptions,
+#   then a rebuild from the facts alone -- the research breakdown in mode
+#   form.
+# - assumption-destroyer: at least 5 assumptions, each with an inversion AND
+#   a reframing.
+# - simplify: the minimal variables named (at least 2), an ELI5, a drawn
+#   diagram of the variables and their relationships, and a solution that
+#   says it uses only those variables.
 
-    Raises ValueError for an unknown stance name. Checks are deterministic
-    keyword heuristics; see the module docstring for the limits.
+
+def _verify_thinking_mode(mode_name: str, response_text: str) -> list[str]:
+    """A thinking mode's structural failures; empty means compliant."""
+    return think.validate(mode_name, response_text) + _banned_phrase_failures(
+        response_text
+    )
+
+
+def verify(stance_name: str, response_text: str) -> list[str]:
+    """The stance or thinking-mode rules a response fails; empty means compliant.
+
+    Accepts stance names and thinking-mode names (``awino think <mode>``).
+    Raises ValueError for an unknown name. Checks are deterministic keyword
+    heuristics; see the module docstring for the limits.
     """
-    stance = Stance.by_name(stance_name)  # raises ValueError on unknown
+    try:
+        stance = Stance.by_name(stance_name)
+    except ValueError:
+        # Not a stance: maybe a thinking mode. A genuinely unknown name
+        # names both namespaces, since verify() accepts both.
+        try:
+            think.by_name(stance_name)
+        except ValueError:
+            raise ValueError(
+                f"unknown stance or thinking mode: {stance_name}"
+            ) from None
+        return _verify_thinking_mode(stance_name, response_text)
     if stance.name == "steel-man":
         return _verify_steel_man(response_text)
     if stance.name == "teach-back":

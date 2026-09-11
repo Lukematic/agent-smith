@@ -171,3 +171,13 @@ with the reason named.
 
 **Enforced by:** health checks and lint for the mechanical half; human review
 for the structural half.
+
+## The core loop (owner's words)
+
+Mission → plan → challenge assumptions → understand (can explain and defend)
+→ know the real problem → what's required (the Honda) → what else we can do
+(beyond-Honda, effort-labeled) → capture everything → work toward the task.
+
+This sits alongside the operational loop — mission → plan → approval →
+execution → proof → outcome verdict — as the human-readable statement of the
+same spine.

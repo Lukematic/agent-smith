@@ -149,7 +149,7 @@ def test_future_stance_falls_back_to_the_shared_check(
 
 
 def test_unknown_stance_raises_value_error() -> None:
-    with pytest.raises(ValueError, match="unknown stance"):
+    with pytest.raises(ValueError, match="unknown stance or thinking mode"):
         stance_verify.verify("hype-man", "Some text.")
 
 

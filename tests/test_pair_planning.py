@@ -57,6 +57,18 @@ Use the existing session store.
 - The inverse: leave auth.py untouched and migrate callers instead.
 - Conventions from src/session.py, which already does flag-gated rollouts.
 
+## Applicability check (the lawyer move)
+### Stated problem
+Migrate auth with zero downtime.
+### Reframed problem (or: the stated problem stands)
+The stated problem stands: the migration is the work; the question was
+never whether to migrate, only how.
+### Evidence
+src/auth.py:42 shows token validation is stateless, so the migration path
+is a flag-gated rollout -- the problem is the cutover mechanism.
+### User confirmation
+User confirmed by Luke: solve the stated problem -- "Migrate auth with zero downtime.".
+
 ## Open questions
 None.
 """
@@ -169,11 +181,18 @@ def _write(driver: loops.RpiDriver, state: loops.LoopState, kind: str, text: str
     path.write_text(text, encoding="utf-8")
 
 
+def _confirm_problem(driver: loops.RpiDriver, state: loops.LoopState) -> None:
+    """Satisfy the lawyer-move gate in fixtures: the user confirmed the
+    stated problem (the fixture research confirms it stands)."""
+    driver.confirm_problem(state, by="Luke")
+
+
 def _at_pair_plan(driver: loops.RpiDriver) -> loops.LoopState:
     """Research done, pairing brief written, now at the pair-plan phase."""
     state = driver.new("migrate auth")
     _write(driver, state, "research", RESEARCH_OK)
     assert driver.check(state) == []
+    _confirm_problem(driver, state)
     _write(driver, state, "pair-plan", BRIEF_OK)
     assert driver.advance(state) == "pair-plan"
     return driver.load(state.id)
@@ -187,6 +206,7 @@ class TestPairBriefValidation:
     def test_missing_brief_names_the_path(self, driver: loops.RpiDriver) -> None:
         state = driver.new("migrate auth")
         _write(driver, state, "research", RESEARCH_OK)
+        _confirm_problem(driver, state)
         assert driver.check(state) == []
         driver.advance(state)  # no brief -> skips to plan; force pair-plan
         state = driver.load(state.id)
@@ -198,6 +218,7 @@ class TestPairBriefValidation:
     def test_missing_sub_problems_named(self, driver: loops.RpiDriver) -> None:
         state = driver.new("migrate auth")
         _write(driver, state, "research", RESEARCH_OK)
+        _confirm_problem(driver, state)
         _write(
             driver, state, "pair-plan",
             BRIEF_OK.replace("## Sub-problems", "## Background"),
@@ -210,6 +231,7 @@ class TestPairBriefValidation:
     def test_single_approach_rejected(self, driver: loops.RpiDriver) -> None:
         state = driver.new("migrate auth")
         _write(driver, state, "research", RESEARCH_OK)
+        _confirm_problem(driver, state)
         one = BRIEF_OK.split("### Strangler")[0]
         _write(driver, state, "pair-plan", one)
         assert driver.check(state) == []
@@ -220,6 +242,7 @@ class TestPairBriefValidation:
     def test_approach_without_tradeoff_rejected(self, driver: loops.RpiDriver) -> None:
         state = driver.new("migrate auth")
         _write(driver, state, "research", RESEARCH_OK)
+        _confirm_problem(driver, state)
         no_tradeoff = BRIEF_OK.replace("trade-off:", "note:").replace("pro:", "plus:")
         no_tradeoff = no_tradeoff.replace("con:", "minus:")
         _write(driver, state, "pair-plan", no_tradeoff)
@@ -231,6 +254,7 @@ class TestPairBriefValidation:
     def test_questions_not_in_qn_format_rejected(self, driver: loops.RpiDriver) -> None:
         state = driver.new("migrate auth")
         _write(driver, state, "research", RESEARCH_OK)
+        _confirm_problem(driver, state)
         _write(
             driver, state, "pair-plan",
             BRIEF_OK.replace("Q1:", "Question one:").replace("Q2:", "Question two:"),
@@ -326,6 +350,7 @@ class TestPairingGate:
         keep the research -> plan -> implement path."""
         state = driver.new("migrate auth")
         _write(driver, state, "research", RESEARCH_OK)
+        _confirm_problem(driver, state)
         assert driver.check(state) == []
         assert driver.advance(state) == "plan"
 
@@ -336,6 +361,7 @@ class TestPairingGate:
         Decisions section still validates (backward compatibility)."""
         state = driver.new("migrate auth")
         _write(driver, state, "research", RESEARCH_OK)
+        _confirm_problem(driver, state)
         assert driver.check(state) == []
         assert driver.advance(state) == "plan"
         state = driver.load(state.id)
@@ -461,6 +487,8 @@ class TestPairPlanningCli:
         )
         brief.parent.mkdir(parents=True, exist_ok=True)
         brief.write_text(BRIEF_OK, encoding="utf-8")
+        confirmed = runner.invoke(loop_app, ["confirm-problem", "--confirmed"])
+        assert confirmed.exit_code == 0, confirmed.output
         nxt = runner.invoke(loop_app, ["next"])
         assert nxt.exit_code == 0, nxt.output
         assert "ADVANCED  phase=pair-plan" in nxt.output

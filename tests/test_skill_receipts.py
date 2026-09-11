@@ -58,6 +58,18 @@ Use the existing session store.
 - The inverse: leave auth.py untouched and migrate callers instead.
 - Conventions from src/session.py, which already does flag-gated rollouts.
 
+## Applicability check (the lawyer move)
+### Stated problem
+Migrate auth with zero downtime.
+### Reframed problem (or: the stated problem stands)
+The stated problem stands: the migration is the work; the question was
+never whether to migrate, only how.
+### Evidence
+src/auth.py:42 shows token validation is stateless, so the migration path
+is a flag-gated rollout -- the problem is the cutover mechanism.
+### User confirmation
+User confirmed by Luke: solve the stated problem -- "Migrate auth with zero downtime.".
+
 ## Open questions
 - none; the cutover shape is settled.
 """
@@ -123,6 +135,52 @@ Revert the flag and redeploy.
 """
 
 
+def _thinking_run(driver: loops.RpiDriver, state: loops.LoopState) -> None:
+    """Satisfy the plan-approval thinking gate in fixtures."""
+    driver.record_thinking_run(state, "premortem", by="Luke", memory_id="D-0001")
+
+
+def _comprehend(driver: loops.RpiDriver, state: loops.LoopState) -> None:
+    """Satisfy the plan-approval comprehension gate in fixtures. PLAN_OK has
+    a decisions section (two decisions) but no objectives or risks sections,
+    so the driver generates two probes and two suggestions; every one must
+    be answered or decided, and the explanation must name both decisions."""
+    driver.record_suggestion_decision(
+        state, "S1", "rejected",
+        "the phases and scope are already explicit enough to proceed", by="Luke",
+    )
+    driver.record_suggestion_decision(
+        state, "S2", "accepted",
+        "noted: the tests section stands in as the objectives list", by="Luke",
+    )
+    driver.record_explanation(
+        state,
+        "We migrate auth behind a flag. Chose the strangler approach (Q1); "
+        "followed the default recommendation because downtime is "
+        "unacceptable. Downtime budget is zero (Q2), so the flag stays "
+        "until verified.",
+        by="Luke",
+    )
+    driver.record_probe_answer(
+        state, "P1", "strangler: safer, zero downtime", by="Luke"
+    )
+    driver.record_probe_answer(
+        state, "P2", "zero downtime budget, flag stays until verified", by="Luke"
+    )
+
+
+def _paste_comprehension_block(
+    driver: loops.RpiDriver, state: loops.LoopState
+) -> None:
+    """Paste the comprehension-check record into the plan artifact -- the
+    documented workflow: once comprehension work exists in loop state, the
+    plan document itself records it (the validator requires the block)."""
+    path = driver.project_root / state.plan_artifact
+    text = path.read_text(encoding="utf-8")
+    block = driver.comprehension_record_block(state)
+    path.write_text(text.rstrip("\n") + "\n\n" + block, encoding="utf-8")
+
+
 @pytest.fixture()
 def project(tmp_path: Path) -> Path:
     """A fake project with the files the fixtures claim are in scope."""
@@ -180,8 +238,15 @@ def _research_done(driver: loops.RpiDriver) -> loops.LoopState:
     """Research written and validated: the receipt is on file."""
     state = driver.new("migrate auth")
     _write(driver, state, "research", RESEARCH_OK)
+    _confirm_problem(driver, state)
     assert driver.check(state) == []
     return driver.load(state.id)
+
+
+def _confirm_problem(driver: loops.RpiDriver, state: loops.LoopState) -> None:
+    """Satisfy the lawyer-move gate in fixtures: the user confirmed the
+    stated problem (the fixture research confirms it stands)."""
+    driver.confirm_problem(state, by="Luke")
 
 
 def _receipt_file(
@@ -196,6 +261,7 @@ class TestReceiptGate:
     ) -> None:
         state = driver.new("migrate auth")
         _write(driver, state, "research", RESEARCH_OK)
+        _confirm_problem(driver, state)
         # No check() ran: no receipt was written.
         with pytest.raises(loops.ReceiptBlocked) as exc_info:
             driver.advance(state)
@@ -363,6 +429,7 @@ class TestRequiredSkillsDeclaration:
     ) -> None:
         state = driver.new("migrate auth")
         _write(driver, state, "research", RESEARCH_OK)
+        _confirm_problem(driver, state)
         brief = BRIEF_OK.split("## Required skills")[0]
         _write(driver, state, "pair-plan", brief)
         assert driver.check(state) == []
@@ -377,6 +444,7 @@ class TestRequiredSkillsDeclaration:
     ) -> None:
         state = driver.new("migrate auth")
         _write(driver, state, "research", RESEARCH_OK)
+        _confirm_problem(driver, state)
         brief = BRIEF_OK.replace("- plan: awino-rpi\n", "")
         _write(driver, state, "pair-plan", brief)
         assert driver.check(state) == []
@@ -391,6 +459,7 @@ class TestRequiredSkillsDeclaration:
     ) -> None:
         state = driver.new("migrate auth")
         _write(driver, state, "research", RESEARCH_OK)
+        _confirm_problem(driver, state)
         brief = BRIEF_OK.replace("awino-rpi", "awino-teleport")
         _write(driver, state, "pair-plan", brief)
         assert driver.check(state) == []
@@ -406,6 +475,7 @@ class TestRequiredSkillsDeclaration:
     ) -> None:
         state = driver.new("migrate auth")
         _write(driver, state, "research", RESEARCH_OK)
+        _confirm_problem(driver, state)
         _write(driver, state, "pair-plan", BRIEF_OK)
         assert driver.check(state) == []
         assert driver.required_skills(state, "research") == ["awino-rpi"]
@@ -435,6 +505,7 @@ class TestFullLoop:
     ) -> None:
         state = driver.new("migrate auth")
         _write(driver, state, "research", RESEARCH_OK)
+        _confirm_problem(driver, state)
         _write(driver, state, "pair-plan", BRIEF_OK)
         assert driver.check(state) == []
         assert driver.advance(state) == "pair-plan"
@@ -445,6 +516,11 @@ class TestFullLoop:
         assert driver.advance(state) == "plan"
         state = driver.load(state.id)
         _write(driver, state, "plan", PLAN_OK)
+        _thinking_run(driver, state)
+        # "Execute when comfortable and understanding": comprehension comes
+        # BEFORE approval, and the plan document records the check.
+        _comprehend(driver, state)
+        _paste_comprehension_block(driver, state)
         driver.approve_plan(state, by="Luke", reason="plan is explicit enough")
         assert driver.check(state) == []
         # The checklist exposes received|missing|invalid per phase, and the
@@ -489,6 +565,7 @@ class TestBuddyReceiptless:
         phase ran before receipts existed."""
         state = driver.new("migrate auth")
         _write(driver, state, "research", RESEARCH_OK)
+        _confirm_problem(driver, state)
         _write(driver, state, "pair-plan", BRIEF_OK)
         assert driver.check(state) == []
         assert _receipt_file(state_root, state.id, "research").is_file()
@@ -531,11 +608,14 @@ class TestBuddyReceiptless:
         # --fix never writes the receipt itself.
         assert not _receipt_file(state_root, state.id, "research").exists()
         # The loop is back at the phase: the skill step runs again and the
-        # driver's check() writes the fresh receipt.
+        # driver's check() writes the fresh receipt. Re-entering research
+        # cleared the problem confirmation (the lawyer move asks again on
+        # re-examined research), so confirm before advancing.
         reloaded = driver.load(state.id)
         assert reloaded.phase == "research"
         assert driver.check(reloaded) == []
         assert _receipt_file(state_root, state.id, "research").is_file()
+        _confirm_problem(driver, reloaded)
         assert driver.advance(reloaded) == "pair-plan"
         assert buddy._receipt_findings(workspace, ledger) == []
 
@@ -546,6 +626,7 @@ class TestBuddyReceiptless:
         the phase ran before receipts existed."""
         state = driver.new("migrate auth")
         _write(driver, state, "research", RESEARCH_OK)
+        _confirm_problem(driver, state)
         _write(driver, state, "pair-plan", BRIEF_OK)
         assert driver.check(state) == []
         assert driver.advance(state) == "pair-plan"
@@ -556,6 +637,11 @@ class TestBuddyReceiptless:
         assert driver.advance(state) == "plan"
         state = driver.load(state.id)
         _write(driver, state, "plan", PLAN_OK)
+        _thinking_run(driver, state)
+        # "Execute when comfortable and understanding": comprehension comes
+        # BEFORE approval, and the plan document records the check.
+        _comprehend(driver, state)
+        _paste_comprehension_block(driver, state)
         driver.approve_plan(state, by="Luke", reason="plan is explicit enough")
         assert driver.check(state) == []
         assert driver.advance(state) == "implement"
