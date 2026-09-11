@@ -11,8 +11,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from smith.enforce import Evidence, Gate, TaskClass
-from smith.models import (
+from awino.enforce import Evidence, Gate, TaskClass
+from awino.models import (
     AntiPattern,
     Autonomy,
     Constraint,

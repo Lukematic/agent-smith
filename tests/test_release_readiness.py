@@ -7,9 +7,9 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from smith import cli
-from smith.harness import Harness, Target, install, status
-from smith.paths import SmithPaths
+from awino import cli
+from awino.harness import Harness, Target, install, status
+from awino.paths import AwinoPaths
 
 runner = CliRunner()
 
@@ -26,7 +26,7 @@ def test_canonical_constitution_and_legacy_pointer_exist() -> None:
 
 
 def test_source_discovery_selects_canonical_constitution() -> None:
-    paths = SmithPaths.discover(Path.cwd())
+    paths = AwinoPaths.discover(Path.cwd())
     assert paths.constitution == Path.cwd() / "AWINO.md"
 
 
@@ -47,15 +47,15 @@ def test_built_wheel_bundles_canonical_and_legacy_constitutions(tmp_path: Path) 
     wheel_path = next(tmp_path.glob("awino_harness-*.whl"))
     with zipfile.ZipFile(wheel_path) as wheel:
         names = set(wheel.namelist())
-    assert "smith/_bundle/AWINO.md" in names
-    assert "smith/_bundle/AGENT_SMITH.md" in names
+    assert "awino/_bundle/AWINO.md" in names
+    assert "awino/_bundle/AGENT_SMITH.md" in names
 
 
 def test_canonical_and_deprecated_entry_points_are_declared() -> None:
     pyproject = Path("pyproject.toml").read_text(encoding="utf-8")
     assert 'name = "awino-harness"' in pyproject
-    assert 'awino = "smith.cli:app"' in pyproject
-    assert 'smith = "smith.cli:deprecated_smith_entry"' in pyproject
+    assert 'awino = "awino.cli:app"' in pyproject
+    assert 'smith = "awino.cli:deprecated_smith_entry"' in pyproject
 
 
 def test_canonical_version_flag() -> None:
@@ -98,14 +98,14 @@ def test_bootstrap_prefers_awino_environment_with_legacy_fallback() -> None:
 
 
 def test_copilot_status_reports_no_skills_mechanism(tmp_path: Path) -> None:
-    smith_home = tmp_path / "source"
-    (smith_home / "agents").mkdir(parents=True)
-    (smith_home / "agents" / "awino.md").write_text(
+    awino_home = tmp_path / "source"
+    (awino_home / "agents").mkdir(parents=True)
+    (awino_home / "agents" / "awino.md").write_text(
         "---\nname: awino\ndescription: test\n---\nbody\n", encoding="utf-8"
     )
     target = Target(Harness.COPILOT, tmp_path / "prompts", "global")
 
-    actions = install(smith_home, target)
+    actions = install(awino_home, target)
     row = next(item for item in status(tmp_path, targets=[target]) if item[0] == target)
 
     assert any("has no skills mechanism" in action.detail for action in actions)
@@ -119,7 +119,7 @@ def test_fetch_404_is_a_clean_cli_error(monkeypatch) -> None:
             pass
 
         def fetch(self, path, source, force=False):
-            from smith.knowledge import FetchError
+            from awino.knowledge import FetchError
 
             raise FetchError(source, path, 404)
 
@@ -150,7 +150,7 @@ def test_delegate_malformed_json_prints_schema_help(tmp_path: Path, monkeypatch)
 
 def test_cli_alias_warning_behavior_from_isolated_python(tmp_path: Path) -> None:
     script = (
-        "import os; from smith import cli; "
+        "import os; from awino import cli; "
         "cli.app=lambda: print('ran'); cli.deprecated_smith_entry()"
     )
     result = subprocess.run(

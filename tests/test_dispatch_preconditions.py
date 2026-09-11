@@ -14,10 +14,10 @@ from pathlib import Path
 
 import pytest
 
-from smith.dispatch import preflight
-from smith.enforce import Gate, Ledger, TaskClass
-from smith.health import Health, Result
-from smith.paths import SmithPaths
+from awino.dispatch import preflight
+from awino.enforce import Gate, Ledger, TaskClass
+from awino.health import Health, Result
+from awino.paths import AwinoPaths
 
 
 class _FakeHealth:
@@ -28,7 +28,7 @@ class _FakeHealth:
         self._results = results
         self.calls = 0
 
-    def __call__(self, paths: SmithPaths, *, fast: bool = False) -> list[Result]:
+    def __call__(self, paths: AwinoPaths, *, fast: bool = False) -> list[Result]:
         del paths, fast
         self.calls += 1
         return self._results
@@ -40,17 +40,17 @@ def ledger(tmp_path: Path) -> Ledger:
 
 
 @pytest.fixture
-def paths(tmp_path: Path) -> SmithPaths:
-    root = tmp_path / "smith-home"
+def paths(tmp_path: Path) -> AwinoPaths:
+    root = tmp_path / "awino-home"
     root.mkdir()
     (root / "plugin.json").write_text("{}", encoding="utf-8")
     (root / "knowledge").mkdir()
-    return SmithPaths(root=root)
+    return AwinoPaths(root=root)
 
 
 class TestHealthPrecondition:
     def test_a_refused_project_blocks_with_the_failing_check_named(
-        self, ledger: Ledger, paths: SmithPaths
+        self, ledger: Ledger, paths: AwinoPaths
     ) -> None:
         failing = _FakeHealth(
             [
@@ -72,7 +72,7 @@ class TestHealthPrecondition:
         assert failing.calls == 1
 
     def test_a_healthy_project_with_no_active_run_passes(
-        self, ledger: Ledger, paths: SmithPaths
+        self, ledger: Ledger, paths: AwinoPaths
     ) -> None:
         healthy = _FakeHealth([Result("uv_env", Health.OK, "fine")])
         result = preflight(ledger, paths, health_check=healthy)
@@ -81,7 +81,7 @@ class TestHealthPrecondition:
         assert result.blockers == ()
         assert result.reroute_to is None
 
-    def test_a_warning_alone_does_not_block(self, ledger: Ledger, paths: SmithPaths) -> None:
+    def test_a_warning_alone_does_not_block(self, ledger: Ledger, paths: AwinoPaths) -> None:
         warned = _FakeHealth(
             [Result("structure", Health.WARN, "2 regenerable artifact(s)", remedy="just clean")]
         )
@@ -92,7 +92,7 @@ class TestHealthPrecondition:
 
 class TestActiveRunPrecondition:
     def test_a_failing_gate_already_recorded_reroutes_to_debug_before_the_requested_skill(
-        self, ledger: Ledger, paths: SmithPaths
+        self, ledger: Ledger, paths: AwinoPaths
     ) -> None:
         run = ledger.open(TaskClass.BUGFIX, "fix it")
         ledger.record(run.run_id, Gate.TESTED, 'python -c "raise SystemExit(1)"')
@@ -105,7 +105,7 @@ class TestActiveRunPrecondition:
         assert "tested" in result.detail.lower()
 
     def test_a_pending_checkpoint_decision_blocks_and_surfaces_the_decision(
-        self, ledger: Ledger, paths: SmithPaths
+        self, ledger: Ledger, paths: AwinoPaths
     ) -> None:
         run = ledger.open(TaskClass.BUGFIX, "fix it")
         ledger.checkpoint(
@@ -127,7 +127,7 @@ class TestActiveRunPrecondition:
 
 class TestPreflightIsReadOnly:
     def test_preflight_performs_no_filesystem_write(
-        self, ledger: Ledger, paths: SmithPaths, tmp_path: Path
+        self, ledger: Ledger, paths: AwinoPaths, tmp_path: Path
     ) -> None:
         marker = tmp_path / "canary.txt"
         marker.write_text("untouched", encoding="utf-8")

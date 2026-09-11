@@ -14,7 +14,7 @@ Emit a new agent definition that inherits the book's practices by construction.
 
 Search, in order, and report what you found:
 
-1. `.smith/emitted/` — did we already build this?
+1. `.awino/emitted/` — did we already build this?
 2. `$AWINO_SKILL_LIBRARY` — the local library
    has hundreds of skills. Grep for the capability.
 3. Registry `reference_configs` — the book ships real agent definitions
@@ -42,7 +42,7 @@ Cite `chapters/5-tool-use/3-tool-restrictions.md` and
 
 ### Step 3: Write the spec — do not skip to the file
 
-Write `.smith/specs/<slug>-agent-spec.md`:
+Write `.awino/specs/<slug>-agent-spec.md`:
 
 ```markdown
 # Spec: <agent-name>
@@ -85,8 +85,8 @@ valid outcome — report the resume path.
 
 ### Step 4: Emit to staging after approval
 
-Write to `.smith/emitted/<agent-name>.md` using
-`.smith/templates/agent.md.tmpl`. Never write directly into a live harness —
+Write to `.awino/emitted/<agent-name>.md` using
+`.awino/templates/agent.md.tmpl`. Never write directly into a live harness —
 the human promotes it with `awino install`, which adapts the frontmatter and
 destination for Claude, Kilo, Goose, Cursor, or Copilot.
 
@@ -117,7 +117,7 @@ Include the propulsion clause verbatim:
 ### Step 5: Lint
 
 ```powershell
-awino validate .smith/emitted/<name>.md -v
+awino validate .awino/emitted/<name>.md -v
 ```
 
 Paste the output. Any FAIL blocks completion.
@@ -132,7 +132,7 @@ Paste the output. Any FAIL blocks completion.
 | name | ... |
 | role | ... |
 | tools | ... |
-| staged at | .smith/emitted/<name>.md |
+| staged at | .awino/emitted/<name>.md |
 | lint | PASS (n checks) |
 
 **Promote with:** `awino install --harness <target>` after adding the staged

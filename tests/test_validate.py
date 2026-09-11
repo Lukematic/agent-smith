@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from smith.validate import (
+from awino.validate import (
     BROKEN_SELFTEST,
     Kind,
     Status,

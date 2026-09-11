@@ -29,7 +29,7 @@ def _run_awino(args: list[str], project_root: Path) -> subprocess.CompletedProce
     env["AWINO_PROJECT"] = str(project_root)
     env.pop("VIRTUAL_ENV", None)
     return subprocess.run(
-        [sys.executable, "-m", "smith.cli", *args],
+        [sys.executable, "-m", "awino.cli", *args],
         cwd=str(project_root),
         env=env,
         capture_output=True,
@@ -154,7 +154,7 @@ def test_config_review_path_audits_a_nested_home_not_the_parent(tmp_path) -> Non
     (target / "pyproject.toml").write_text("[project]\nname='x'\nversion='0.1'\n", encoding="utf-8")
     (target / "justfile").write_text("lint:\n    ruff check .\n", encoding="utf-8")
     r = subprocess.run(
-        [sys.executable, "-m", "smith.cli", "config-review", "--path", str(target)],
+        [sys.executable, "-m", "awino.cli", "config-review", "--path", str(target)],
         cwd=root,
         env={**os.environ, "PYTHONPATH": str(root / "src")},
         capture_output=True,

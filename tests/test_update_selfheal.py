@@ -15,8 +15,8 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from smith import cli
-from smith.enforce import Ledger, TaskClass
+from awino import cli
+from awino.enforce import Ledger, TaskClass
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -81,7 +81,7 @@ class TestUpdateEnsuresProjectState:
         result = CliRunner().invoke(cli.app, ["update"])
 
         assert result.exit_code == 0, result.output
-        assert (project / ".smith" / "run").is_dir()
+        assert (project / ".awino" / "run").is_dir()
 
 
 class TestUpdateRefreshesOnlyDetectedHarnesses:
@@ -106,12 +106,12 @@ class TestUpdatePreservesProjectSpecificState:
     ) -> None:
         _remote, origin = _make_remote_and_clone(tmp_path)
         project = _make_target_project(tmp_path)
-        smith_dir = project / ".smith"
-        memory_dir = smith_dir / "memory"
+        awino_dir = project / ".awino"
+        memory_dir = awino_dir / "memory"
         memory_dir.mkdir(parents=True)
         lessons = memory_dir / "lessons.md"
         lessons.write_text("- [2026-01-01] a durable project lesson\n", encoding="utf-8")
-        project_yaml = smith_dir / "project.yaml"
+        project_yaml = awino_dir / "project.yaml"
         project_yaml.write_text("mission: test project\n", encoding="utf-8")
 
         monkeypatch.setattr(Path, "home", lambda: tmp_path / "no-claude-here")
@@ -140,11 +140,11 @@ class TestUpdateIsIdempotent:
 
         first = CliRunner().invoke(cli.app, ["update"])
         assert first.exit_code == 0, first.output
-        run_dir_before = list((project / ".smith" / "run").iterdir())
+        run_dir_before = list((project / ".awino" / "run").iterdir())
 
         second = CliRunner().invoke(cli.app, ["update"])
         assert second.exit_code == 0, second.output
-        run_dir_after = list((project / ".smith" / "run").iterdir())
+        run_dir_after = list((project / ".awino" / "run").iterdir())
 
         assert run_dir_before == run_dir_after
 
@@ -169,7 +169,7 @@ class TestStaleInstallUpgradesEndToEnd:
 
     The owner points agents at the repo URL, so a clone that fell behind must
     fast-forward through the real ``awino update-preflight`` + ``awino update``
-    path - file:// upstream, no network - while .smith state (project.yaml,
+    path - file:// upstream, no network - while .awino state (project.yaml,
     memory, ledger runs) survives byte-identical.
     """
 
@@ -206,18 +206,18 @@ class TestStaleInstallUpgradesEndToEnd:
         project = tmp_path / "target-project"
         project.mkdir()
         (project / ".git").mkdir()
-        smith_dir = project / ".smith"
-        (smith_dir / "memory").mkdir(parents=True)
-        project_yaml = smith_dir / "project.yaml"
+        awino_dir = project / ".awino"
+        (awino_dir / "memory").mkdir(parents=True)
+        project_yaml = awino_dir / "project.yaml"
         project_yaml.write_text(
             "mission: upgrade probe\nupgrade_marker: STALE-STATE-KEPT-4242\n",
             encoding="utf-8",
         )
-        lesson = smith_dir / "memory" / "lessons.md"
+        lesson = awino_dir / "memory" / "lessons.md"
         lesson.write_text(
             "- [2026-09-11] stale installs must upgrade cleanly\n", encoding="utf-8"
         )
-        run = Ledger(smith_dir).open(
+        run = Ledger(awino_dir).open(
             TaskClass.RESEARCH, objective="probe run that must survive upgrade"
         )
 
@@ -245,5 +245,5 @@ class TestStaleInstallUpgradesEndToEnd:
         assert b"STALE-STATE-KEPT-4242" in project_yaml.read_bytes()
         assert lesson.read_bytes() == before_lesson
         # The ledger run still loads.
-        loaded = Ledger(smith_dir).load(run.run_id)
+        loaded = Ledger(awino_dir).load(run.run_id)
         assert loaded.objective == "probe run that must survive upgrade"

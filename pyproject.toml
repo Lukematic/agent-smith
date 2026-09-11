@@ -39,8 +39,8 @@ Issues = "https://github.com/Lukematic/agent-smith/issues"
 Documentation = "https://github.com/Lukematic/agent-smith/tree/main/docs"
 
 [project.scripts]
-awino = "smith.cli:app"
-smith = "smith.cli:deprecated_smith_entry"
+awino = "awino.cli:app"
+smith = "awino.cli:deprecated_smith_entry"
 
 [dependency-groups]
 dev = [
@@ -54,28 +54,28 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/smith"]
+packages = ["src/awino"]
 
 # The knowledge registry, skills, persona, and constitution are not Python, but
 # they are what A.W.I.N.O. *is*. A wheel carrying only the CLI installs a tool whose
 # knowledge base is missing, so `awino route` and every skill fail immediately.
 #
 # force-include maps repository paths to package-relative paths, so the data ships
-# inside `smith/_bundle/` and `smith.paths` can find it when no git clone exists.
+# inside `awino/_bundle/` and `awino.paths` can find it when no git clone exists.
 [tool.hatch.build.targets.wheel.force-include]
-"AWINO.md" = "smith/_bundle/AWINO.md"
-"AGENT_SMITH.md" = "smith/_bundle/AGENT_SMITH.md"
-"plugin.json" = "smith/_bundle/plugin.json"
-".claude-plugin" = "smith/_bundle/.claude-plugin"
-"settings.json" = "smith/_bundle/settings.json"
-"bin" = "smith/_bundle/bin"
-"knowledge/REGISTRY.yaml" = "smith/_bundle/knowledge/REGISTRY.yaml"
-"knowledge/SOURCES.yaml" = "smith/_bundle/knowledge/SOURCES.yaml"
-"skills" = "smith/_bundle/skills"
-"agents" = "smith/_bundle/agents"
-"hooks" = "smith/_bundle/hooks"
-"templates" = "smith/_bundle/templates"
-"memory/lessons.md" = "smith/_bundle/memory/lessons.md"
+"AWINO.md" = "awino/_bundle/AWINO.md"
+"AGENT_SMITH.md" = "awino/_bundle/AGENT_SMITH.md"
+"plugin.json" = "awino/_bundle/plugin.json"
+".claude-plugin" = "awino/_bundle/.claude-plugin"
+"settings.json" = "awino/_bundle/settings.json"
+"bin" = "awino/_bundle/bin"
+"knowledge/REGISTRY.yaml" = "awino/_bundle/knowledge/REGISTRY.yaml"
+"knowledge/SOURCES.yaml" = "awino/_bundle/knowledge/SOURCES.yaml"
+"skills" = "awino/_bundle/skills"
+"agents" = "awino/_bundle/agents"
+"hooks" = "awino/_bundle/hooks"
+"templates" = "awino/_bundle/templates"
+"memory/lessons.md" = "awino/_bundle/memory/lessons.md"
 
 [tool.hatch.build.targets.sdist]
 # The sdist is the reproducible source of truth, so it carries everything a clone
@@ -133,7 +133,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["ARG"]
 # typer declares CLI options via call-in-default; that is its documented API.
-"src/smith/cli/*.py" = ["B008"]
+"src/awino/cli/*.py" = ["B008"]
 
 [tool.ruff.format]
 quote-style = "double"

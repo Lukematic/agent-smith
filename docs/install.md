@@ -26,7 +26,7 @@ Plugin installation crosses a user trust boundary, so one explicit user action i
 required. The agent must not simulate consent by running a global Bash installer.
 
 The plugin supplies the `awino` agent and exactly 16 canonical `awino-*` skills. It
-does not initialize `.seeds` or `.smith`. A.W.I.N.O. asks before project setup and
+does not initialize `.seeds` or `.awino`. A.W.I.N.O. asks before project setup and
 uses `awino work-init` after approval.
 
 The native agent and skills work without the Python CLI. Deterministic ledger,

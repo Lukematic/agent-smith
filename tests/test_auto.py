@@ -15,11 +15,11 @@ from pathlib import Path
 
 import pytest
 
-from smith.auto import AutoResult, run_auto
-from smith.dispatch import FloorState
-from smith.enforce import Ledger
-from smith.seeds import Issue
-from smith.skill_catalog import SkillCatalog
+from awino.auto import AutoResult, run_auto
+from awino.dispatch import FloorState
+from awino.enforce import Ledger
+from awino.seeds import Issue
+from awino.skill_catalog import SkillCatalog
 
 SMITH_ROOT = Path(__file__).resolve().parents[1]
 

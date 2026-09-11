@@ -23,7 +23,7 @@ hook commands.
 ## Project behavior
 
 The plugin still does not silently create project state. When a project has a
-confirmed `.smith/project.yaml`, SessionStart and UserPromptSubmit load it and
+confirmed `.awino/project.yaml`, SessionStart and UserPromptSubmit load it and
 inject its goals, tenets, expectations, memory, current run, and pending
 continuation. When it is absent, A.W.I.N.O. asks before onboarding creates it.
 

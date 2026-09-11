@@ -10,16 +10,16 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from smith.fix import Outcome
-from smith.fix import fix_clone_freshness as _fix
-from smith.paths import SmithPaths
+from awino.fix import Outcome
+from awino.fix import fix_clone_freshness as _fix
+from awino.paths import AwinoPaths
 
 
 def _git(cwd: Path, *args: str) -> None:
     subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
 
 
-def _clone_with_remote(tmp_path: Path) -> tuple[Path, SmithPaths]:
+def _clone_with_remote(tmp_path: Path) -> tuple[Path, AwinoPaths]:
     remote = tmp_path / "remote.git"
     remote.mkdir()
     _git(remote, "init", "--bare", "-b", "main")
@@ -34,7 +34,7 @@ def _clone_with_remote(tmp_path: Path) -> tuple[Path, SmithPaths]:
     _git(origin, "commit", "-m", "first")
     _git(origin, "remote", "add", "origin", str(remote))
     _git(origin, "push", "-u", "origin", "main")
-    return remote, SmithPaths(root=origin)
+    return remote, AwinoPaths(root=origin)
 
 
 class TestFixCloneFreshness:
@@ -84,6 +84,6 @@ class TestFixCloneFreshness:
         assert "uncommitted" in repair.detail
 
     def test_non_git_directory_is_skipped_not_an_error(self, tmp_path: Path) -> None:
-        paths = SmithPaths(root=tmp_path)
+        paths = AwinoPaths(root=tmp_path)
         repair = _fix(paths)
         assert repair.outcome is Outcome.SKIPPED

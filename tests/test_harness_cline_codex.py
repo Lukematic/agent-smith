@@ -22,8 +22,8 @@ from pathlib import Path
 
 import pytest
 
-from smith import harness
-from smith.harness import Harness, Target
+from awino import harness
+from awino.harness import Harness, Target
 
 BODY = "---\nname: awino\ndescription: Test persona\n---\n\nBody text here."
 
@@ -37,8 +37,8 @@ def fake_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 @pytest.fixture()
-def smith_home(tmp_path: Path) -> Path:
-    root = tmp_path / "smith-home"
+def awino_home(tmp_path: Path) -> Path:
+    root = tmp_path / "awino-home"
     (root / "agents").mkdir(parents=True)
     (root / "agents" / "awino.md").write_text(BODY, encoding="utf-8")
     (root / "skills").mkdir(parents=True)
@@ -97,11 +97,11 @@ class TestCodexAdapter:
         assert found[(Harness.CODEX, "project")].persona_path == project / "AGENTS.md"
 
     def test_install_writes_fresh_global_agents_md(
-        self, fake_home: Path, smith_home: Path
+        self, fake_home: Path, awino_home: Path
     ) -> None:
         (fake_home / ".codex").mkdir()
         target = Target(Harness.CODEX, fake_home / ".codex", "global")
-        actions = harness.install(smith_home, target)
+        actions = harness.install(awino_home, target)
         persona = _persona_action(actions, "AGENTS.md")
         assert persona.outcome == "INSTALLED"
         text = (fake_home / ".codex" / "AGENTS.md").read_text(encoding="utf-8")
@@ -111,16 +111,16 @@ class TestCodexAdapter:
         skills = [a for a in actions if "skills mechanism" in a.detail]
         assert skills and all(a.outcome == "SKIPPED" for a in skills)
         # reinstall is a no-op
-        repeat = harness.install(smith_home, target)
+        repeat = harness.install(awino_home, target)
         assert _persona_action(repeat, "AGENTS.md").outcome == "SKIPPED"
 
     def test_install_refuses_to_clobber_human_agents_md(
-        self, project: Path, smith_home: Path
+        self, project: Path, awino_home: Path
     ) -> None:
         human = project / "AGENTS.md"
         human.write_text("# My project conventions\n\nDo not touch.\n", encoding="utf-8")
         target = Target(Harness.CODEX, project, "project")
-        actions = harness.install(smith_home, target)
+        actions = harness.install(awino_home, target)
         persona = _persona_action(actions, "AGENTS.md")
         assert persona.outcome == "FAILED"
         assert human.read_text(encoding="utf-8") == "# My project conventions\n\nDo not touch.\n"
@@ -165,19 +165,19 @@ class TestClineAdapter:
         assert found[(Harness.CLINE, "project")].persona_path == project / ".clinerules"
 
     def test_install_refuses_to_clobber_human_clinerules(
-        self, project: Path, smith_home: Path
+        self, project: Path, awino_home: Path
     ) -> None:
         human = project / ".clinerules"
         human.write_text("My Cline rules.\n", encoding="utf-8")
         target = Target(Harness.CLINE, project, "project")
-        actions = harness.install(smith_home, target)
+        actions = harness.install(awino_home, target)
         persona = _persona_action(actions, ".clinerules")
         assert persona.outcome == "FAILED"
         assert human.read_text(encoding="utf-8") == "My Cline rules.\n"
 
-    def test_install_writes_fresh_clinerules(self, project: Path, smith_home: Path) -> None:
+    def test_install_writes_fresh_clinerules(self, project: Path, awino_home: Path) -> None:
         target = Target(Harness.CLINE, project, "project")
-        actions = harness.install(smith_home, target)
+        actions = harness.install(awino_home, target)
         persona = _persona_action(actions, ".clinerules")
         assert persona.outcome == "INSTALLED"
         text = (project / ".clinerules").read_text(encoding="utf-8")
@@ -227,18 +227,18 @@ class TestExistingHarnessesUnaffected:
         assert Harness.CURSOR.supports_skills is False
 
     def test_existing_harness_install_still_works(
-        self, fake_home: Path, smith_home: Path
+        self, fake_home: Path, awino_home: Path
     ) -> None:
         claude_root = fake_home / ".claude"
         (claude_root / "agents").mkdir(parents=True)
         target = Target(Harness.CLAUDE, claude_root, "global")
-        actions = harness.install(smith_home, target)
+        actions = harness.install(awino_home, target)
         persona = _persona_action(actions, "awino.md")
         assert persona.outcome == "INSTALLED"
         assert "tools:" in (claude_root / "agents" / "awino.md").read_text(encoding="utf-8")
 
     def test_skill_drift_stays_empty_for_cline_and_codex(
-        self, project: Path, smith_home: Path
+        self, project: Path, awino_home: Path
     ) -> None:
-        assert harness.skill_drift(smith_home, Target(Harness.CLINE, project, "project")) == []
-        assert harness.skill_drift(smith_home, Target(Harness.CODEX, project, "project")) == []
+        assert harness.skill_drift(awino_home, Target(Harness.CLINE, project, "project")) == []
+        assert harness.skill_drift(awino_home, Target(Harness.CODEX, project, "project")) == []

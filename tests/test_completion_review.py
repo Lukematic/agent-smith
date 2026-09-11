@@ -11,13 +11,13 @@ from pathlib import Path
 
 import pytest
 
-from smith.completion_review import (
+from awino.completion_review import (
     TOOLCHAIN_GATES,
     AcceptanceCriterion,
     classify_tidy_findings,
     extract_acceptance_criteria,
 )
-from smith.enforce import (
+from awino.enforce import (
     Ledger,
     LedgerError,
     ProvenanceGateResult,
@@ -25,7 +25,7 @@ from smith.enforce import (
     Run,
     TaskClass,
 )
-from smith.tidy import Clutter, Finding
+from awino.tidy import Clutter, Finding
 
 
 @pytest.fixture

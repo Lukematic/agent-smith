@@ -32,15 +32,15 @@ default to editing `CLAUDE.md`. Classify and persist it immediately:
 
 | User intent | Canonical project store | Command |
 | --- | --- | --- |
-| mission or user outcome | `.smith/project.yaml` | `awino remember --as mission "..."` |
-| invariant business or workflow rule | `.smith/project.yaml` tenets | `awino remember --as tenet "..."` |
-| quality, privacy, deployment expectation | `.smith/project.yaml` expectations | `awino remember --as expectation "..."` |
-| goal or explicit non-goal | `.smith/project.yaml` | `awino remember --as goal|non-goal "..."` |
-| repeated A.W.I.N.O. mistake | `.smith/memory/lessons.md` | append dated failure rule |
+| mission or user outcome | `.awino/project.yaml` | `awino remember --as mission "..."` |
+| invariant business or workflow rule | `.awino/project.yaml` tenets | `awino remember --as tenet "..."` |
+| quality, privacy, deployment expectation | `.awino/project.yaml` expectations | `awino remember --as expectation "..."` |
+| goal or explicit non-goal | `.awino/project.yaml` | `awino remember --as goal|non-goal "..."` |
+| repeated A.W.I.N.O. mistake | `.awino/memory/lessons.md` | append dated failure rule |
 
 `CLAUDE.md` remains team documentation, not A.W.I.N.O.'s canonical memory. Mirror a
 rule there only when the user wants every tool and human contributor to inherit it.
-The confirmed `.smith/project.yaml` is re-injected by hooks at session start and on
+The confirmed `.awino/project.yaml` is re-injected by hooks at session start and on
 every user prompt, so fresh task sessions retain mission, goals, tenets, and workflow
 constraints without carrying conversation history.
 
@@ -135,8 +135,8 @@ out to have been right the first time.
 
 At session start, in this order:
 
-1. `.smith/project.yaml` — confirmed mission, goals, tenets, expectations, workflow
-2. `.smith/memory/lessons.md` — project-specific recurrence prevention
+1. `.awino/project.yaml` — confirmed mission, goals, tenets, expectations, workflow
+2. `.awino/memory/lessons.md` — project-specific recurrence prevention
 3. `$AWINO/memory/lessons.md` — global binding rules that override defaults
 4. `retrieve_memories(category="agentic_doctrine", is_global=true)` when available
 5. Relevant `expertise/<domain>.jsonl` only when working that domain

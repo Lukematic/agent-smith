@@ -15,7 +15,7 @@ def run_cli(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
     env["SMITH_PROJECT"] = str(project)
     env.pop("VIRTUAL_ENV", None)
     return subprocess.run(
-        [sys.executable, "-m", "smith.cli", *args],
+        [sys.executable, "-m", "awino.cli", *args],
         cwd=project,
         env=env,
         capture_output=True,

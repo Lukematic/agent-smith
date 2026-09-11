@@ -1,5 +1,5 @@
-"""Tests for the RPI loop driver (src/smith/loops.py) and its CLI
-(src/smith/cli/loopctl.py).
+"""Tests for the RPI loop driver (src/awino/loops.py) and its CLI
+(src/awino/cli/loopctl.py).
 
 All state lives in tmp dirs: the driver gets an explicit loops_dir and
 project_root, and the CLI runs under AWINO_PROJECT pointing at a tmp project.
@@ -15,9 +15,9 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from smith import loops
-from smith.cli.loopctl import loop_app
-from smith.enforce import Ledger, LedgerError
+from awino import loops
+from awino.cli.loopctl import loop_app
+from awino.enforce import Ledger, LedgerError
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILL_MD = REPO_ROOT / "skills" / "awino-rpi" / "SKILL.md"
@@ -26,19 +26,19 @@ RESEARCH_OK = """# Research: rpi loop driver
 
 ## Metadata
 - date 2026-09-11, branch challenge/tested-fixes, commit abc123
-- scope: src/smith/loops.py and src/smith/cli/loopctl.py examined in full;
+- scope: src/awino/loops.py and src/awino/cli/loopctl.py examined in full;
   the gate ledger was read, not modified
 
 ## Where it lives
 | Concern | File | Lines |
 |---|---|---|
-| driver | src/smith/loops.py | 1-200 |
-| cli | src/smith/cli/loopctl.py | 1-150 |
+| driver | src/awino/loops.py | 1-200 |
+| cli | src/awino/cli/loopctl.py | 1-150 |
 
 ## How it works
-The driver sequences phases; validation lives in src/smith/loops.py:100 and
-state persists via LoopState at src/smith/loops.py:140. The CLI in
-src/smith/cli/loopctl.py:1 wires the driver to typer commands.
+The driver sequences phases; validation lives in src/awino/loops.py:100 and
+state persists via LoopState at src/awino/loops.py:140. The CLI in
+src/awino/cli/loopctl.py:1 wires the driver to typer commands.
 
 ## Flow
 run rpi -> next -> approve -> next -> handoff to the gate ledger.
@@ -47,7 +47,7 @@ run rpi -> next -> approve -> next -> handoff to the gate ledger.
 _gate.py_ helpers _echo/_workspace are reused by loopctl.
 
 ## Open questions
-None; the ledger layout was read from src/smith/enforce.py:381.
+None; the ledger layout was read from src/awino/enforce.py:381.
 """
 
 PLAN_OK = """# Plan: rpi loop driver
@@ -61,8 +61,8 @@ thoughts/research/2026-09-11-0800-rpi-loop-driver.md
 - [ ] implement: verify the gate-ledger handoff
 
 ## Scope
-- `src/smith/loops.py`
-- `src/smith/cli/loopctl.py`
+- `src/awino/loops.py`
+- `src/awino/cli/loopctl.py`
 - `tests/test_loops.py`
 
 ## Tests
@@ -80,11 +80,11 @@ Delete the three new files and drop the registration lines.
 def _project(tmp_path: Path) -> Path:
     """A fake project with the files the plan fixture claims are in scope."""
     project = tmp_path / "project"
-    (project / "src" / "smith" / "cli").mkdir(parents=True)
+    (project / "src" / "awino" / "cli").mkdir(parents=True)
     (project / "tests").mkdir(parents=True)
     for rel in (
-        "src/smith/loops.py",
-        "src/smith/cli/loopctl.py",
+        "src/awino/loops.py",
+        "src/awino/cli/loopctl.py",
         "tests/test_loops.py",
     ):
         (project / rel).write_text("# placeholder\n", encoding="utf-8")
@@ -108,7 +108,7 @@ def driver(project: Path, tmp_path: Path) -> loops.RpiDriver:
 
 @pytest.fixture()
 def loop_ledger(tmp_path: Path) -> Ledger:
-    return Ledger(tmp_path / ".smith")
+    return Ledger(tmp_path / ".awino")
 
 
 @pytest.fixture()
@@ -172,7 +172,7 @@ class TestResearchValidation:
         self, driver: loops.RpiDriver
     ) -> None:
         state = driver.new("add an RPI loop driver")
-        _write_research(driver, state, "too short, see src/smith/loops.py:1\n")
+        _write_research(driver, state, "too short, see src/awino/loops.py:1\n")
         missing = driver.validate_current(state)
         assert len(missing) == 1
         assert "too short" in missing[0]
@@ -216,12 +216,12 @@ class TestPlanValidation:
     def test_plan_nonexistent_scope_path_names_it(self, driver: loops.RpiDriver) -> None:
         state = self._research_done(driver)
         text = PLAN_OK.replace(
-            "`src/smith/cli/loopctl.py`", "`src/smith/cli/does-not-exist.py`"
+            "`src/awino/cli/loopctl.py`", "`src/awino/cli/does-not-exist.py`"
         )
         _write_plan(driver, state, text)
         missing = driver.validate_current(state)
         assert missing == [
-            "scope path does not exist in repo: 'src/smith/cli/does-not-exist.py'"
+            "scope path does not exist in repo: 'src/awino/cli/does-not-exist.py'"
         ]
 
     def test_plan_accepts_acceptance_synonym(self, driver: loops.RpiDriver) -> None:
@@ -424,7 +424,7 @@ class TestLoopCli:
         assert "no open gate run with --loop rpi" in no_run.output
 
         # Fake an open ledger run tagged --loop rpi.
-        run_dir = project / ".smith" / "run" / "run-abc"
+        run_dir = project / ".awino" / "run" / "run-abc"
         run_dir.mkdir(parents=True, exist_ok=True)
         run_dir.joinpath("run.json").write_text(
             json.dumps({"run_id": "run-abc", "loop": "rpi", "terminal_state": None}),
@@ -466,7 +466,7 @@ class TestLoopCli:
 
 class TestLoopEventPersistence:
     def test_record_and_read_round_trip(self, loop_ledger: Ledger) -> None:
-        from smith.enforce import LoopEvent
+        from awino.enforce import LoopEvent
 
         loop_ledger.record_loop_event(
             LoopEvent(
@@ -491,7 +491,7 @@ class TestLoopEventPersistence:
     def test_events_are_oldest_first_and_filterable_by_loop(
         self, loop_ledger: Ledger
     ) -> None:
-        from smith.enforce import LoopEvent
+        from awino.enforce import LoopEvent
 
         for loop_id, kind in (("a", "loop_started"), ("b", "loop_started"), ("a", "loop_closed")):
             loop_ledger.record_loop_event(
@@ -516,10 +516,10 @@ class TestLoopEventPersistence:
     def test_missing_trail_file_reads_as_empty(self, tmp_path: Path) -> None:
         # Loops that ran before the trail existed leave no events; callers
         # fall back to the run-level heuristic.
-        assert Ledger(tmp_path / ".smith").loop_events() == []
+        assert Ledger(tmp_path / ".awino").loop_events() == []
 
     def test_unknown_event_kind_is_refused(self, loop_ledger: Ledger) -> None:
-        from smith.enforce import LoopEvent
+        from awino.enforce import LoopEvent
 
         with pytest.raises(LedgerError, match="unknown loop event kind"):
             loop_ledger.record_loop_event(
@@ -537,7 +537,7 @@ class TestLoopEventPersistence:
     ) -> None:
         state = driver.new("no ledger wired")
         driver.record_failure(state)
-        assert not (tmp_path / ".smith" / "loops.jsonl").exists()
+        assert not (tmp_path / ".awino" / "loops.jsonl").exists()
 
 
 class TestLedgerTrail:
@@ -579,7 +579,7 @@ class TestLedgerTrail:
         assert "ADVANCED  phase=implement" in advanced.output
 
         # Fake an open ledger run tagged --loop rpi so the handoff verifies.
-        run_dir = project / ".smith" / "run" / "run-abc"
+        run_dir = project / ".awino" / "run" / "run-abc"
         run_dir.mkdir(parents=True, exist_ok=True)
         run_dir.joinpath("run.json").write_text(
             json.dumps({"run_id": "run-abc", "loop": "rpi", "terminal_state": None}),
@@ -589,7 +589,7 @@ class TestLedgerTrail:
         assert handoff.exit_code == 0, handoff.output
         assert "HANDOFF" in handoff.output
 
-        ledger = Ledger(project / ".smith")
+        ledger = Ledger(project / ".awino")
         events = ledger.loop_events(loop_id)
         assert [(event.kind, event.phase) for event in events] == [
             ("loop_started", "research"),
@@ -605,7 +605,7 @@ class TestLedgerTrail:
         assert all(event.loop_kind == "rpi" for event in events)
         assert all(event.at for event in events)
         # The trail is ledger-level, not inside a per-run dir.
-        assert (project / ".smith" / "loops.jsonl").is_file()
+        assert (project / ".awino" / "loops.jsonl").is_file()
 
 
 class TestArtifactRejection:
@@ -613,7 +613,7 @@ class TestArtifactRejection:
         self, event_driver: loops.RpiDriver, loop_ledger: Ledger
     ) -> None:
         state = event_driver.new("add an RPI loop driver")
-        _write_research(event_driver, state, "too short, see src/smith/loops.py:1\n")
+        _write_research(event_driver, state, "too short, see src/awino/loops.py:1\n")
         missing = event_driver.check(state)
         assert missing
         events = loop_ledger.loop_events(state.id)
@@ -764,7 +764,7 @@ class TestBackCli:
         advanced = runner.invoke(loop_app, ["next"])
         assert advanced.exit_code == 0, advanced.output
         assert "ADVANCED  phase=plan" in advanced.output
-        ledger = Ledger(project / ".smith")
+        ledger = Ledger(project / ".awino")
         kinds = [event.kind for event in ledger.loop_events()]
         tail = kinds[kinds.index("phase_reentered") :]
         assert tail == [

@@ -6,13 +6,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from smith.recall import recall_lessons
+from awino.recall import recall_lessons
 
 
 def _lessons(tmp_path: Path) -> Path:
     p = tmp_path / "lessons.md"
     p.write_text(
-        "- [2026-01-01] `FLOOR_VERIFY_CWD` - verify commands must be relative to the project root, not .smith.\n"
+        "- [2026-01-01] `FLOOR_VERIFY_CWD` - verify commands must be relative to the project root, not .awino.\n"
         "- [2026-01-02] `SILENT_CHAIN_NOOP` - never infer gate closure from a silent && chain.\n"
         "- [2026-01-03] `LINTER_FALSE_POSITIVE` - a grep for a retired script name matches prose about it.\n"
         "- [2026-01-04] Unrelated note about pyproject packaging on OneDrive.\n",

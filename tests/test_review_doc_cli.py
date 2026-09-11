@@ -18,7 +18,7 @@ def run_cli(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
     env.pop("VIRTUAL_ENV", None)
     env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
     return subprocess.run(
-        [sys.executable, "-m", "smith.cli", "review-doc", *args],
+        [sys.executable, "-m", "awino.cli", "review-doc", *args],
         cwd=project,
         env=env,
         capture_output=True,

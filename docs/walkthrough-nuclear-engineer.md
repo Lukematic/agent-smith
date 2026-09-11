@@ -222,7 +222,7 @@ Recurrence block:
 The project-specific rule belongs in project memory, not A.W.I.N.O.'s global doctrine:
 
 ```text
-.smith/memory/lessons.md
+.awino/memory/lessons.md
 ```
 
 A.W.I.N.O.'s global memory should only retain the reusable pattern: “scientific claim

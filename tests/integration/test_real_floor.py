@@ -1,7 +1,7 @@
 """Integration: one real floor trip through the actual CLI, end to end.
 
 This is the test Phase 0 proved was missing: everything else fakes the
-worker. Here the full boundary is real - `python -m smith.cli floor open`
+worker. Here the full boundary is real - `python -m awino.cli floor open`
 writes a real prompt into a real temp project, a real subprocess plays the
 worker (any environment can: that is the portability contract), and
 `floor close` re-runs the real verification command before routing.
@@ -26,7 +26,7 @@ pytestmark = pytest.mark.integration
 
 def _cli(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "-m", "smith.cli", *args],
+        [sys.executable, "-m", "awino.cli", *args],
         cwd=cwd,
         env={**dict(os.environ), "PYTHONPATH": str(SMITH_ROOT / "src")},
         capture_output=True,

@@ -7,7 +7,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from smith.guard import PushVerdict, check_push_identity
+from awino.guard import PushVerdict, check_push_identity
 
 
 def _git(cwd: Path, *args: str) -> None:
@@ -61,7 +61,7 @@ def test_verdict_names_what_it_checked() -> None:
 
 
 def test_canonical_root_defaults_to_running_clone_until_recorded(tmp_path: Path) -> None:
-    from smith.guard import canonical_root_for, record_canonical_root
+    from awino.guard import canonical_root_for, record_canonical_root
 
     home = tmp_path / "clone"
     home.mkdir()
@@ -73,7 +73,7 @@ def test_canonical_root_defaults_to_running_clone_until_recorded(tmp_path: Path)
 
 
 def test_remote_equality_ignores_userinfo_scheme_and_suffix() -> None:
-    from smith.guard import _norm_remote
+    from awino.guard import _norm_remote
 
     a = _norm_remote("https://Lukematic@github.com/Lukematic/agent-smith.git")
     b = _norm_remote("https://github.com/Lukematic/agent-smith")

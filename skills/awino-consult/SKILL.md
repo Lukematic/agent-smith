@@ -18,7 +18,7 @@ question is compound. Split it and say so. Opening a 4th file is
 
 ### Step 1: Classify, do not fetch
 
-Read `.smith/knowledge/REGISTRY.yaml` only. Match the question against the
+Read `.awino/knowledge/REGISTRY.yaml` only. Match the question against the
 `routes:` block first — it maps common phrasings straight to chapter keys.
 
 If no route matches, match on `tags` and `use_when`. If still nothing matches,
@@ -79,7 +79,7 @@ Rules:
 ### Step 5: Write back if durable
 
 If the answer produced a rule you will want next session, append to
-`.smith/memory/expertise/<domain>.jsonl`:
+`.awino/memory/expertise/<domain>.jsonl`:
 
 ```json
 {"type":"convention","domain":"harness","description":"Repeat mistakes get structural fixes not prompt text","classification":"foundational","source":"chapters/6-harnesses/5-harness-engineering.md","ts":"2026-08-21"}

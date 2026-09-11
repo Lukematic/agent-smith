@@ -15,9 +15,9 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from smith import loops
-from smith.cli.loopctl import loop_app
-from smith.enforce import Ledger
+from awino import loops
+from awino.cli.loopctl import loop_app
+from awino.enforce import Ledger
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILL_MD = REPO_ROOT / "skills" / "awino-rpi" / "SKILL.md"
@@ -130,7 +130,7 @@ def event_driver(
 
 @pytest.fixture()
 def loop_ledger(tmp_path: Path) -> Ledger:
-    return Ledger(tmp_path / ".smith")
+    return Ledger(tmp_path / ".awino")
 
 
 def _write(driver: loops.RpiDriver, state: loops.LoopState, kind: str, text: str) -> None:

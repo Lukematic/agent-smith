@@ -65,7 +65,7 @@ def test_repository_exposes_only_canonical_skills() -> None:
 
 
 def test_visual_requests_route_to_awino_visualize() -> None:
-    from smith.skill_catalog import SkillCatalog
+    from awino.skill_catalog import SkillCatalog
 
     empty = ROOT / "tests" / "missing-skill-root"
     catalog = SkillCatalog(empty, empty, ROOT / "skills")
@@ -77,7 +77,7 @@ def test_visual_requests_route_to_awino_visualize() -> None:
 
 
 def test_failures_route_to_debug_but_vague_agent_behavior_routes_to_triage() -> None:
-    from smith.skill_catalog import SkillCatalog
+    from awino.skill_catalog import SkillCatalog
 
     empty = ROOT / "tests" / "missing-skill-root"
     catalog = SkillCatalog(empty, empty, ROOT / "skills")

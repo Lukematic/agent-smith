@@ -28,10 +28,10 @@ for the knowledge-registry curation described below.
 awino drift
 ```
 
-`awino drift` is the diff (the former `.smith\scripts\registry_build.ps1` no
+`awino drift` is the diff (the former `.awino\scripts\registry_build.ps1` no
 longer exists — this replaced it). It writes `knowledge/DRIFT.md` under the
-resolved A.W.I.N.O. home (`SmithPaths.discover()`, not the current project's
-`.smith/`) and prints `UPSTREAM=`, `REGISTRY=`, `ADDED=`, `REMOVED=` on stdout.
+resolved A.W.I.N.O. home (`AwinoPaths.discover()`, not the current project's
+`.awino/`) and prints `UPSTREAM=`, `REGISTRY=`, `ADDED=`, `REMOVED=` on stdout.
 Read that report. It shows upstream chapter count, registry chapter count,
 `ADDED`, `REMOVED`, and the appendix example corpora.
 
@@ -44,7 +44,7 @@ entered via `_index.md`, not registry entries. Do not add them individually.
 For each newly added chapter path — **not in bulk**:
 
 
-1. Fetch it: `awino fetch <path>` (the former `.smith\scripts\fetch.ps1` no
+1. Fetch it: `awino fetch <path>` (the former `.awino\scripts\fetch.ps1` no
    longer exists — this replaced it)
 2. Read only the frontmatter plus the first section.
 3. Write a registry entry:

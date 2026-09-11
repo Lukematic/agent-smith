@@ -48,7 +48,7 @@ test:
     uv run pytest
 
 test-cov:
-    uv run pytest --cov=smith --cov-report=term-missing
+    uv run pytest --cov=awino --cov-report=term-missing
 
 # The single gate. Nothing ships unless this passes.
 # `lint` already covers formatting; tidy-check runs last because it is advisory

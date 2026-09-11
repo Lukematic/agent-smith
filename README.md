@@ -17,7 +17,7 @@ Run `awino --version` (or check if `~/.local/bin/awino.ps1` exists on Windows).
   ```powershell
   awino start          # reports 'A.W.I.N.O. freshness: ahead=N behind=M'
   ```
-  If `behind > 0`, run `awino update`. **Safe rebase contract:** `awino update` snapshots and preserves your target project's `.smith/project.yaml`, `.smith/memory/`, `.seeds`, and ledger history—it updates the engine and knowledge base without overwriting project intent.
+  If `behind > 0`, run `awino update`. **Safe rebase contract:** `awino update` snapshots and preserves your target project's `.awino/project.yaml`, `.awino/memory/`, `.seeds`, and ledger history—it updates the engine and knowledge base without overwriting project intent.
 - **If NOT installed on this machine:** Clone it once into a central directory (e.g. `~/.local/share/awino` or user tools directory, **never** inside the human's target project directory), and run the installer:
 
   Windows (PowerShell):
@@ -57,7 +57,7 @@ Inspect and configure what the project needs (environment, virtual environment, 
    If dependencies, virtualenv, or task runners are missing, confirm setup with `awino project-bootstrap --environment <choice> --tracker <choice> --runner <choice> --confirm`.
 
 2. **Mission & Goals Onboarding:**
-   If the project does not yet have a confirmed `.smith/project.yaml`, run:
+   If the project does not yet have a confirmed `.awino/project.yaml`, run:
    ```powershell
    awino onboard
    ```
@@ -99,7 +99,7 @@ claude plugin install awino@awino
 ```
 
 The native install provides the `awino` agent and all 16 canonical `awino-*` skills
-automatically. It does not initialize `.seeds` or `.smith`, install Python, or run a
+automatically. It does not initialize `.seeds` or `.awino`, install Python, or run a
 global shell installer. The deterministic gate ledger is an optional CLI layer and
 requires `uv`. Its launcher automatically creates or refreshes a locked `.venv`
 for each installed plugin version and prints `DEGRADED` when `uv` is unavailable.
@@ -156,7 +156,9 @@ The startup display reports `Project`, `Mission confidence`, `Toolchain`, `Track
 **Agent Smith** is the former product name. The `smith` executable, `agent-smith`
 persona, legacy environment names, and some repository filenames remain deprecated
 compatibility aliases. `AGENT_SMITH.md` is a deprecated pointer to `AWINO.md`, not
-a second constitution. New instructions, automation, and examples must use the
+a second constitution. A pre-rename project whose state lives in `.smith/` keeps
+working: the first command that touches state transparently migrates it to
+`.awino/` (atomic rename, zero data loss). New instructions, automation, and examples must use the
 `awino` command and A.W.I.N.O. identity.
 
 ## Optional modes

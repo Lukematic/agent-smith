@@ -11,7 +11,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from smith import cli
+from awino import cli
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -71,7 +71,7 @@ class TestUpdateCheckStandaloneClone:
 
         origin = tmp_path / "origin"
         origin.mkdir()
-        # Real HOME_MARKERS so SmithPaths.discover() recognizes this
+        # Real HOME_MARKERS so AwinoPaths.discover() recognizes this
         # disposable clone as an A.W.I.N.O. home rather than falling back to
         # the actual source tree running the test - the exact mistake the
         # first draft of this test made, caught by its own assertion.

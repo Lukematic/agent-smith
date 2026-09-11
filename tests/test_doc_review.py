@@ -1,4 +1,4 @@
-"""Tests for ``smith.doc_review``: rubric application and the two hard caps.
+"""Tests for ``awino.doc_review``: rubric application and the two hard caps.
 
 Real subagent spawning is out of scope here (see module docstring in
 doc_review.py): these tests inject a fake ``ReviewerFn`` to drive the
@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from smith import doc_review
-from smith.doc_review import (
+from awino import doc_review
+from awino.doc_review import (
     DocReviewResult,
     Issue,
     RubricKind,
@@ -21,8 +21,8 @@ from smith.doc_review import (
     run_review_loop,
     score_document,
 )
-from smith.enforce import ReviewVerdict
-from smith.spawn import Role
+from awino.enforce import ReviewVerdict
+from awino.spawn import Role
 
 # ── rubric application against inline fixtures ───────────────────────────────
 

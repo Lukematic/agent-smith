@@ -99,7 +99,7 @@ Exit: `awino auto --max-seeds 2 --confirm-budget` closes two real Low-priority S
 ### Phase D — Worktree isolation (loop-level, second half)
 
 Seed `7028` already names it: opt-in git worktree per delegated batch. `awino auto
---isolate` runs each Seed in `.smith/worktrees/<seed-id>`, merges on `COMPLETE`, leaves
+--isolate` runs each Seed in `.awino/worktrees/<seed-id>`, merges on `COMPLETE`, leaves
 the worktree on any stop. This is the last piece the constitution requires before
 "loop-level" is an honest label.
 

@@ -7,20 +7,20 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from smith.drift import removed_symbols, symbol_drift
+from awino.drift import removed_symbols, symbol_drift
 
 DIFF_ENUM_VALUE = """\
-diff --git a/src/smith/enforce.py b/src/smith/enforce.py
---- a/src/smith/enforce.py
-+++ b/src/smith/enforce.py
+diff --git a/src/awino/enforce.py b/src/awino/enforce.py
+--- a/src/awino/enforce.py
++++ b/src/awino/enforce.py
 @@ -83,3 +83,2 @@ class ReviewVerdict(StrEnum):
      CHANGES_REQUESTED = "changes-requested"
 -    BLOCKED = "blocked"
 """
 
 DIFF_FUNCTION = """\
---- a/src/smith/x.py
-+++ b/src/smith/x.py
+--- a/src/awino/x.py
++++ b/src/awino/x.py
 @@
 -def _load_runner_recipes(project):
 -    return []
@@ -28,8 +28,8 @@ DIFF_FUNCTION = """\
 """
 
 DIFF_RENAME = """\
---- a/src/smith/x.py
-+++ b/src/smith/x.py
+--- a/src/awino/x.py
++++ b/src/awino/x.py
 @@
 -MAX_CONCURRENT = 6
 +MAX_PARALLEL = 6

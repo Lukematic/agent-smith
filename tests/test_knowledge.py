@@ -11,13 +11,13 @@ from pathlib import Path
 
 import pytest
 
-from smith.knowledge import BudgetExceeded, KnowledgeStore, Manifest
-from smith.paths import SmithPaths
+from awino.knowledge import BudgetExceeded, KnowledgeStore, Manifest
+from awino.paths import AwinoPaths
 
 
 @pytest.fixture
 def store() -> KnowledgeStore:
-    return KnowledgeStore(SmithPaths.discover())
+    return KnowledgeStore(AwinoPaths.discover())
 
 
 class TestRegistryIntegrity:
@@ -124,12 +124,12 @@ class TestManifest:
 
 class TestPaths:
     def test_discovery_finds_the_smith_root(self) -> None:
-        paths = SmithPaths.discover()
+        paths = AwinoPaths.discover()
         assert (paths.root / "plugin.json").is_file()
         assert paths.registry.is_file()
 
     def test_scaffold_is_idempotent(self, tmp_path: Path) -> None:
-        paths = SmithPaths(root=tmp_path)
+        paths = AwinoPaths(root=tmp_path)
         first = paths.ensure_scaffold()
         second = paths.ensure_scaffold()
         assert first

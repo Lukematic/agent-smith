@@ -103,7 +103,7 @@ Every node is one existing command. Every edge is a fixed rule on an observable 
 | Node | Calls (already exists) | Reads | Writes |
 | --- | --- | --- | --- |
 | LOCATE | `start` internals, `recall`, `playbook.load_intent` | ledger, lessons, intent | nothing |
-| PROVISION | `provision.plan/apply` | fs | `.smith/`, `.venv` with consent |
+| PROVISION | `provision.plan/apply` | fs | `.awino/`, `.venv` with consent |
 | ROUTE | `dispatch.decide` | catalog | nothing |
 | LADDER | **new** `ladder.choose` = `models.detect_rung` + `models` verifier strength + scope count | rung-verdict | `machine.json` node+loop |
 | BUDGET | print | - | waits |

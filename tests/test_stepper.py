@@ -12,11 +12,11 @@ from pathlib import Path
 
 import pytest
 
-from smith import heilmeier, machine, stepper
-from smith.enforce import Ledger, TaskClass
-from smith.machine import Machine, Node
-from smith.paths import SmithPaths
-from smith.skill_catalog import SkillCatalog
+from awino import heilmeier, machine, stepper
+from awino.enforce import Ledger, TaskClass
+from awino.machine import Machine, Node
+from awino.paths import AwinoPaths
+from awino.skill_catalog import SkillCatalog
 
 SMITH_ROOT = Path(__file__).resolve().parents[1]
 
@@ -29,7 +29,7 @@ def ctx(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> stepper.StepContext:
         "[project]\nname='p'\nversion='0.1'\ndependencies=['pytest']\n[tool.pytest.ini_options]\ntestpaths=['tests']\n",
         encoding="utf-8",
     )
-    state = project / ".smith"
+    state = project / ".awino"
     (state / "run").mkdir(parents=True)
     (state / "memory").mkdir()
     (project / ".venv").mkdir()
@@ -47,7 +47,7 @@ def ctx(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> stepper.StepContext:
         state_root=state,
         project=project,
         home=home,
-        paths=SmithPaths(root=home),
+        paths=AwinoPaths(root=home),
         ledger=Ledger(state),
         catalog=SkillCatalog(Path("/n"), Path("/n"), SMITH_ROOT / "skills"),
         scope=["tests/test_a.py"],

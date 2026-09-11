@@ -19,7 +19,7 @@ ready Seed. Read-only. In a chat session, just say "start" - the agent runs it.
 awino start --fix
 ```
 
-Creates `.smith/` state, creates `.venv` when a `pyproject.toml` exists, and
+Creates `.awino/` state, creates `.venv` when a `pyproject.toml` exists, and
 asks one yes/no question for anything that is a human decision (create a
 project file? init a tracker?). Nothing silent: every action prints
 `CREATED`/`DECLINED`/`FAILED`.

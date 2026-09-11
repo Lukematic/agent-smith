@@ -14,7 +14,7 @@ SMITH_ROOT = Path(__file__).resolve().parents[1]
 
 def _cli(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "-m", "smith.cli", *args],
+        [sys.executable, "-m", "awino.cli", *args],
         cwd=cwd,
         env={**dict(os.environ), "PYTHONPATH": str(SMITH_ROOT / "src")},
         capture_output=True,

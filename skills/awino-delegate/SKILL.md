@@ -20,7 +20,7 @@ machines while retaining focused subagent execution.
 
 For non-trivial work:
 
-1. Load confirmed `.smith/project.yaml` and the active issue/run.
+1. Load confirmed `.awino/project.yaml` and the active issue/run.
 2. If planning decisions remain, run `awino ask "<question>"` before posing
    each one. It refuses (exit 1, `ALREADY_ASKED`) if an equivalent question
    or answer already exists this session, so a repeated planning question

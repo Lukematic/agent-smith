@@ -112,7 +112,7 @@ Once required fields are present:
 awino onboard --confirm
 ```
 
-This writes `.smith/project.yaml`, the project-local source of truth for confirmed
+This writes `.awino/project.yaml`, the project-local source of truth for confirmed
 intent. Then hand off to `awino-rpi` for repository research.
 
 ## Failure Modes
@@ -132,7 +132,7 @@ intent. Then hand off to `awino-rpi` for repository research.
 
 Done when:
 
-- `.smith/project.yaml` exists with `source: confirmed`;
+- `.awino/project.yaml` exists with `source: confirmed`;
 - mission, primary user, at least one goal, at least one tenet, and a success
   metric are present;
 - the user chose or rejected the recommended direction;

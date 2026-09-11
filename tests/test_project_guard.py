@@ -3,10 +3,10 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from smith.enforce import Ledger, TaskClass
-from smith.onboarding import ProjectIntent, WorkflowPolicy
-from smith.project_guard import pre_tool_decision, project_context
-from smith.session_state import bind_run, start
+from awino.enforce import Ledger, TaskClass
+from awino.onboarding import ProjectIntent, WorkflowPolicy
+from awino.project_guard import pre_tool_decision, project_context
+from awino.session_state import bind_run, start
 
 
 def intent() -> ProjectIntent:
@@ -99,7 +99,7 @@ def test_one_task_per_session_rejects_second_run(tmp_path: Path) -> None:
 
 
 def test_bugfix_guard_denies_ordinary_production_edits_until_authorized(tmp_path: Path) -> None:
-    ledger = Ledger(tmp_path / ".smith")
+    ledger = Ledger(tmp_path / ".awino")
     run = ledger.open(TaskClass.BUGFIX, "fix", file_scope=["src/app.py"])
     production = tmp_path / "src" / "app.py"
 
@@ -115,7 +115,7 @@ def test_bugfix_guard_denies_ordinary_production_edits_until_authorized(tmp_path
 
 
 def test_bugfix_guard_allows_test_evidence_edits_before_authorization(tmp_path: Path) -> None:
-    ledger = Ledger(tmp_path / ".smith")
+    ledger = Ledger(tmp_path / ".awino")
     ledger.open(TaskClass.BUGFIX, "fix", file_scope=["src/app.py"])
 
     assert (
@@ -127,10 +127,10 @@ def test_bugfix_guard_allows_test_evidence_edits_before_authorization(tmp_path: 
 
 
 def test_bugfix_guard_uses_nested_install_state_root(tmp_path: Path) -> None:
-    smith_home = tmp_path / ".smith"
-    smith_home.mkdir()
-    (smith_home / "plugin.json").write_text("{}\n", encoding="utf-8")
-    ledger = Ledger(smith_home / "state")
+    awino_home = tmp_path / ".awino"
+    awino_home.mkdir()
+    (awino_home / "plugin.json").write_text("{}\n", encoding="utf-8")
+    ledger = Ledger(awino_home / "state")
     ledger.open(TaskClass.BUGFIX, "fix", file_scope=["src/app.py"])
 
     result = pre_tool_decision(

@@ -97,8 +97,8 @@ cd awino
 
 ```bash
 cd your-project
-git submodule add https://github.com/Lukematic/agent-smith.git .smith
-cd .smith && ./install.sh --local
+git submodule add https://github.com/Lukematic/agent-smith.git .awino
+cd .awino && ./install.sh --local
 ```
 
 `--local` installs to `./.agents/` instead of `~/.agents/`, so the install travels
@@ -188,7 +188,7 @@ believing the update worked and knowing it did.
 If user-owned state needs restoration, use the exact path printed by preflight:
 
 ```bash
-awino rollback ~/.smith/backups/<timestamp>  # project state only
+awino rollback ~/.awino/backups/<timestamp>  # project state only
 # Add --include-harness only when intentionally restoring detected editor config.
 ```
 

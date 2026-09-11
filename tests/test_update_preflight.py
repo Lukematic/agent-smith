@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from smith.updater import PreflightError, restore, update_preflight
+from awino.updater import PreflightError, restore, update_preflight
 
 
 def git(cwd: Path, *args: str) -> None:
@@ -31,9 +31,9 @@ def repo(tmp_path: Path) -> tuple[Path, Path]:
 def test_dirty_clone_refuses_before_pull_but_writes_backup(tmp_path: Path) -> None:
     source, _ = repo(tmp_path)
     project = tmp_path / "project"
-    (project / ".smith" / "memory").mkdir(parents=True)
-    (project / ".smith" / "project.yaml").write_text("name: mine\n", encoding="utf-8")
-    (project / ".smith" / "memory" / "facts.md").write_text("fact\n", encoding="utf-8")
+    (project / ".awino" / "memory").mkdir(parents=True)
+    (project / ".awino" / "project.yaml").write_text("name: mine\n", encoding="utf-8")
+    (project / ".awino" / "memory" / "facts.md").write_text("fact\n", encoding="utf-8")
     (project / ".seeds").mkdir()
     (project / ".seeds" / "issues.jsonl").write_text('{"id":"6303"}\n', encoding="utf-8")
     (source / "local.txt").write_text("dirty", encoding="utf-8")
@@ -42,8 +42,8 @@ def test_dirty_clone_refuses_before_pull_but_writes_backup(tmp_path: Path) -> No
         update_preflight(source, project, harness_paths=[])
 
     backup = raised.value.backup
-    assert (backup / "project" / ".smith" / "project.yaml").is_file()
-    assert (backup / "project" / ".smith" / "memory" / "facts.md").is_file()
+    assert (backup / "project" / ".awino" / "project.yaml").is_file()
+    assert (backup / "project" / ".awino" / "memory" / "facts.md").is_file()
     assert (backup / "project" / ".seeds" / "issues.jsonl").is_file()
 
 
@@ -92,7 +92,7 @@ def test_local_commit_refuses_pull_as_diverged(tmp_path: Path) -> None:
 def test_restore_recovers_project_and_harness_state(tmp_path: Path) -> None:
     source, _ = repo(tmp_path)
     project = tmp_path / "project"
-    memory = project / ".smith" / "memory"
+    memory = project / ".awino" / "memory"
     memory.mkdir(parents=True)
     lesson = memory / "lessons.md"
     lesson.write_text("before\n", encoding="utf-8")

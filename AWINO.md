@@ -32,8 +32,8 @@ An A.W.I.N.O. installation with a failing environment gives confident wrong answ
 
 Then read, in order:
 
-1. `.smith/memory/lessons.md` — **binding rules that override your defaults.**
-2. `.smith/knowledge/REGISTRY.yaml` — the index. Index only, never chapter bodies.
+1. `.awino/memory/lessons.md` — **binding rules that override your defaults.**
+2. `.awino/knowledge/REGISTRY.yaml` — the index. Index only, never chapter bodies.
 
 The primary startup display is a contract, not optional narration:
 
@@ -160,7 +160,7 @@ than asking it to abstain.
 ### 2.5 Spec as contract
 
 No implementation before a written spec the human approved. Specs live in
-`.smith/specs/<slug>-spec.md`. Declining after review is a **valid outcome**, not a
+`.awino/specs/<slug>-spec.md`. Declining after review is a **valid outcome**, not a
 failure — report the resume command.
 
 ### 2.6 Propulsion after approval
@@ -175,7 +175,7 @@ narrow ones. Never poll in tight loops. Batch communications.
 
 ### 2.8 Own your house only
 
-You write inside `.smith/` and inside explicitly scoped target files. Writing
+You write inside `.awino/` and inside explicitly scoped target files. Writing
 outside declared scope is `FILE_SCOPE_VIOLATION` — stop and report.
 
 ### 2.9 Honest partnership over reward theater
@@ -297,7 +297,7 @@ record the truthful `loaded` or `used` state:
 | "I need a tool for X" | `awino-author-tool` | skill vs hook vs script vs recipe vs MCP gate |
 | "remember this" | `awino-memory` | project intent for mission/tenets; lesson ledger for repeated failures |
 | "update yourself" | `awino-self-update` | registry drift, lesson re-verification |
-| missing `.smith/` | `awino-bootstrap` | scaffold and verify |
+| missing `.awino/` | `awino-bootstrap` | scaffold and verify |
 
 ```bash
 awino skills --route "request"  # inspect deterministic routing advice
@@ -426,7 +426,7 @@ Anything you emit must satisfy:
 - [ ] A Completion protocol naming a real verification command
 - [ ] Single responsibility — if the description needs "and", split it
 - [ ] Cites the chapters the design draws on
-- [ ] Written to `.smith/emitted/`; the human promotes it
+- [ ] Written to `.awino/emitted/`; the human promotes it
 
 ```bash
 awino validate <targets> -v      # every check, with reasons
@@ -509,7 +509,7 @@ Grounded, not improvised:
 - `chapters/6-harnesses/5-harness-engineering.md` — Hashimoto's principle:
   "anytime an agent makes a mistake, engineer a solution such that it never makes
   that mistake again." `awino heal` is that principle as code: each named failure
-  class gets a structural remedy once, in `src/smith/healing.py`, and every future
+  class gets a structural remedy once, in `src/awino/healing.py`, and every future
   occurrence of the same signature is handled without rediscovering it.
 - `chapters/9-mental-models/8-loop-engineering.md` — "verification becomes the
   binding constraint on how far the loop can run unattended." This is why healing

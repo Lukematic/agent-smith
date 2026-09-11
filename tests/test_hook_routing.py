@@ -17,7 +17,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from smith import onboarding
+from awino import onboarding
 
 SMITH_ROOT = Path(__file__).resolve().parents[1]
 AGENT_GUIDE = SMITH_ROOT / "docs" / "agent-guide.md"
@@ -25,7 +25,7 @@ AGENT_GUIDE = SMITH_ROOT / "docs" / "agent-guide.md"
 
 def _hook(prompt: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "-m", "smith.cli", "hook", "prompt"],
+        [sys.executable, "-m", "awino.cli", "hook", "prompt"],
         input=json.dumps({"prompt": prompt}),
         cwd=cwd,
         env={**dict(os.environ), "PYTHONPATH": str(SMITH_ROOT / "src")},
@@ -70,7 +70,7 @@ class TestHookNeverSpawns:
     ) -> None:
         project = _project(tmp_path)
         _hook("pytest is failing with a ValueError in the loader", project)
-        state = project / ".smith"
+        state = project / ".awino"
         assert not list(state.rglob("dispatch-f*")) if state.exists() else True
 
 
@@ -83,7 +83,7 @@ class TestDocsBoundaryStatementSurvives:
 class TestSessionStartRequiresConfirmedProjectIntent:
     def _session_start(self, project: Path) -> str:
         result = subprocess.run(
-            [sys.executable, "-m", "smith.cli", "hook", "session-start"],
+            [sys.executable, "-m", "awino.cli", "hook", "session-start"],
             input=json.dumps({"session_id": "setup-test"}),
             cwd=project,
             env={**dict(os.environ), "PYTHONPATH": str(SMITH_ROOT / "src")},
@@ -133,7 +133,7 @@ class TestSessionStartSurvivesCompaction:
 
     def _hook(self, event: str, payload: dict, cwd: Path) -> str:
         r = subprocess.run(
-            [sys.executable, "-m", "smith.cli", "hook", event],
+            [sys.executable, "-m", "awino.cli", "hook", event],
             input=json.dumps(payload),
             cwd=cwd,
             env={**dict(os.environ), "PYTHONPATH": str(SMITH_ROOT / "src")},
@@ -164,7 +164,7 @@ class TestSessionStartSurvivesCompaction:
             [
                 sys.executable,
                 "-m",
-                "smith.cli",
+                "awino.cli",
                 "best",
                 "pytest is failing with a ValueError in the loader",
             ],

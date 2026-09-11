@@ -75,7 +75,7 @@ labelling.
 ## 2. Which model fires when
 
 Four models, four distinct triggers. Each answers a different question, and each
-is a function in `src/smith/models.py`, not a passage to read.
+is a function in `src/awino/models.py`, not a passage to read.
 
 | Model | Fires when | Question it answers | Command |
 | --- | --- | --- | --- |
@@ -236,10 +236,10 @@ building the sensor before trusting the output.
 
 ## 7. Reading order
 
-1. `src/smith/models.py` for the four decision functions
+1. `src/awino/models.py` for the four decision functions
 2. `tests/test_models.py` for the assertion that each one changes a decision
-3. `src/smith/enforce.py` for the gate contracts and `adjudicate()`
-4. `src/smith/health.py` for the project-level guides and sensors
+3. `src/awino/enforce.py` for the gate contracts and `adjudicate()`
+4. `src/awino/health.py` for the project-level guides and sensors
 
 Grounding: chapters/6-harnesses/4-harness-as-control-system.md,
 chapters/6-harnesses/5-harness-engineering.md,

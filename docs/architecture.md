@@ -42,7 +42,7 @@ The folder contains a portable persona, model-invoked skills, deterministic CLI,
 and an Open Plugin manifest for compatible harnesses.
 
 ```
-.smith/
+.awino/
   plugin.json               # Open Plugin manifest
   AWINO.md                  # L1 canonical constitution — always loaded
   AGENT_SMITH.md            # deprecated compatibility pointer
@@ -75,7 +75,7 @@ and an Open Plugin manifest for compatible harnesses.
     SESSION_LOG.md          # history + three-strikes tracking
   templates/
     agent.md.tmpl
-  src/smith/                # the deterministic half: anything a script does reliably
+  src/awino/                # the deterministic half: anything a script does reliably
     cli.py                  # every command, typer
     knowledge.py            # fetch, cache, provenance, drift, routing, budget
     validate.py             # artifact-aware validator with PASS/WARN/SKIP/FAIL

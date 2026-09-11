@@ -62,7 +62,7 @@ skills. A URL pasted into chat is not installation authorization: Claude Code's
 plugin trust boundary requires the user to perform one explicit install action.
 The agent must not replace that action with a global Bash mutation.
 
-Plugin installation does not create `.seeds`, `.smith`, or any project-local state.
+Plugin installation does not create `.seeds`, `.awino`, or any project-local state.
 In a new project, A.W.I.N.O. asks for approval before using `awino work-init`.
 
 The agent and skills need no Python dependency. The deterministic ledger CLI needs

@@ -21,10 +21,9 @@ HISTORICAL_PREFIXES = ("docs/updates/", "memory/")
 HISTORICAL_FILES = {"docs/name-options.txt"}
 LEGACY_FILES = {"AGENT_SMITH.md", "agents/agent-smith.md"}
 COMPATIBILITY_IMPLEMENTATIONS = {
-    "src/smith/skill_catalog.py",
-    "src/smith/health.py",
-    "src/smith/knowledge.py",
-    "src/smith/watch.py",
+    # Resolves the deprecated `smith-*` skill-name aliases to their canonical
+    # `awino-*` names for existing integrations (see skill_catalog.py).
+    "src/awino/skill_catalog.py",
 }
 
 OLD_BRAND = re.compile(r"\bAgent Smith\b|\bSmith(?:'s)?\b|\bsmith\s+[a-z]", re.IGNORECASE)
@@ -52,12 +51,9 @@ def _allowed_residue(path: Path, line: str) -> bool:
     if relative.startswith(HISTORICAL_PREFIXES):
         return True
 
-    # Python's installed module/package ABI and the on-disk state directory stay `.smith`.
-    if "src/smith" in line or re.search(r"(?:from|import) smith(?:\.|\b)", line):
-        return True
-    if re.search(r'[`"]smith(?:/|\.|_)|\bsmith\.cli:|--cov=smith|smith/healing\.py', line):
-        return True
-    if re.search(r"\bSmith(?:Paths|Path|Home|Workspace)\b", line):
+    # The deprecated `smith` console shim and the `.smith` -> `.awino` migration
+    # name the old surface explicitly; that is compatibility, not branding.
+    if "deprecated_smith_entry" in line:
         return True
     if ".smith" in line:
         line = line.replace(".smith", "")

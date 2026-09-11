@@ -1,7 +1,7 @@
 """Privacy regression: session_log.append() used to persist whatever text it
 was given verbatim, including secret-shaped strings. The UserPromptSubmit hook
 feeds every prompt through append(), so a pasted credential landed on disk in
-plaintext under .smith state. append() must now pass text through a redaction
+plaintext under .awino state. append() must now pass text through a redaction
 denylist before persisting, while ordinary technical content is unchanged.
 
 All secrets below are synthetic, constructed to match the shape only.
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from smith import session_log
+from awino import session_log
 
 # Synthetic, non-functional examples of each denylisted secret shape.
 AWS_KEY = "AKIA" + "IOSFODNN7EXAMPLE"

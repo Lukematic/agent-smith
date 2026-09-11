@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from smith.config_review import (
+from awino.config_review import (
     Category,
     Finding,
     Severity,

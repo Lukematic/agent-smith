@@ -15,9 +15,9 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from smith import session_markers
-from smith.cli import _workspace, buddy, project
-from smith.enforce import Ledger
+from awino import session_markers
+from awino.cli import _workspace, buddy, project
+from awino.enforce import Ledger
 
 
 @pytest.fixture()
@@ -33,7 +33,7 @@ def cli_runner(monkeypatch: pytest.MonkeyPatch) -> CliRunner:
 
 @pytest.fixture()
 def state_root(tmp_path: Path) -> Path:
-    root = tmp_path / ".smith"
+    root = tmp_path / ".awino"
     root.mkdir(parents=True, exist_ok=True)
     return root
 
@@ -57,7 +57,7 @@ def test_record_twice_then_count_is_two(state_root: Path) -> None:
 
 
 def test_record_creates_the_directory_when_missing(tmp_path: Path) -> None:
-    missing = tmp_path / "no-such-dir" / ".smith"
+    missing = tmp_path / "no-such-dir" / ".awino"
     path = session_markers.record_session_end(missing)
     assert path.is_file()
     assert session_markers.count_session_ends(missing) == 1
@@ -75,8 +75,8 @@ def test_best_end_branch_records_a_marker(monkeypatch: pytest.MonkeyPatch, tmp_p
     # not a copy of it: run the order, then read back through buddy's
     # real reporting function.
     monkeypatch.chdir(tmp_path)
-    (tmp_path / ".smith").mkdir(exist_ok=True)
-    (tmp_path / ".smith" / "MISSION.md").write_text("# Mission\n", encoding="utf-8")
+    (tmp_path / ".awino").mkdir(exist_ok=True)
+    (tmp_path / ".awino" / "MISSION.md").write_text("# Mission\n", encoding="utf-8")
 
     project._run_session_end_order()  # the code path `awino best --end` takes
 
@@ -91,7 +91,7 @@ def test_buddy_report_shows_the_measured_count(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    state_root = tmp_path / ".smith"
+    state_root = tmp_path / ".awino"
     state_root.mkdir(exist_ok=True)
     session_markers.record_session_end(state_root)
     session_markers.record_session_end(state_root)
@@ -107,7 +107,7 @@ def test_buddy_fix_catch_up_records_a_marker(
     # buddy --fix runs the session-end order by hand when no marker exists;
     # that firing must count too.
     monkeypatch.chdir(tmp_path)
-    state_root = tmp_path / ".smith"
+    state_root = tmp_path / ".awino"
     state_root.mkdir(exist_ok=True)
     (state_root / "MISSION.md").write_text("# Mission\n", encoding="utf-8")
 
@@ -123,7 +123,7 @@ def test_buddy_fix_skips_catch_up_once_a_marker_exists(
     # A second --fix must not re-run the session-end order: the marker from
     # the first catch-up means it is measured, not missing.
     monkeypatch.chdir(tmp_path)
-    state_root = tmp_path / ".smith"
+    state_root = tmp_path / ".awino"
     state_root.mkdir(exist_ok=True)
     (state_root / "MISSION.md").write_text("# Mission\n", encoding="utf-8")
 

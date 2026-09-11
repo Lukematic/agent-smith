@@ -15,9 +15,9 @@ improve every project that uses A.W.I.N.O.
 | Persona, skills, constitution | global/user | one maintained behavior source |
 | Knowledge registry and cache | global/user | the same source corpus everywhere |
 | Foundational agent lessons | global/user | universal harness rules |
-| Confirmed project intent | project `.smith/project.yaml` | mission differs per repository |
-| Project conventions and failures | project `.smith/memory/` | local, not doctrine |
-| Run ledger and Ralph state | project `.smith/` | belongs to the work |
+| Confirmed project intent | project `.awino/project.yaml` | mission differs per repository |
+| Project conventions and failures | project `.awino/memory/` | local, not doctrine |
+| Run ledger and Ralph state | project `.awino/` | belongs to the work |
 | Seeds worklist | project `.seeds/` | issues belong to the repository |
 | RPI research and plans | project `thoughts/` | describes the codebase |
 
@@ -77,7 +77,7 @@ It:
 4. reflects a mission draft with its source/confidence;
 5. asks one unresolved frontier question at a time;
 6. optionally offers Seeds initialization;
-7. persists confirmed intent to `.smith/project.yaml`.
+7. persists confirmed intent to `.awino/project.yaml`.
 
 Example:
 

@@ -10,10 +10,10 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from smith import cli, fair
-from smith.enforce import Ledger, TaskClass, adjudicate
-from smith.graph import GraphOutcome, run_worker_reviewer_graph
-from smith.spawn import Assignment, Role, Runner, SpawnResult, spawn_one
+from awino import cli, fair
+from awino.enforce import Ledger, TaskClass, adjudicate
+from awino.graph import GraphOutcome, run_worker_reviewer_graph
+from awino.spawn import Assignment, Role, Runner, SpawnResult, spawn_one
 
 ROOT = Path(__file__).parents[1]
 
@@ -370,10 +370,10 @@ def test_spawn_one_uses_fresh_real_subprocess_invocation_identities(
     assert first.invocation_id
     assert second.invocation_id
     assert first.invocation_id != second.invocation_id
-    prompts = list((tmp_path / ".smith" / "state" / "assignments").glob("worker-*.md"))
+    prompts = list((tmp_path / ".awino" / "state" / "assignments").glob("worker-*.md"))
     assert len(prompts) == 2
     assert prompts[0].read_bytes() != prompts[1].read_bytes()
-    assert not (tmp_path / ".smith" / "assignments").exists()
+    assert not (tmp_path / ".awino" / "assignments").exists()
 
 
 @pytest.mark.parametrize(

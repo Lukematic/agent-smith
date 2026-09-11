@@ -41,7 +41,7 @@ produce a zero exit code from a failing suite.
 ### 1. A run has a contract it did not choose
 
 ```bash
-awino gate open code-change "add retry to the fetch client" --scope src/smith/knowledge.py
+awino gate open code-change "add retry to the fetch client" --scope src/awino/knowledge.py
 ```
 
 ```
@@ -53,7 +53,7 @@ gates required before close:
   [ ] scope_respected
 ```
 
-The task class determines the gates, from a table in `src/smith/enforce.py`. The
+The task class determines the gates, from a table in `src/awino/enforce.py`. The
 agent cannot negotiate them because it never selects them. The table is data, so
 it can be diffed, reviewed, and unit tested, unlike a paragraph of prose.
 
@@ -81,7 +81,7 @@ command: uv run pytest
   | 71 passed in 3.35s
 ```
 
-Recorded per attempt into `.smith/run/<id>/evidence.jsonl`: the command, the real
+Recorded per attempt into `.awino/run/<id>/evidence.jsonl`: the command, the real
 exit code, a hash of the output, the first 4000 characters, and the duration.
 
 Gates with no command use `--attest`, and attestations are reported separately so
@@ -198,9 +198,9 @@ awino doctor --record
 
 ## Reading order
 
-1. `src/smith/enforce.py` for the contract table and `adjudicate()`
+1. `src/awino/enforce.py` for the contract table and `adjudicate()`
 2. `tests/test_enforce.py` for the refusal cases, which is where the guarantees live
-3. `src/smith/health.py` for the project-level gates
+3. `src/awino/health.py` for the project-level gates
 
 Grounding: chapters/6-harnesses/5-harness-engineering.md,
 chapters/11-agent-readiness/2-failure-modes.md, chapters/7-patterns/1-plan-build-review.md

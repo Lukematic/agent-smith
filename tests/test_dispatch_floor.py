@@ -20,13 +20,13 @@ from pathlib import Path
 
 import pytest
 
-from smith.dispatch import (
+from awino.dispatch import (
     FloorState,
     close_floor,
     open_floor,
 )
-from smith.enforce import Ledger, TaskClass
-from smith.skill_catalog import SkillCatalog
+from awino.enforce import Ledger, TaskClass
+from awino.skill_catalog import SkillCatalog
 
 SMITH_ROOT = Path(__file__).resolve().parents[1]
 
@@ -270,7 +270,7 @@ class TestReviewerFloor:
     def test_open_floor_reviewer_role_is_read_only_and_writes_no_scope(
         self, ledger: Ledger, run_id: str, tmp_path: Path
     ) -> None:
-        from smith.dispatch import open_floor
+        from awino.dispatch import open_floor
 
         _marker, verify = _passing_verify(tmp_path)
         state = open_floor(
@@ -293,7 +293,7 @@ class TestReviewerFloor:
     def test_reviewer_verdict_file_lives_under_state_root_not_project(
         self, ledger: Ledger, run_id: str, tmp_path: Path
     ) -> None:
-        from smith.dispatch import open_floor
+        from awino.dispatch import open_floor
 
         _marker, verify = _passing_verify(tmp_path)
         state = open_floor(
@@ -312,7 +312,7 @@ class TestReviewerFloor:
         assert str(tmp_path) not in state.verdict_path or "reviews" in state.verdict_path
 
     def test_ship_verdict_completes(self, ledger: Ledger, run_id: str, tmp_path: Path) -> None:
-        from smith.dispatch import close_floor, open_floor
+        from awino.dispatch import close_floor, open_floor
 
         _marker, verify = _passing_verify(tmp_path)
         state = open_floor(
@@ -339,7 +339,7 @@ class TestReviewerFloor:
     def test_revise_verdict_opens_a_worker_floor_with_feedback(
         self, ledger: Ledger, run_id: str, tmp_path: Path
     ) -> None:
-        from smith.dispatch import close_floor, open_floor
+        from awino.dispatch import close_floor, open_floor
 
         _marker, verify = _passing_verify(tmp_path)
         state = open_floor(
@@ -367,7 +367,7 @@ class TestReviewerFloor:
         assert result.next_state.role != "reviewer"
 
     def test_missing_verdict_file_blocks(self, ledger: Ledger, run_id: str, tmp_path: Path) -> None:
-        from smith.dispatch import close_floor, open_floor
+        from awino.dispatch import close_floor, open_floor
 
         _marker, verify = _passing_verify(tmp_path)
         open_floor(
@@ -387,7 +387,7 @@ class TestReviewerFloor:
         assert result.outcome.value in ("max-iterations", "blocked")
 
     def test_malformed_verdict_blocks(self, ledger: Ledger, run_id: str, tmp_path: Path) -> None:
-        from smith.dispatch import close_floor, open_floor
+        from awino.dispatch import close_floor, open_floor
 
         _marker, verify = _passing_verify(tmp_path)
         state = open_floor(

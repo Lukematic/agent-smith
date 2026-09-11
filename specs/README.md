@@ -16,7 +16,7 @@ Files are interoperable GitHub-flavored Markdown. Specifications should state th
 
 ## Stability
 
-Specifications are reusable, version-controlled project records rather than ephemeral prompts. Edit them only when the approved contract changes, preserve enough context for a fresh implementer or reviewer, and keep runtime artifacts under `.smith/state/` instead.
+Specifications are reusable, version-controlled project records rather than ephemeral prompts. Edit them only when the approved contract changes, preserve enough context for a fresh implementer or reviewer, and keep runtime artifacts under `.awino/state/` instead.
 
 ## FAIR
 

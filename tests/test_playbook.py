@@ -10,8 +10,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from smith.enforce import Gate, Ledger, TaskClass
-from smith.playbook import (
+from awino.enforce import Gate, Ledger, TaskClass
+from awino.playbook import (
     DEFAULT_PLAYBOOK,
     grill_questions,
     load_playbook,
@@ -98,8 +98,8 @@ class TestRunEvent:
 
 class TestStepsDeclareSkills:
     def test_every_default_step_maps_to_a_real_skill_or_direct(self) -> None:
-        from smith.playbook import STEP_SKILLS
-        from smith.skill_catalog import SkillCatalog
+        from awino.playbook import STEP_SKILLS
+        from awino.skill_catalog import SkillCatalog
 
         names = {
             s.name
@@ -120,8 +120,8 @@ class TestStepsDeclareSkills:
 
 class TestElevator:
     def test_elevator_routes_recalls_and_names_the_next_command(self, tmp_path: Path) -> None:
-        from smith.playbook import elevator
-        from smith.skill_catalog import SkillCatalog
+        from awino.playbook import elevator
+        from awino.skill_catalog import SkillCatalog
 
         s = _state(tmp_path)
         (s / "memory").mkdir()
@@ -148,8 +148,8 @@ class TestElevator:
     def test_elevator_on_a_vague_ask_asks_one_question_and_gives_no_command(
         self, tmp_path: Path
     ) -> None:
-        from smith.playbook import elevator
-        from smith.skill_catalog import SkillCatalog
+        from awino.playbook import elevator
+        from awino.skill_catalog import SkillCatalog
 
         s = _state(tmp_path)
         catalog = SkillCatalog(
@@ -161,8 +161,8 @@ class TestElevator:
         assert "NEXT  awino gate open" not in joined
 
     def test_elevator_announces_a_stance_switch(self, tmp_path: Path) -> None:
-        from smith.playbook import elevator
-        from smith.skill_catalog import SkillCatalog
+        from awino.playbook import elevator
+        from awino.skill_catalog import SkillCatalog
 
         s = _state(tmp_path)
         catalog = SkillCatalog(
@@ -180,12 +180,12 @@ class TestElevator:
 
 class TestElevatorRemembers:
     def _catalog(self):
-        from smith.skill_catalog import SkillCatalog
+        from awino.skill_catalog import SkillCatalog
 
         return SkillCatalog(Path("/n"), Path("/n"), Path(__file__).resolve().parents[1] / "skills")
 
     def test_a_routed_request_is_persisted_as_intent(self, tmp_path: Path) -> None:
-        from smith.playbook import elevator, load_intent
+        from awino.playbook import elevator, load_intent
 
         s = _state(tmp_path)
         elevator(
@@ -201,7 +201,7 @@ class TestElevatorRemembers:
         assert "ValueError" in intent["request"]
 
     def test_session_start_carries_the_open_intent(self, tmp_path: Path) -> None:
-        from smith.playbook import elevator
+        from awino.playbook import elevator
 
         s = _state(tmp_path)
         elevator(
@@ -215,14 +215,14 @@ class TestElevatorRemembers:
         assert any("CARRYING" in ln and "awino-debug" in ln for ln in lines)
 
     def test_an_ambiguous_request_persists_nothing(self, tmp_path: Path) -> None:
-        from smith.playbook import elevator, load_intent
+        from awino.playbook import elevator, load_intent
 
         s = _state(tmp_path)
         elevator("xyzzy plugh wibble", s, tmp_path, ledger=Ledger(s), catalog=self._catalog())
         assert load_intent(s) is None
 
     def test_task_close_clears_the_intent(self, tmp_path: Path) -> None:
-        from smith.playbook import elevator, load_intent
+        from awino.playbook import elevator, load_intent
 
         s = _state(tmp_path)
         elevator(

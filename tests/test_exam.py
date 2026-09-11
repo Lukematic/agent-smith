@@ -3,7 +3,7 @@ disposable, and render reports honestly."""
 
 from __future__ import annotations
 
-from smith.exam import PROBES, ProbeResult, render
+from awino.exam import PROBES, ProbeResult, render
 
 
 def test_every_probe_names_a_real_cli_entry_and_an_expectation() -> None:

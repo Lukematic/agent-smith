@@ -7,17 +7,17 @@ from pathlib import Path
 
 import pytest
 
-from smith.debugging import (
+from awino.debugging import (
     ArchitectureAssessment,
     DebugPhase,
     DebugSession,
     FailureSignature,
 )
-from smith.enforce import Ledger, TaskClass
+from awino.enforce import Ledger, TaskClass
 
 
 def session(tmp_path: Path) -> tuple[Ledger, DebugSession]:
-    ledger = Ledger(tmp_path / ".smith")
+    ledger = Ledger(tmp_path / ".awino")
     run = ledger.open(TaskClass.BUGFIX, "fix deterministic failure", file_scope=["src/app.py"])
     return ledger, DebugSession.begin(ledger, run.run_id, "pytest fails", "agent")
 
@@ -117,7 +117,7 @@ def run_cli(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
     env["SMITH_PROJECT"] = str(project)
     env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
     return subprocess.run(
-        [sys.executable, "-m", "smith.cli", *args],
+        [sys.executable, "-m", "awino.cli", *args],
         cwd=project,
         env=env,
         capture_output=True,

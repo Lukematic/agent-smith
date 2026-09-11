@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from smith.skill_catalog import SkillCatalog
+from awino.skill_catalog import SkillCatalog
 
 
 def write_skill(root: Path, name: str, description: str) -> Path:

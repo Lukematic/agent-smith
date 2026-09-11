@@ -7,14 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from smith.harness import Harness, Target, _link_or_copy, install
-from smith.ownership import manifest_path
+from awino.harness import Harness, Target, _link_or_copy, install
+from awino.ownership import manifest_path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture
-def smith_home(tmp_path: Path) -> Path:
+def awino_home(tmp_path: Path) -> Path:
     home = tmp_path / "source"
     (home / "agents").mkdir(parents=True)
     (home / "skills" / "awino-test").mkdir(parents=True)
@@ -83,13 +83,13 @@ def test_modified_owned_copy_is_backed_up_and_refused(
     assert (destination / "SKILL.md").read_text(encoding="utf-8") == "local"
 
 
-def test_modified_persona_is_backed_up_and_refused(smith_home: Path, tmp_path: Path) -> None:
+def test_modified_persona_is_backed_up_and_refused(awino_home: Path, tmp_path: Path) -> None:
     target = Target(Harness.CLAUDE, tmp_path / ".claude", "project")
     target.root.mkdir()
-    assert not any(action.failed for action in install(smith_home, target, skills=False))
+    assert not any(action.failed for action in install(awino_home, target, skills=False))
     target.persona_path.write_text("local persona\n", encoding="utf-8")
 
-    actions = install(smith_home, target, skills=False)
+    actions = install(awino_home, target, skills=False)
 
     assert actions[0].failed
     backup = Path(actions[0].detail.split("backup: ", 1)[1])
@@ -97,12 +97,12 @@ def test_modified_persona_is_backed_up_and_refused(smith_home: Path, tmp_path: P
     assert target.persona_path.read_text(encoding="utf-8") == "local persona\n"
 
 
-def test_manifest_is_deterministic_and_records_hashes(smith_home: Path, tmp_path: Path) -> None:
+def test_manifest_is_deterministic_and_records_hashes(awino_home: Path, tmp_path: Path) -> None:
     target = Target(Harness.CLAUDE, tmp_path / ".claude", "project")
     target.root.mkdir()
-    install(smith_home, target, skills=False)
+    install(awino_home, target, skills=False)
     first = manifest_path(target.root).read_bytes()
-    install(smith_home, target, skills=False)
+    install(awino_home, target, skills=False)
     second = manifest_path(target.root).read_bytes()
     payload = json.loads(second)
 
@@ -112,13 +112,13 @@ def test_manifest_is_deterministic_and_records_hashes(smith_home: Path, tmp_path
 
 
 def test_windows_persona_install_writes_the_exact_hashed_lf_bytes(
-    smith_home: Path, tmp_path: Path
+    awino_home: Path, tmp_path: Path
 ) -> None:
     target = Target(Harness.CLAUDE, tmp_path / ".claude", "project")
     target.root.mkdir()
 
-    first = install(smith_home, target, skills=False)
-    second = install(smith_home, target, skills=False)
+    first = install(awino_home, target, skills=False)
+    second = install(awino_home, target, skills=False)
 
     assert first[0].outcome == "INSTALLED"
     assert second[0].outcome == "SKIPPED"
@@ -126,14 +126,14 @@ def test_windows_persona_install_writes_the_exact_hashed_lf_bytes(
 
 
 def test_windows_persona_real_edit_is_still_backed_up_and_refused(
-    smith_home: Path, tmp_path: Path
+    awino_home: Path, tmp_path: Path
 ) -> None:
     target = Target(Harness.CLAUDE, tmp_path / ".claude", "project")
     target.root.mkdir()
-    install(smith_home, target, skills=False)
+    install(awino_home, target, skills=False)
     target.persona_path.write_bytes(target.persona_path.read_bytes() + b"local edit\n")
 
-    action = install(smith_home, target, skills=False)[0]
+    action = install(awino_home, target, skills=False)[0]
 
     assert action.failed
     assert "backup:" in action.detail

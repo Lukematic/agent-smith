@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from smith import cli
-from smith.seeds import Issue, SeedsResult, SeedsState
+from awino import cli
+from awino.seeds import Issue, SeedsResult, SeedsState
 
 
 def run_cli(
@@ -24,7 +24,7 @@ def run_cli(
     if path_prefix is not None:
         env["PATH"] = f"{path_prefix}{os.pathsep}{env['PATH']}"
     return subprocess.run(
-        [sys.executable, "-m", "smith.cli", *args],
+        [sys.executable, "-m", "awino.cli", *args],
         cwd=project,
         env=env,
         capture_output=True,

@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from smith import fair, mission
-from smith.mission import Confidence, Kind
+from awino import fair, mission
+from awino.mission import Confidence, Kind
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
@@ -290,9 +290,9 @@ class TestProjectKind:
 
 class TestRealProject:
     def test_smith_itself_is_discoverable(self) -> None:
-        from smith.paths import SmithPaths
+        from awino.paths import AwinoPaths
 
-        found = mission.discover(SmithPaths.discover().root)
+        found = mission.discover(AwinoPaths.discover().root)
         assert found.statement
         assert found.confidence.trustworthy
 
@@ -303,14 +303,14 @@ class _FakeIssue:
 
 
 class _FakeTracker:
-    """Minimal stand-in for smith.seeds.Seeds, usable without a real .seeds/."""
+    """Minimal stand-in for awino.seeds.Seeds, usable without a real .seeds/."""
 
     def __init__(self, titles: list[str]) -> None:
         self._titles = titles
 
     def state(self):
-        # Duck-typed to match smith.seeds.Seeds.state()'s return shape.
-        from smith.seeds import SeedsState
+        # Duck-typed to match awino.seeds.Seeds.state()'s return shape.
+        from awino.seeds import SeedsState
 
         return SeedsState.READY, "ready"
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from smith.project_template import (
+from awino.project_template import (
     independent_subprojects,
     is_multi_project_container,
     render_justfile,
@@ -103,7 +103,7 @@ class TestScaffold:
 class TestMultiProjectContainerDetection:
     """Regression for a real, live-caught bug, twice: running project-scaffold
     against the actual ai_explained workspace (21 loose topic subfolders, no
-    .git of its own, exactly one real subproject: .smith) silently wrote a
+    .git of its own, exactly one real subproject: .awino) silently wrote a
     real pyproject.toml at the wrong level. The first fix attempt required
     two marker-bearing siblings before refusing and STILL passed against the
     real folder, because it has only one - the real signal is not "how many
@@ -157,6 +157,6 @@ class TestMultiProjectContainerDetection:
         # verified end-to-end in tests/test_cli_project_bootstrap.py.
         (tmp_path / "sandbox" / ".git").mkdir(parents=True)
         (tmp_path / "research_idea").mkdir()
-        (tmp_path / "smith-install").mkdir()
-        (tmp_path / "smith-install" / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+        (tmp_path / "awino-install").mkdir()
+        (tmp_path / "awino-install" / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
         assert is_multi_project_container(tmp_path) is True

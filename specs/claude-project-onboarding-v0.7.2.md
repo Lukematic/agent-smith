@@ -2,8 +2,8 @@
 
 ## Problem
 
-A project may contain `.smith/` run and memory directories but no confirmed
-`.smith/project.yaml`. `awino onboard` without a `--set` answer intentionally
+A project may contain `.awino/` run and memory directories but no confirmed
+`.awino/project.yaml`. `awino onboard` without a `--set` answer intentionally
 prints the next question but does not persist invented intent. Before this
 release, SessionStart stayed silent in that state, so Claude could begin
 substantive work without asking the human for project goals.
@@ -12,7 +12,7 @@ substantive work without asking the human for project goals.
 
 At SessionStart:
 
-- when `.smith/project.yaml` is human-confirmed, inject its mission, goals,
+- when `.awino/project.yaml` is human-confirmed, inject its mission, goals,
   tenets, expectations, workflow rules, run continuation, and project memory;
 - when it is absent or unconfirmed, inject `PROJECT_SETUP_REQUIRED`, derive the
   next onboarding frontier question from repository evidence, tell the active

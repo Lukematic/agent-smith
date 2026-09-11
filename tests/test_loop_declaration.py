@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from smith.enforce import LOOPS, Ledger, LedgerError, TaskClass
+from awino.enforce import LOOPS, Ledger, LedgerError, TaskClass
 
 
 def test_loop_is_recorded_on_the_run(tmp_path: Path) -> None:

@@ -13,8 +13,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from smith import stance_verify
-from smith.cli import app as cli_app
+from awino import stance_verify
+from awino.cli import app as cli_app
 
 # ── fixtures ─────────────────────────────────────────────────────────────────
 

@@ -16,7 +16,7 @@ Every mechanical piece already works. Nothing chains them. That is the entire de
 | Elevator role | Existing mechanism | State |
 | --- | --- | --- |
 | Passenger describes a need without knowing floor numbers | free-text request | — |
-| Operator matches description to a floor | `SkillCatalog.recommend`, `src/smith/skill_catalog.py:96-109` | REAL, advisory only |
+| Operator matches description to a floor | `SkillCatalog.recommend`, `src/awino/skill_catalog.py:96-109` | REAL, advisory only |
 | Operator presses the button and stays behind | `spawn.spawn_one`, fresh subprocess | REAL |
 | Operator waits | blocking subprocess with timeout | REAL |
 | Passenger says "done" | `SpawnResult.claimed_complete` | REAL |
@@ -44,9 +44,9 @@ Probed 2026-09-02. Do not re-derive. Re-probe only when a step fails.
 | Nesting is refused via `AWINO_SPAWN_DEPTH` | `spawn.current_depth` |
 | Reviewer read-only is mechanically enforceable on Claude only | `Runner.enforces_read_only` |
 | Independent re-verification already implemented | `spawn.verify` |
-| Bounded worker/reviewer routing already implemented | `src/smith/graph.py` |
-| Attempt ceiling is 3 | `MAX_ATTEMPTS`, `src/smith/enforce.py` |
-| Durable artifacts, checkpoints, provenance all exist | `src/smith/enforce.py` |
+| Bounded worker/reviewer routing already implemented | `src/awino/graph.py` |
+| Attempt ceiling is 3 | `MAX_ATTEMPTS`, `src/awino/enforce.py` |
+| Durable artifacts, checkpoints, provenance all exist | `src/awino/enforce.py` |
 | `UserPromptSubmit` hook is declared and implemented | `hooks/hooks.json`; `cli.py:1131-1159` |
 | Kilo install copies persona and skills, **not** hooks | `harness.py:370-420` |
 | Persona and mode provable for Claude, Kilo, Roo | `~/.claude/agents/awino.md`; `~/.config/kilo/agents/awino.md`; `modes.py` `EDITORS["roo"]` |
@@ -121,10 +121,10 @@ Dependencies are strict; `sd dep add <blocked> <blocker>`.
 7. No guessed paths. Every third-party path traces to a pasted probe.
 8. Hash, never grep, for propagation checks.
 9. Do not touch: `enforce.py`, `graph.py`, `spawn.py`, `updater.py`,
-   `config_review.py`, anything outside `.smith/`, or the marketplace plugin copy.
+   `config_review.py`, anything outside `.awino/`, or the marketplace plugin copy.
 10. Commit per Seed. Push only in S10, and only after config review passes.
 
-Commands, all from `.smith`:
+Commands, all from `.awino`:
 
 ```powershell
 uv run pytest -q
@@ -137,14 +137,14 @@ uv run awino doctor --fast
 
 ## 6. S1 — Dispatch routing decision
 
-**Touches:** `src/smith/dispatch.py` (new), `tests/test_dispatch_routing.py` (new).
+**Touches:** `src/awino/dispatch.py` (new), `tests/test_dispatch_routing.py` (new).
 
 Routing must be a pure function so it is testable without spawning anything.
 
 - [x] **S1.1** Open the run:
 
   ```powershell
-  uv run awino gate open code-change "Dispatch routing decision" --plan specs/dispatch-loop-spec.md --by awino --scope src/smith/dispatch.py --scope tests/test_dispatch_routing.py
+  uv run awino gate open code-change "Dispatch routing decision" --plan specs/dispatch-loop-spec.md --by awino --scope src/awino/dispatch.py --scope tests/test_dispatch_routing.py
   uv run awino gate plan approve --by "<human>" --reason "S1 approved"
   ```
 
@@ -196,7 +196,7 @@ a guess.
 
 ## 7. S2 — Precondition gate
 
-**Touches:** `src/smith/dispatch.py`, `tests/test_dispatch_preconditions.py` (new).
+**Touches:** `src/awino/dispatch.py`, `tests/test_dispatch_preconditions.py` (new).
 
 This is "something is off with you — go to this floor first," made mechanical.
 
@@ -234,7 +234,7 @@ This is "something is off with you — go to this floor first," made mechanical.
 
 ## 8. S3 — Dispatch execution loop
 
-**Touches:** `src/smith/dispatch.py`, `tests/test_dispatch_loop.py` (new).
+**Touches:** `src/awino/dispatch.py`, `tests/test_dispatch_loop.py` (new).
 
 The seven-step trip: match → confirm → dispatch → wait → verify → route → record.
 
@@ -282,7 +282,7 @@ cap.
 
 ## 9. S4 — `awino dispatch` CLI
 
-**Touches:** `src/smith/cli.py`, `tests/test_dispatch_cli.py` (new).
+**Touches:** `src/awino/cli.py`, `tests/test_dispatch_cli.py` (new).
 
 - [x] **S4.1** Open the run. Approve.
 
@@ -331,7 +331,7 @@ cap.
 
 ## 10. S5 — `awino start`
 
-**Touches:** `src/smith/cli.py`, `tests/test_start_command.py` (new),
+**Touches:** `src/awino/cli.py`, `tests/test_start_command.py` (new),
 `docs/user-guide.md`.
 
 - [x] **S5.1** Open the run. Approve.
@@ -343,7 +343,7 @@ cap.
   2. read-only by default, proven by a before/after directory snapshot;
   3. `--fix` performs only mechanical repairs and reports the rest;
   4. never opens a ledger run;
-  5. reports the gap without crashing when no `.smith/` exists.
+  5. reports the gap without crashing when no `.awino/` exists.
 
 - [x] **S5.3** Paste failures.
 
@@ -371,7 +371,7 @@ cap.
 
 ## 11. S6 — Hash-verified skill propagation
 
-**Touches:** `src/smith/harness.py`, `src/smith/cli.py`,
+**Touches:** `src/awino/harness.py`, `src/awino/cli.py`,
 `tests/test_skill_propagation.py` (new).
 
 Fixes "I fix things and nothing happens."
@@ -426,7 +426,7 @@ check is `LINTER_FALSE_POSITIVE` (`memory/lessons.md:22`).
 
 ## 12. S7 — Roo harness target; Cline and Codex deferred
 
-**Touches:** `src/smith/harness.py`, `tests/test_harness_surfaces.py` (new),
+**Touches:** `src/awino/harness.py`, `tests/test_harness_surfaces.py` (new),
 `docs/install.md`.
 
 - [x] **S7.1** Open the run. Approve.
@@ -475,12 +475,12 @@ check is `LINTER_FALSE_POSITIVE` (`memory/lessons.md:22`).
 
 ## 13. S8 — Self-healing `awino update`
 
-**Touches:** `src/smith/cli.py`, `tests/test_update_selfheal.py` (new).
+**Touches:** `src/awino/cli.py`, `tests/test_update_selfheal.py` (new).
 
 - [x] **S8.1** Open the run. Approve.
 
 - [x] **S8.2** Write failing tests:
-  1. `update` ensures project state: a `.smith/` lacking `run/` gains it.
+  1. `update` ensures project state: a `.awino/` lacking `run/` gains it.
   2. Refreshes **detected** harnesses only; an absent harness stays absent.
   3. Preserves project-specific state: `project.yaml`, `memory/`, `run/` byte-identical
      before and after. This is the git-rebase behavior the user described.
@@ -521,7 +521,7 @@ from the printed `BACKUP`.
 
 ## 14. S9 — Wire the operator in: one instruction, not twenty
 
-**Touches:** `agents/awino.md`, `AWINO.md`, `src/smith/modes.py`,
+**Touches:** `agents/awino.md`, `AWINO.md`, `src/awino/modes.py`,
 `tests/test_dispatch_wiring.py` (new), `docs/agent-guide.md`.
 
 - [x] **S9.1** Open the run. Approve.
@@ -581,7 +581,7 @@ through `34b6902` on `main`, not yet pushed.
 | S2 | `20260902-221951-8da930` | `47f899b` | None. |
 | S3 | `20260902-223058-cc061f` | `5752c6e` | `verified is None` produces `UNVERIFIED`; `False` reroutes; `True` completes. Spec §8.2 listed `UNVERIFIED` and reroute as separate tests without naming the three-state rule; the code now names it explicitly. |
 | S4 | `20260902-224743-43d82a` | `1a46091` | Tests caught that `--dry-run` bypassed `--max-floors` validation. Validation moved ahead of the dry-run short-circuit. |
-| S5 | `20260902-230355-16664a` | `cd2fa34` | `_ledger()` calls `ensure_state()` and would have written `.smith/.gitignore`. `start` constructs `Ledger` directly to stay read-only. `--fix` runs `fix.fix_scaffold` only; there is no `Fixer` class. |
+| S5 | `20260902-230355-16664a` | `cd2fa34` | `_ledger()` calls `ensure_state()` and would have written `.awino/.gitignore`. `start` constructs `Ledger` directly to stay read-only. `--fix` runs `fix.fix_scaffold` only; there is no `Fixer` class. |
 | S6 | `20260902-232241-8b9793` | `a1ff943` | `refresh_skills` also installs `absent` skills, not only `drifted`. Live run filled the empty Goose target. Live `skills-status` showed every prior copy already `current`, confirming the earlier grep-based "stale" finding was a false positive. |
 | S7 | `20260902-233742-290d06` | `1bbf8ab` | Added `Harness.installs_persona_file` so Roo is skills-only; agent selection stays with `modes.py`. A guessed `~/.roo/agents/` path was written and then removed before commit. Cline and Codex are not `Harness` members, so `install-status` cannot mark them `DEFERRED`; the deferral is recorded in `docs/install.md` instead. |
 | S8 | `20260902-235358-ea7b02` | `170232f` | Self-healing applies to the standalone-clone path only. The Claude-plugin path reinstalls via `claude plugin update` and needs a restart, so refreshing there would read pre-restart files. This machine is a plugin install; the standalone path was live-verified against a disposable clone with `AWINO_HOME` and `USERPROFILE` overridden. |
@@ -653,11 +653,11 @@ as a lesson in S10.
       ledger;
 - [x] `skills-status` reports zero drifted installer-owned copies;
 - [x] `install-status` lists Roo; Cline and Codex are absent from `Harness` by design and their deferral is recorded in `docs/install.md` (S7 deviation);
-- [x] the second project's `.smith/memory/` is byte-identical before and after;
+- [x] the second project's `.awino/memory/` is byte-identical before and after;
 - [x] the second project gained no `knowledge/` directory;
-- [x] `git -C .smith status --short` shows `config_review.py` unchanged from its
+- [x] `git -C .awino status --short` shows `config_review.py` unchanged from its
       pre-existing state;
-- [x] no file outside `.smith/` was modified;
+- [x] no file outside `.awino/` was modified;
 - [x] a dated lesson was appended to `memory/lessons.md`.
 
 ---

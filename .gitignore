@@ -4,12 +4,13 @@ __pycache__/
 .ruff_cache/
 .pytest_cache/
 .smith/
+.awino/
 knowledge/cache/*
 !knowledge/cache/.gitignore
 knowledge/MANIFEST.json
 knowledge/DRIFT.md
 
-# transient subagent prompts written by 'smith delegate'
+# transient subagent prompts written by 'awino delegate'
 assignments/
 backups/
 state/session.json

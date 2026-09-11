@@ -20,17 +20,17 @@ from pathlib import Path
 
 import pytest
 
-from smith.dispatch import (
+from awino.dispatch import (
     REMEDIATION_SKILL,
     DispatchOutcome,
     run_dispatch,
 )
-from smith.enforce import Ledger, TaskClass
-from smith.health import Health, Result
-from smith.paths import SmithPaths
-from smith.skill_catalog import SkillCatalog
-from smith.spawn import Assignment, Runner, SpawnResult, spawn_one
-from smith.spawn import verify as spawn_verify
+from awino.enforce import Ledger, TaskClass
+from awino.health import Health, Result
+from awino.paths import AwinoPaths
+from awino.skill_catalog import SkillCatalog
+from awino.spawn import Assignment, Runner, SpawnResult, spawn_one
+from awino.spawn import verify as spawn_verify
 
 SMITH_ROOT = Path(__file__).resolve().parents[1]
 
@@ -45,12 +45,12 @@ _DELEGATE_REQUEST = (
 _NO_MATCH_REQUEST = "xyzzy plugh wibble"
 
 
-def _healthy(_paths: SmithPaths, *, fast: bool = False) -> list[Result]:
+def _healthy(_paths: AwinoPaths, *, fast: bool = False) -> list[Result]:
     del fast
     return [Result("uv_env", Health.OK, "fine")]
 
 
-def _unhealthy(_paths: SmithPaths, *, fast: bool = False) -> list[Result]:
+def _unhealthy(_paths: AwinoPaths, *, fast: bool = False) -> list[Result]:
     del fast
     return [
         Result("clone_freshness", Health.FAIL, "uncommitted tracked changes", remedy="git pull")
@@ -68,12 +68,12 @@ def run_id(ledger: Ledger) -> str:
 
 
 @pytest.fixture
-def paths(tmp_path: Path) -> SmithPaths:
-    root = tmp_path / "smith-home"
+def paths(tmp_path: Path) -> AwinoPaths:
+    root = tmp_path / "awino-home"
     root.mkdir()
     (root / "plugin.json").write_text("{}", encoding="utf-8")
     (root / "knowledge").mkdir()
-    return SmithPaths(root=root)
+    return AwinoPaths(root=root)
 
 
 @pytest.fixture
@@ -110,7 +110,7 @@ def _run(
     ledger: Ledger,
     run_id: str,
     catalog: SkillCatalog,
-    paths: SmithPaths,
+    paths: AwinoPaths,
     tmp_path: Path,
     *,
     request: str = _DELEGATE_REQUEST,
@@ -143,7 +143,7 @@ def _run(
 
 class TestHappyPath:
     def test_a_verified_success_produces_complete_with_recorded_artifacts(
-        self, ledger: Ledger, run_id: str, catalog: SkillCatalog, paths: SmithPaths, tmp_path: Path
+        self, ledger: Ledger, run_id: str, catalog: SkillCatalog, paths: AwinoPaths, tmp_path: Path
     ) -> None:
         def execute(assignment, *_args):
             return _result(assignment)
@@ -171,7 +171,7 @@ class TestHappyPath:
 
 class TestUnverifiedClaimIsNotAccepted:
     def test_a_claim_with_no_verification_command_result_is_unverified_not_complete(
-        self, ledger: Ledger, run_id: str, catalog: SkillCatalog, paths: SmithPaths, tmp_path: Path
+        self, ledger: Ledger, run_id: str, catalog: SkillCatalog, paths: AwinoPaths, tmp_path: Path
     ) -> None:
         def execute(assignment, *_args):
             return _result(assignment)
@@ -192,7 +192,7 @@ class TestUnverifiedClaimIsNotAccepted:
 
 class TestVerificationFailureReroutesToRemediation:
     def test_a_failed_verification_reroutes_with_the_exact_failure_text_carried_forward(
-        self, ledger: Ledger, run_id: str, catalog: SkillCatalog, paths: SmithPaths, tmp_path: Path
+        self, ledger: Ledger, run_id: str, catalog: SkillCatalog, paths: AwinoPaths, tmp_path: Path
     ) -> None:
         assignments: list[Assignment] = []
 
@@ -221,7 +221,7 @@ class TestVerificationFailureReroutesToRemediation:
 
 class TestAmbiguousOrEmptyRequestAsksAQuestionAndSpawnsNothing:
     def test_a_request_matching_no_skill_produces_question_with_no_spawn(
-        self, ledger: Ledger, run_id: str, catalog: SkillCatalog, paths: SmithPaths, tmp_path: Path
+        self, ledger: Ledger, run_id: str, catalog: SkillCatalog, paths: AwinoPaths, tmp_path: Path
     ) -> None:
         calls: list[str] = []
 
@@ -250,7 +250,7 @@ class TestAmbiguousOrEmptyRequestAsksAQuestionAndSpawnsNothing:
 
 class TestPreflightBlockerPreventsAnySpawn:
     def test_an_unhealthy_project_blocks_before_dispatching(
-        self, ledger: Ledger, run_id: str, catalog: SkillCatalog, paths: SmithPaths, tmp_path: Path
+        self, ledger: Ledger, run_id: str, catalog: SkillCatalog, paths: AwinoPaths, tmp_path: Path
     ) -> None:
         calls: list[str] = []
 
@@ -279,7 +279,7 @@ class TestPreflightBlockerPreventsAnySpawn:
 
 class TestIterationCapIsRespected:
     def test_repeated_verification_failure_exhausts_the_exact_budget(
-        self, ledger: Ledger, run_id: str, catalog: SkillCatalog, paths: SmithPaths, tmp_path: Path
+        self, ledger: Ledger, run_id: str, catalog: SkillCatalog, paths: AwinoPaths, tmp_path: Path
     ) -> None:
         calls: list[str] = []
 
@@ -310,7 +310,7 @@ class TestIterationCapIsRespected:
 
 class TestNestedInvocationIsRefused:
     def test_a_nested_dispatch_call_is_blocked_before_any_routing_decision(
-        self, ledger: Ledger, run_id: str, catalog: SkillCatalog, paths: SmithPaths, tmp_path: Path
+        self, ledger: Ledger, run_id: str, catalog: SkillCatalog, paths: AwinoPaths, tmp_path: Path
     ) -> None:
         def execute(*_args):
             pytest.fail("must not spawn from inside a nested invocation")
@@ -335,7 +335,7 @@ class TestNestedInvocationIsRefused:
 
 class TestUnconfirmedBudgetIsRefused:
     def test_unconfirmed_budget_is_blocked_before_any_routing_decision(
-        self, ledger: Ledger, run_id: str, catalog: SkillCatalog, paths: SmithPaths, tmp_path: Path
+        self, ledger: Ledger, run_id: str, catalog: SkillCatalog, paths: AwinoPaths, tmp_path: Path
     ) -> None:
         def execute(*_args):
             pytest.fail("must not spawn without confirmed budget")
@@ -360,7 +360,7 @@ class TestUnconfirmedBudgetIsRefused:
 
 class TestDistinctInvocationIdentitiesArePersisted:
     def test_each_floor_in_a_reroute_trip_has_a_distinct_persisted_invocation_id(
-        self, ledger: Ledger, run_id: str, catalog: SkillCatalog, paths: SmithPaths, tmp_path: Path
+        self, ledger: Ledger, run_id: str, catalog: SkillCatalog, paths: AwinoPaths, tmp_path: Path
     ) -> None:
         calls: list[str] = []
 
@@ -387,7 +387,7 @@ class TestRealSubprocessInvocationsAreDistinct:
         ledger: Ledger,
         run_id: str,
         catalog: SkillCatalog,
-        paths: SmithPaths,
+        paths: AwinoPaths,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:

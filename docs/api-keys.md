@@ -12,7 +12,7 @@ it only detects their *absence* and tells you the remedy.
 ## The default path
 
 `awino delegate` spawns subagents through `claude`, `goose`, or `codex`, in that
-order (`src/smith/spawn.py::detect_runner`). Each is a CLI that manages its own
+order (`src/awino/spawn.py::detect_runner`). Each is a CLI that manages its own
 auth:
 
 ```bash

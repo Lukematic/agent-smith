@@ -12,7 +12,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from smith.enforce import (
+from awino.enforce import (
     CONTRACTS,
     Gate,
     Ledger,
@@ -207,13 +207,13 @@ class TestPlanApproval:
         run = ledger.open(
             TaskClass.CODE_CHANGE,
             "planned work",
-            file_scope=["src/smith/enforce.py"],
+            file_scope=["src/awino/enforce.py"],
             plan_path=plan,
         )
         decision = ledger.approve_plan(run.run_id, "reviewer", "scope reviewed")
         assert decision.decision == PlanDecision.APPROVED
         assert len(decision.plan_sha256) == 64
-        assert decision.approved_scope == ["src/smith/enforce.py"]
+        assert decision.approved_scope == ["src/awino/enforce.py"]
         assert ledger.validate_plan(run.run_id) == []
         assert ledger.load(run.run_id).plan_decisions == [decision]
 
@@ -237,7 +237,7 @@ class TestPlanApproval:
         ledger.approve_plan(run.run_id, "reviewer")
         plan.write_text("changed", encoding="utf-8")
         subprocess_run = Mock()
-        monkeypatch.setattr("smith.enforce.subprocess.run", subprocess_run)
+        monkeypatch.setattr("awino.enforce.subprocess.run", subprocess_run)
         with pytest.raises(LedgerError, match="PLAN_INVALID"):
             ledger.record(run.run_id, Gate.TESTED, "must-not-run")
         subprocess_run.assert_not_called()
@@ -380,7 +380,7 @@ class TestThreeStrikes:
         for _ in range(3):
             ledger.record(run.run_id, Gate.RESEARCHED, "exit 1")
         subprocess_run = Mock()
-        monkeypatch.setattr("smith.enforce.subprocess.run", subprocess_run)
+        monkeypatch.setattr("awino.enforce.subprocess.run", subprocess_run)
         with pytest.raises(LedgerError, match="THREE_STRIKES"):
             ledger.record(run.run_id, Gate.RESEARCHED, "must-not-run")
         subprocess_run.assert_not_called()
@@ -392,7 +392,7 @@ class TestThreeStrikes:
         for _ in range(3):
             ledger.attest(run.run_id, Gate.RESEARCHED, "reviewed")
         subprocess_run = Mock(return_value=Mock(returncode=0, stdout="", stderr=""))
-        monkeypatch.setattr("smith.enforce.subprocess.run", subprocess_run)
+        monkeypatch.setattr("awino.enforce.subprocess.run", subprocess_run)
         ledger.record(run.run_id, Gate.RESEARCHED, "allowed")
         subprocess_run.assert_called_once()
 
@@ -400,25 +400,25 @@ class TestThreeStrikes:
 class TestSkillAudit:
     def test_loaded_skills_are_recorded(self, ledger: Ledger) -> None:
         run = ledger.open(TaskClass.CODE_CHANGE, "with skills")
-        ledger.note_skill(run.run_id, "smith-rpi")
-        ledger.note_skill(run.run_id, "smith-delegate")
-        assert ledger.load(run.run_id).skills_loaded == ["smith-rpi", "smith-delegate"]
+        ledger.note_skill(run.run_id, "awino-rpi")
+        ledger.note_skill(run.run_id, "awino-delegate")
+        assert ledger.load(run.run_id).skills_loaded == ["awino-rpi", "awino-delegate"]
 
     def test_duplicate_skill_records_once(self, ledger: Ledger) -> None:
         run = ledger.open(TaskClass.CODE_CHANGE, "dup skill")
-        ledger.note_skill(run.run_id, "smith-rpi")
-        ledger.note_skill(run.run_id, "smith-rpi")
-        assert ledger.load(run.run_id).skills_loaded == ["smith-rpi"]
+        ledger.note_skill(run.run_id, "awino-rpi")
+        ledger.note_skill(run.run_id, "awino-rpi")
+        assert ledger.load(run.run_id).skills_loaded == ["awino-rpi"]
 
     def test_skill_events_are_persisted(self, ledger: Ledger) -> None:
         run = ledger.open(TaskClass.CODE_CHANGE, "skill history")
-        ledger.note_skill(run.run_id, "smith-rpi", state="used", reason="planned work")
+        ledger.note_skill(run.run_id, "awino-rpi", state="used", reason="planned work")
         loaded = ledger.load(run.run_id)
         assert len(loaded.skill_events) == 1
-        assert loaded.skill_events[0].name == "smith-rpi"
+        assert loaded.skill_events[0].name == "awino-rpi"
         assert loaded.skill_events[0].state == "used"
         assert loaded.skill_events[0].reason == "planned work"
-        assert loaded.skills_loaded == ["smith-rpi"]
+        assert loaded.skills_loaded == ["awino-rpi"]
 
     def test_recommendation_does_not_claim_skill_loaded(self, ledger: Ledger) -> None:
         run = ledger.open(TaskClass.QUESTION, "route only")
@@ -455,8 +455,8 @@ class TestWeakeningDetection:
 
     def test_production_assert_change_is_not_flagged(self) -> None:
         # Editing an assert in production code is legitimate work.
-        diff = """--- a/src/smith/knowledge.py
-+++ b/src/smith/knowledge.py
+        diff = """--- a/src/awino/knowledge.py
++++ b/src/awino/knowledge.py
 -    assert path
 +    if not path:
 +        raise ValueError
@@ -475,21 +475,21 @@ class TestWeakeningDetection:
 class TestScopeDetection:
     def test_file_outside_scope_is_flagged(self) -> None:
         violations = detect_scope_violations(
-            ["src/smith/knowledge.py", "src/smith/secret.py"], ["src/smith/knowledge.py"]
+            ["src/awino/knowledge.py", "src/awino/secret.py"], ["src/awino/knowledge.py"]
         )
-        assert violations == ["src/smith/secret.py"]
+        assert violations == ["src/awino/secret.py"]
 
     def test_declared_files_pass(self) -> None:
-        assert detect_scope_violations(["src/smith/cli.py"], ["src/smith/cli.py"]) == []
+        assert detect_scope_violations(["src/awino/cli.py"], ["src/awino/cli.py"]) == []
 
     def test_directory_scope_allows_children(self) -> None:
-        assert detect_scope_violations(["src/smith/cli.py"], ["src/smith/"]) == []
+        assert detect_scope_violations(["src/awino/cli.py"], ["src/awino/"]) == []
 
     def test_empty_scope_means_unscoped_not_forbidden(self) -> None:
         assert detect_scope_violations(["anything.py"], []) == []
 
     def test_separator_style_does_not_matter(self) -> None:
-        assert detect_scope_violations(["src\\smith\\cli.py"], ["src/smith/cli.py"]) == []
+        assert detect_scope_violations(["src\\awino\\cli.py"], ["src/awino/cli.py"]) == []
 
 
 class TestDeliverableCompleteness:

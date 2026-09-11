@@ -2,7 +2,7 @@
 
 ## Decision
 
-A.W.I.N.O.'s source and dependency authority remains `.smith/pyproject.toml`.
+A.W.I.N.O.'s source and dependency authority remains `.awino/pyproject.toml`.
 The outer project does not receive a second Python project or virtual environment.
 
 ## User entry points
@@ -20,9 +20,9 @@ Opening a terminal does not run arbitrary scripts automatically. The explicit te
 
 ## Ordered startup contract
 
-1. Locate the nearest ancestor containing `.smith/pyproject.toml`.
+1. Locate the nearest ancestor containing `.awino/pyproject.toml`.
 2. Refuse with every searched directory if no installation is found.
-3. Synchronize only `<installation>/.smith/.venv` from the lockfile with `uv sync --project`.
+3. Synchronize only `<installation>/.awino/.venv` from the lockfile with `uv sync --project`.
 4. Run `awino doctor --fast`; a blocking failure prevents resume.
 5. Inspect Kilo integration drift: `.kilo/kilo.json`, A.W.I.N.O. persona, and installer manifest.
 6. With `--fix`, repair only installer-owned integration files and preserve unrelated Kilo configuration.
@@ -33,7 +33,7 @@ Opening a terminal does not run arbitrary scripts automatically. The explicit te
 
 `start --fix` may repair:
 
-- a missing/stale `.smith/.venv`;
+- a missing/stale `.awino/.venv`;
 - a missing or stale A.W.I.N.O. Kilo persona;
 - missing/default-agent drift in `.kilo/kilo.json`, preserving unrelated keys;
 - stale A.W.I.N.O. installer-manifest entries.
@@ -43,7 +43,7 @@ It must not:
 - switch an active Kilo/Cline/Roo/Claude session;
 - override a human-selected active agent;
 - create an outer-project `.venv`, `pyproject.toml`, or lockfile;
-- create A.W.I.N.O. state where `.smith/pyproject.toml` is absent;
+- create A.W.I.N.O. state where `.awino/pyproject.toml` is absent;
 - fetch, pull, push, or otherwise change Git source during normal `start`.
 
 ## Freshness
@@ -55,10 +55,10 @@ integration.
 
 ## Verification
 
-1. Root and nested-directory invocations find one `.smith/pyproject.toml`.
+1. Root and nested-directory invocations find one `.awino/pyproject.toml`.
 2. An absent installation refuses without creating files.
 3. The outer project gains no Python environment or packaging files.
 4. Kilo repair preserves unrelated configuration and records exact managed hashes.
 5. Normal `start` does not invoke Git network or mutation commands.
 6. `update` refreshes an out-of-date installer-owned Kilo persona safely.
-7. `uv run pytest` and `uv run ruff check src tests` pass from `.smith`.
+7. `uv run pytest` and `uv run ruff check src tests` pass from `.awino`.

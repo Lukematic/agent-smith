@@ -7,8 +7,8 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from smith import cli
-from smith.toolchain import Manager, Runner, Toolchain
+from awino import cli
+from awino.toolchain import Manager, Runner, Toolchain
 
 
 class TestEnvironmentIsolation:
@@ -21,7 +21,7 @@ class TestEnvironmentIsolation:
             '[project]\nname="x"\nversion="0.1"\nrequires-python=">=3.12"\n',
             encoding="utf-8",
         )
-        external = tmp_path / "smith-home" / ".venv"
+        external = tmp_path / "awino-home" / ".venv"
         external.mkdir(parents=True)
         monkeypatch.setenv("VIRTUAL_ENV", str(external))
         chain = Toolchain(project)
@@ -60,7 +60,7 @@ class TestManagerPrecedence:
 
         # Make manager availability deterministic instead of depending on the
         # developer's machine.
-        from smith import toolchain
+        from awino import toolchain
 
         monkeypatch.setattr(toolchain, "_have", lambda name: name in {"poetry", "uv"})
         chain = Toolchain(project)
@@ -70,7 +70,7 @@ class TestManagerPrecedence:
         project = tmp_path / "project"
         (project / ".venv" / ("Scripts" if os.name == "nt" else "bin")).mkdir(parents=True)
         (project / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
-        from smith import toolchain
+        from awino import toolchain
 
         monkeypatch.setattr(toolchain, "_have", lambda name: name in {"uv", "python"})
         assert Toolchain(project).manager[0] is Manager.VENV
@@ -79,7 +79,7 @@ class TestManagerPrecedence:
         (tmp_path / "pyproject.toml").write_text(
             "[tool.pdm]\ndistribution=true\n", encoding="utf-8"
         )
-        from smith import toolchain
+        from awino import toolchain
 
         monkeypatch.setattr(toolchain, "_have", lambda name: name in {"pdm", "uv"})
         assert Toolchain(tmp_path).manager[0] is Manager.PDM
@@ -88,7 +88,7 @@ class TestManagerPrecedence:
         (tmp_path / "package.json").write_text(
             '{"scripts":{"test":"node test.js"}}', encoding="utf-8"
         )
-        from smith import toolchain
+        from awino import toolchain
 
         monkeypatch.setattr(toolchain, "_have", lambda name: name == "python")
         assert Toolchain(tmp_path).manager[0] is Manager.NONE
@@ -96,7 +96,7 @@ class TestManagerPrecedence:
     def test_unavailable_just_falls_through_to_make(self, tmp_path: Path, monkeypatch) -> None:
         (tmp_path / "justfile").write_text("test:\n", encoding="utf-8")
         (tmp_path / "Makefile").write_text("test:\n", encoding="utf-8")
-        from smith import toolchain
+        from awino import toolchain
 
         monkeypatch.setattr(toolchain, "_have", lambda name: name == "make")
         assert Toolchain(tmp_path).runner[0] is Runner.MAKE
@@ -106,7 +106,7 @@ class TestManagerPrecedence:
         (tmp_path / "package.json").write_text(
             '{"scripts":{"test":"node test.js"}}', encoding="utf-8"
         )
-        from smith import toolchain
+        from awino import toolchain
 
         monkeypatch.setattr(toolchain, "_have", lambda name: False)
         assert Toolchain(tmp_path).runner[0] is Runner.NPM_SCRIPTS
@@ -127,7 +127,7 @@ requires-python = ">=3.12"
 """.strip(),
             encoding="utf-8",
         )
-        from smith import toolchain
+        from awino import toolchain
 
         monkeypatch.delenv("VIRTUAL_ENV", raising=False)
         monkeypatch.delenv("CONDA_PREFIX", raising=False)
@@ -189,7 +189,7 @@ class TestMissingRunnerBinary:
         self, tmp_path: Path, monkeypatch
     ) -> None:
         (tmp_path / "justfile").write_text("test:\n", encoding="utf-8")
-        from smith import toolchain
+        from awino import toolchain
 
         monkeypatch.setattr(toolchain, "_have", lambda name: name == "just")
         assert Toolchain(tmp_path).missing_runner_binary is None
@@ -198,7 +198,7 @@ class TestMissingRunnerBinary:
         self, tmp_path: Path, monkeypatch
     ) -> None:
         (tmp_path / "justfile").write_text("test:\n", encoding="utf-8")
-        from smith import toolchain
+        from awino import toolchain
 
         monkeypatch.setattr(toolchain, "_have", lambda name: False)
         missing = Toolchain(tmp_path).missing_runner_binary
@@ -211,7 +211,7 @@ class TestMissingRunnerBinary:
         self, tmp_path: Path, monkeypatch
     ) -> None:
         (tmp_path / "Makefile").write_text("test:\n", encoding="utf-8")
-        from smith import toolchain
+        from awino import toolchain
 
         monkeypatch.setattr(toolchain, "_have", lambda name: False)
         missing = Toolchain(tmp_path).missing_runner_binary
@@ -224,7 +224,7 @@ class TestMissingRunnerBinary:
     ) -> None:
         (tmp_path / "justfile").write_text("test:\n", encoding="utf-8")
         (tmp_path / "Makefile").write_text("test:\n", encoding="utf-8")
-        from smith import toolchain
+        from awino import toolchain
 
         monkeypatch.setattr(toolchain, "_have", lambda name: False)
         missing = Toolchain(tmp_path).missing_runner_binary
@@ -235,12 +235,12 @@ class TestMissingRunnerBinary:
 
 class TestToolInstallCommand:
     def test_unknown_binary_returns_none(self) -> None:
-        from smith.toolchain import tool_install_command
+        from awino.toolchain import tool_install_command
 
         assert tool_install_command("does-not-exist-tool") is None
 
     def test_known_binary_with_no_available_package_manager_returns_none(self, monkeypatch) -> None:
-        from smith import toolchain
+        from awino import toolchain
 
         monkeypatch.setattr(toolchain, "_have", lambda name: False)
         assert toolchain.tool_install_command("just") is None
@@ -248,7 +248,7 @@ class TestToolInstallCommand:
     def test_known_binary_with_an_available_manager_returns_a_real_command(
         self, monkeypatch
     ) -> None:
-        from smith import toolchain
+        from awino import toolchain
 
         monkeypatch.setattr(os, "name", "nt")
         monkeypatch.setattr(toolchain, "_have", lambda name: name == "winget")

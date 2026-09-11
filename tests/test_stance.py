@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from smith.stance import (
+from awino.stance import (
     STANCES,
     Stance,
     baseline_stance,

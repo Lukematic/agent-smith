@@ -1,6 +1,6 @@
 """Mission-first onboarding must persist only confirmed intent.
 
-These tests cover the sparse-repository failure that motivated ``smith onboard``:
+These tests cover the sparse-repository failure that motivated ``awino onboard``:
 mission discovery found a sentence, but goals, tenets, primary user, expectations,
 and success criteria were never collected, so planning rushed toward architecture.
 """
@@ -11,8 +11,8 @@ from pathlib import Path
 
 import yaml
 
-from smith import onboarding
-from smith.mission import Confidence, Kind, Mission
+from awino import onboarding
+from awino.mission import Confidence, Kind, Mission
 
 
 def stated_mission() -> Mission:
@@ -102,7 +102,7 @@ class TestConfirmation:
         intent = self.complete_intent()
         path = onboarding.save(tmp_path, intent)
         loaded = onboarding.load(tmp_path)
-        assert path == tmp_path / ".smith" / "project.yaml"
+        assert path == tmp_path / ".awino" / "project.yaml"
         assert loaded is not None
         assert loaded.mission == intent.mission
         assert loaded.goals == intent.goals
@@ -141,7 +141,7 @@ class TestConfirmation:
 
 class TestBootstrapState:
     def test_legacy_project_loads_without_bootstrap(self, tmp_path: Path) -> None:
-        path = tmp_path / ".smith" / "project.yaml"
+        path = tmp_path / ".awino" / "project.yaml"
         path.parent.mkdir()
         path.write_text("mission: legacy\nsource: confirmed\n", encoding="utf-8")
 

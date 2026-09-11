@@ -18,7 +18,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from smith.enforce import CONTRACTS, Gate, TaskClass
+from awino.enforce import CONTRACTS, Gate, TaskClass
 
 assert Gate.REVIEWED in CONTRACTS[TaskClass.REFACTOR], "test assumes refactor requires REVIEWED"
 
@@ -29,7 +29,7 @@ def run_cli(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
     env.pop("VIRTUAL_ENV", None)
     env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
     return subprocess.run(
-        [sys.executable, "-m", "smith.cli", *args],
+        [sys.executable, "-m", "awino.cli", *args],
         cwd=project,
         env=env,
         capture_output=True,
@@ -165,8 +165,8 @@ def test_gate_review_tidy_dry_run_never_modifies_the_project(tmp_path: Path) -> 
     assert reviewed.returncode == 0, reviewed.stdout + reviewed.stderr
 
     after = _snapshot(project)
-    before_src = {k: v for k, v in before.items() if not k.startswith(".smith")}
-    after_src = {k: v for k, v in after.items() if not k.startswith(".smith")}
+    before_src = {k: v for k, v in before.items() if not k.startswith(".awino")}
+    after_src = {k: v for k, v in after.items() if not k.startswith(".awino")}
     assert before_src == after_src, "gate review modified project files it should only read"
 
 

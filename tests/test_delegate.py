@@ -13,10 +13,10 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from smith import loops
-from smith.cli.loopctl import loop_app
-from smith.enforce import Ledger
-from smith.seeds import Issue, Seeds, SeedsResult, SeedsState
+from awino import loops
+from awino.cli.loopctl import loop_app
+from awino.enforce import Ledger
+from awino.seeds import Issue, Seeds, SeedsResult, SeedsState
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DELEGATE_SKILL = REPO_ROOT / "skills" / "awino-delegate" / "SKILL.md"
@@ -90,7 +90,7 @@ def event_driver(
 
 @pytest.fixture()
 def loop_ledger(tmp_path: Path) -> Ledger:
-    return Ledger(tmp_path / ".smith")
+    return Ledger(tmp_path / ".awino")
 
 
 @pytest.fixture()

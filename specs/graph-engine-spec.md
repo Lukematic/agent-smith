@@ -6,12 +6,12 @@ Implement a cross-platform, bounded graph in which worker and reviewer phases ru
 
 ## Scope
 
-- `src/smith/graph.py`
-- `src/smith/spawn.py`
-- `src/smith/cli.py`
+- `src/awino/graph.py`
+- `src/awino/spawn.py`
+- `src/awino/cli.py`
 - `tests/test_graph.py`
 
-The unrelated `src/smith/config_review.py` change is explicitly out of scope.
+The unrelated `src/awino/config_review.py` change is explicitly out of scope.
 
 ## Required behavior
 

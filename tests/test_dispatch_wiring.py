@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from smith.modes import build_modes
+from awino.modes import build_modes
 
 AGENTS_AWINO_MD = Path(__file__).resolve().parents[1] / "agents" / "awino.md"
 AWINO_MD = Path(__file__).resolve().parents[1] / "AWINO.md"
@@ -41,7 +41,7 @@ class TestPersonaRoutesActionableRequestsThroughBest:
 
 class TestGeneratedModesCarryTheSameTwoInstructions:
     def test_the_primary_generated_mode_names_best_as_the_door(self, tmp_path: Path) -> None:
-        modes = build_modes(tmp_path / "smith-home")
+        modes = build_modes(tmp_path / "awino-home")
         primary = next(mode for mode in modes if mode.slug == "awino")
         combined = primary.role_definition + primary.custom_instructions
         assert "awino best" in combined

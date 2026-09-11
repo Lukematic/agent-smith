@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from smith.heilmeier import (
+from awino.heilmeier import (
     QUESTIONS,
     Catechism,
     insights,
@@ -17,7 +17,7 @@ from smith.heilmeier import (
 
 
 def _project(tmp_path: Path) -> Path:
-    p = tmp_path / "proj" / ".smith"
+    p = tmp_path / "proj" / ".awino"
     p.mkdir(parents=True)
     return p
 

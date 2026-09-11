@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from smith import session_state
+from awino import session_state
 
 
 class TestPerSessionIsolation:

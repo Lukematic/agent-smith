@@ -25,7 +25,7 @@ def _run_module(project: Path, *args: str) -> subprocess.CompletedProcess[bytes]
     env.pop("VIRTUAL_ENV", None)
     env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
     return subprocess.run(
-        [sys.executable, "-m", "smith.cli", *args],
+        [sys.executable, "-m", "awino.cli", *args],
         cwd=project,
         env=env,
         capture_output=True,
@@ -56,7 +56,7 @@ def test_cli_subprocess_writes_utf8_regardless_of_console_codepage(tmp_path: Pat
         [
             sys.executable,
             "-c",
-            "import smith.cli; import sys; sys.stdout.write(chr(0x2014))",
+            "import awino.cli; import sys; sys.stdout.write(chr(0x2014))",
         ],
         capture_output=True,
         text=False,

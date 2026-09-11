@@ -7,13 +7,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from smith.paths import SmithPaths
-from smith.tidy import Finding, Tidier
+from awino.paths import AwinoPaths
+from awino.tidy import Finding, Tidier
 
 
-def _minimal_home(tmp_path: Path) -> SmithPaths:
+def _minimal_home(tmp_path: Path) -> AwinoPaths:
     (tmp_path / "README.md").write_text("# test\n", encoding="utf-8")
-    return SmithPaths(root=tmp_path)
+    return AwinoPaths(root=tmp_path)
 
 
 class TestGeneratedTestReportIsNotStrayClutter:
@@ -51,7 +51,7 @@ class TestGeneratedTestReportIsNotStrayClutter:
     def test_the_exact_reproduced_bug_no_longer_fails_the_structure_gate(
         self, tmp_path: Path
     ) -> None:
-        from smith.health import Health, check_structure
+        from awino.health import Health, check_structure
 
         home = _minimal_home(tmp_path)
         (tmp_path / "test-results-ubuntu-latest-py3.12.xml").write_text(

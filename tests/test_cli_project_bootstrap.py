@@ -13,7 +13,7 @@ def run_cli(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
     env.pop("VIRTUAL_ENV", None)
     env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
     return subprocess.run(
-        [sys.executable, "-m", "smith.cli", *args],
+        [sys.executable, "-m", "awino.cli", *args],
         cwd=project,
         env=env,
         capture_output=True,
@@ -29,7 +29,7 @@ def test_read_only_report_does_not_create_project_state(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
     assert payload["status"].startswith("BOOTSTRAP_REQUIRED")
-    assert not (tmp_path / ".smith").exists()
+    assert not (tmp_path / ".awino").exists()
 
 
 def test_confirm_requires_all_explicit_decisions(tmp_path: Path) -> None:
@@ -75,7 +75,7 @@ def test_gate_open_snapshots_bootstrap(tmp_path: Path) -> None:
     opened = run_cli(tmp_path, "gate", "open", "question", "inspect")
     assert opened.returncode == 0, opened.stdout + opened.stderr
     run_id = opened.stdout.split()[1]
-    artifacts = tmp_path / ".smith" / "run" / run_id / "artifacts.jsonl"
+    artifacts = tmp_path / ".awino" / "run" / run_id / "artifacts.jsonl"
     rows = [
         json.loads(ln) for ln in artifacts.read_text(encoding="utf-8").splitlines() if ln.strip()
     ]
@@ -115,7 +115,7 @@ def test_inspection_surfaces_the_missing_binary_and_why_it_matters(tmp_path: Pat
     env.pop("VIRTUAL_ENV", None)
     env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
     result = subprocess.run(
-        [sys.executable, "-m", "smith.cli", "project-bootstrap"],
+        [sys.executable, "-m", "awino.cli", "project-bootstrap"],
         cwd=tmp_path,
         env=env,
         capture_output=True,
@@ -140,8 +140,8 @@ def test_project_scaffold_refuses_against_a_real_multi_project_container(
     (tmp_path / "sandbox").mkdir()
     (tmp_path / "sandbox" / ".git").mkdir()
     (tmp_path / "research_idea").mkdir()
-    (tmp_path / "smith-install").mkdir()
-    (tmp_path / "smith-install" / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+    (tmp_path / "awino-install").mkdir()
+    (tmp_path / "awino-install" / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
 
     result = run_cli(tmp_path, "project-scaffold")
 

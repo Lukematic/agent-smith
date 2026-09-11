@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from smith.modes import EDITORS, Mode, ModeTarget, build_modes, discover, install, status
+from awino.modes import EDITORS, Mode, ModeTarget, build_modes, discover, install, status
 
 
 @pytest.fixture
@@ -158,43 +158,43 @@ class TestDiscovery:
 
 class TestSmithModes:
     def test_five_modes_are_built(self) -> None:
-        assert len(build_modes(Path("/tmp/smith"))) == 5
+        assert len(build_modes(Path("/tmp/awino"))) == 5
 
     def test_all_are_schema_valid(self) -> None:
-        for mode in build_modes(Path("/tmp/smith")):
+        for mode in build_modes(Path("/tmp/awino")):
             assert mode.validate() == [], f"{mode.slug}: {mode.validate()}"
 
     def test_consult_mode_cannot_edit(self) -> None:
         # The restriction is the whole point: a consult that edits is not a consult.
-        ask = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "awino-consult")
+        ask = next(m for m in build_modes(Path("/tmp/awino")) if m.slug == "awino-consult")
         assert "edit" not in ask.groups
         assert "command" not in ask.groups
 
     def test_plan_mode_edits_markdown_only(self) -> None:
-        plan = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "awino-plan")
+        plan = next(m for m in build_modes(Path("/tmp/awino")) if m.slug == "awino-plan")
         edit = next(g for g in plan.groups if isinstance(g, list) and g[0] == "edit")
         assert "md" in edit[1]["fileRegex"]
         assert "command" not in plan.groups
 
     def test_discover_mode_is_read_only(self) -> None:
-        mode = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "awino-discover")
+        mode = next(m for m in build_modes(Path("/tmp/awino")) if m.slug == "awino-discover")
         assert "edit" not in mode.groups
         assert "command" not in mode.groups
         assert "one unresolved question" in mode.custom_instructions
 
     def test_research_mode_loads_evidence_and_reproducibility(self) -> None:
-        mode = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "awino-research")
+        mode = next(m for m in build_modes(Path("/tmp/awino")) if m.slug == "awino-research")
         assert "awino-evidence" in mode.custom_instructions
         assert "awino-reproducibility" in mode.custom_instructions
         assert "edit" not in mode.groups
 
     def test_full_mode_can_edit(self) -> None:
-        full = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "awino")
+        full = next(m for m in build_modes(Path("/tmp/awino")) if m.slug == "awino")
         assert "edit" in full.groups
 
     def test_modes_without_command_do_not_advertise_executable_cli_commands(self) -> None:
         command_pattern = re.compile(r"`(?:awino|smith)(?:\s[^`]*)?`")
-        for mode in build_modes(Path("/tmp/smith")):
+        for mode in build_modes(Path("/tmp/awino")):
             if "command" in mode.groups:
                 continue
             text = f"{mode.role_definition}\n{mode.custom_instructions}"
@@ -202,11 +202,11 @@ class TestSmithModes:
 
     def test_all_mode_skill_routes_use_canonical_awino_names(self) -> None:
         legacy_skill = re.compile(r"\bsmith-(?:consult|discover|evidence|reproducibility|rpi)\b")
-        for mode in build_modes(Path("/tmp/smith")):
+        for mode in build_modes(Path("/tmp/awino")):
             assert not legacy_skill.search(mode.custom_instructions), mode.slug
 
     def test_primary_mode_exposes_the_startup_display_contract(self) -> None:
-        primary = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "awino")
+        primary = next(m for m in build_modes(Path("/tmp/awino")) if m.slug == "awino")
         required = {
             "Project",
             "Mission confidence",
@@ -220,7 +220,7 @@ class TestSmithModes:
         assert all(label in primary.custom_instructions for label in required)
 
     def test_primary_mode_cannot_silently_switch_the_selected_kilo_mode(self) -> None:
-        primary = next(m for m in build_modes(Path("/tmp/smith")) if m.slug == "awino")
+        primary = next(m for m in build_modes(Path("/tmp/awino")) if m.slug == "awino")
         assert "cannot silently switch" in primary.custom_instructions
         assert "selected Kilo mode" in primary.custom_instructions
 
@@ -228,25 +228,25 @@ class TestSmithModes:
         # roleDefinition is resident on every turn. Embedding the whole persona
         # would duplicate the constitution and pay for it repeatedly, which is the
         # CONTEXT_BLOAT this tool exists to prevent.
-        for mode in build_modes(Path("/tmp/smith")):
+        for mode in build_modes(Path("/tmp/awino")):
             assert len(mode.role_definition) < 2500, f"{mode.slug} roleDefinition is bloated"
 
     def test_role_definition_points_at_the_constitution(self) -> None:
-        for mode in build_modes(Path("/tmp/smith")):
+        for mode in build_modes(Path("/tmp/awino")):
             assert "AWINO.md" in mode.role_definition
 
     def test_no_active_mode_loads_the_legacy_constitution_pointer(self) -> None:
-        for mode in build_modes(Path("/tmp/smith")):
+        for mode in build_modes(Path("/tmp/awino")):
             assert "AGENT_SMITH.md" not in mode.role_definition
 
     def test_every_mode_states_when_to_use_it(self) -> None:
-        for mode in build_modes(Path("/tmp/smith")):
+        for mode in build_modes(Path("/tmp/awino")):
             assert mode.when_to_use
             assert mode.description
 
     def test_home_path_is_embedded_so_files_are_findable(self) -> None:
-        modes = build_modes(Path("/opt/custom-smith"))
-        assert all("/opt/custom-smith" in m.role_definition for m in modes)
+        modes = build_modes(Path("/opt/custom-awino"))
+        assert all("/opt/custom-awino" in m.role_definition for m in modes)
 
 
 class TestReadmeMatchesGeneratedModes:
@@ -265,7 +265,7 @@ class TestReadmeMatchesGeneratedModes:
 
     def test_every_generated_mode_name_appears_in_readme(self) -> None:
         readme = self._readme_text()
-        for mode in build_modes(Path("/tmp/smith")):
+        for mode in build_modes(Path("/tmp/awino")):
             assert mode.name in readme, f"README is missing or stale for mode name {mode.name!r}"
 
     def test_readme_does_not_still_reference_the_old_mode_names(self) -> None:
@@ -306,7 +306,7 @@ class TestIdempotentLinking:
     """
 
     def test_relinking_the_same_source_is_skipped(self, tmp_path: Path) -> None:
-        from smith.harness import _link_or_copy
+        from awino.harness import _link_or_copy
 
         source = tmp_path / "src"
         source.mkdir()
@@ -325,7 +325,7 @@ class TestIdempotentLinking:
             assert second == "COPIED"
 
     def test_foreign_link_pointing_elsewhere_is_refused(self, tmp_path: Path) -> None:
-        from smith.harness import _link_or_copy
+        from awino.harness import _link_or_copy
 
         old = tmp_path / "old"
         old.mkdir()
@@ -348,7 +348,7 @@ class TestIdempotentLinking:
         # installed before ownership.record() was called on link success: a
         # manifest-unaware link must not be silently relinked, and must not
         # be confused with a genuinely foreign (never-A.W.I.N.O.-owned) path.
-        from smith.harness import _link_or_copy
+        from awino.harness import _link_or_copy
 
         source = tmp_path / "source"
         source.mkdir()
@@ -360,7 +360,7 @@ class TestIdempotentLinking:
         # exactly the state a pre-fix install left behind.
         first, _ = _link_or_copy(source, destination)
         assert first == "LINKED"
-        from smith import ownership
+        from awino import ownership
 
         manifest = ownership.manifest_path(destination.parent)
         manifest.unlink()
@@ -374,7 +374,7 @@ class TestIdempotentLinking:
         # genuinely A.W.I.N.O.'s own but now needs to point somewhere else
         # (a moved or consolidated repository), instead of the flag doing
         # nothing at all.
-        from smith.harness import _link_or_copy
+        from awino.harness import _link_or_copy
 
         old = tmp_path / "old"
         old.mkdir()
@@ -406,7 +406,7 @@ class TestHarnessFrontmatter:
     """
 
     def _persona(self, harness, tmp_path: Path) -> str:
-        from smith.harness import _persona_for
+        from awino.harness import _persona_for
 
         source = tmp_path / "agent-smith.md"
         source.write_text(
@@ -420,35 +420,35 @@ class TestHarnessFrontmatter:
         # Without `mode: primary` Kilo installs a subagent: invocable by another
         # agent but invisible in the mode selector. That was the real bug behind
         # "it is not a mode".
-        from smith.harness import Harness
+        from awino.harness import Harness
 
         rendered = self._persona(Harness.KILO, tmp_path)
         assert "mode: primary" in rendered
         assert "displayName: A.W.I.N.O." in rendered
 
     def test_claude_declares_tools(self, tmp_path: Path) -> None:
-        from smith.harness import Harness
+        from awino.harness import Harness
 
         rendered = self._persona(Harness.CLAUDE, tmp_path)
         assert "tools:" in rendered
         assert "Read" in rendered
 
     def test_copilot_quotes_description_and_declares_tools(self, tmp_path: Path) -> None:
-        from smith.harness import Harness
+        from awino.harness import Harness
 
         rendered = self._persona(Harness.COPILOT, tmp_path)
         assert "description: '" in rendered
         assert "tools: []" in rendered
 
     def test_cursor_uses_always_apply(self, tmp_path: Path) -> None:
-        from smith.harness import Harness
+        from awino.harness import Harness
 
         rendered = self._persona(Harness.CURSOR, tmp_path)
         assert "alwaysApply:" in rendered
         assert "mode:" not in rendered
 
     def test_body_survives_every_adaptation(self, tmp_path: Path) -> None:
-        from smith.harness import Harness
+        from awino.harness import Harness
 
         for harness in Harness:
             assert "Body text here." in self._persona(harness, tmp_path)
@@ -457,18 +457,18 @@ class TestHarnessFrontmatter:
         # ~/.kilo is not where Kilo reads global agents. It is ~/.config/kilo, and
         # the earlier wrong path produced an install that looked successful and
         # did nothing.
-        from smith.harness import Harness
+        from awino.harness import Harness
 
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         assert Harness.KILO.global_root.parts[-2:] == (".config", "kilo")
 
     def test_copilot_filename_encodes_the_artifact_type(self) -> None:
-        from smith.harness import Harness
+        from awino.harness import Harness
 
         assert Harness.COPILOT.persona_filename.endswith(".chatmode.md")
 
     def test_only_real_skill_harnesses_claim_skill_support(self) -> None:
-        from smith.harness import Harness
+        from awino.harness import Harness
 
         assert Harness.CLAUDE.supports_skills
         assert Harness.KILO.supports_skills

@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from smith.enforce import Gate, Ledger, LedgerError, TaskClass
-from smith.loop import LoopOutcome, run_loop, run_with_verification
+from awino.enforce import Gate, Ledger, LedgerError, TaskClass
+from awino.loop import LoopOutcome, run_loop, run_with_verification
 
 
 @pytest.fixture

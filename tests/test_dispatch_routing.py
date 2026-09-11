@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from smith.dispatch import decide
-from smith.skill_catalog import SkillCatalog
+from awino.dispatch import decide
+from awino.skill_catalog import SkillCatalog
 
 SMITH_ROOT = Path(__file__).resolve().parents[1]
 
@@ -146,7 +146,7 @@ class TestStemmedRouting:
         assert d.skill is not None and d.skill.name == "awino-rpi"
 
     def test_stemming_is_conservative(self) -> None:
-        from smith.skill_catalog import _stem
+        from awino.skill_catalog import _stem
 
         assert _stem("refactors") == "refactor"
         assert _stem("migrations") == "migration"

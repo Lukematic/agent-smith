@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from smith.healing import (
+from awino.healing import (
     MAX_HEAL_ATTEMPTS,
     Failure,
     diagnose,
@@ -72,7 +72,7 @@ class TestDiagnosis:
     def test_every_signature_with_a_remedy_has_no_human_action_text(self) -> None:
         # A self-healable diagnosis should not also demand a human decision; that
         # would make its own self_healable flag meaningless.
-        from smith.healing import SIGNATURES
+        from awino.healing import SIGNATURES
 
         for failure, _patterns, _desc, remedy, human in SIGNATURES:
             if remedy is not None:
@@ -154,7 +154,7 @@ class TestRunWithHealing:
     def test_summary_names_what_was_healed_on_success(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from smith import healing as healing_module
+        from awino import healing as healing_module
 
         calls = {"n": 0}
 

@@ -3,11 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from smith import harness
+from awino import harness
 
 
 def _home(tmp_path: Path) -> Path:
-    home = tmp_path / ".smith"
+    home = tmp_path / ".awino"
     (home / "agents").mkdir(parents=True)
     (home / "agents" / "awino.md").write_text(
         "---\nname: awino\ndescription: test persona\n---\nbody\n", encoding="utf-8"
@@ -43,7 +43,7 @@ def test_kilo_repair_removes_only_the_managed_legacy_persona(tmp_path: Path) -> 
     legacy = project / ".kilo" / "agents" / "awino.md"
     legacy.parent.mkdir(parents=True)
     legacy.write_text("old installer persona\n", encoding="utf-8")
-    from smith import ownership
+    from awino import ownership
 
     ownership.record(project / ".kilo", legacy, "persona")
 
@@ -98,7 +98,7 @@ def test_kilo_target_uses_the_same_canonical_persona_path_as_repair(tmp_path: Pa
 
 
 def test_cached_freshness_never_fetches(tmp_path: Path, monkeypatch) -> None:
-    from smith import updater
+    from awino import updater
 
     calls: list[tuple[str, ...]] = []
 

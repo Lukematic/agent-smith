@@ -1,8 +1,8 @@
-"""Regression tests for `smith gate` commands acting on the correct project.
+"""Regression tests for `awino gate` commands acting on the correct project.
 
 A live sandbox test (chemical/mechanical/nuclear/physicist/software-engineer
-persona walkthroughs) found that `smith gate record --cmd` and
-`smith gate check --diff-base` both resolved their working directory to Smith's
+persona walkthroughs) found that `awino gate record --cmd` and
+`awino gate check --diff-base` both resolved their working directory to Smith's
 own home (`_paths().root`) instead of the target project
 (`_workspace().project.root`). This silently ran Smith's own test suite and
 reported PASS for a project whose own tests actually failed, and treated a
@@ -24,15 +24,15 @@ from pathlib import Path
 import pytest
 
 
-def _run_smith(
-    args: list[str], project_root: Path, smith_home: Path
+def _run_awino(
+    args: list[str], project_root: Path, awino_home: Path
 ) -> subprocess.CompletedProcess:
     env = os.environ.copy()
     env["SMITH_PROJECT"] = str(project_root)
     env.pop("VIRTUAL_ENV", None)
     env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
     return subprocess.run(
-        [sys.executable, "-m", "smith.cli", *args],
+        [sys.executable, "-m", "awino.cli", *args],
         cwd=str(project_root),
         env=env,
         capture_output=True,
@@ -41,22 +41,22 @@ def _run_smith(
     )
 
 
-def _open_code_run(project: Path, smith_home: Path, objective: str, scope: str):
+def _open_code_run(project: Path, awino_home: Path, objective: str, scope: str):
     plan = project / "plan.md"
     plan.write_text("# Plan\n", encoding="utf-8")
-    opened = _run_smith(
+    opened = _run_awino(
         ["gate", "open", "code-change", objective, "--scope", scope, "--plan", str(plan)],
         project,
-        smith_home,
+        awino_home,
     )
     if opened.returncode == 0:
-        approved = _run_smith(["gate", "plan", "approve", "--by", "test"], project, smith_home)
+        approved = _run_awino(["gate", "plan", "approve", "--by", "test"], project, awino_home)
         assert approved.returncode == 0, approved.stdout + approved.stderr
     return opened
 
 
 @pytest.fixture
-def smith_home() -> Path:
+def awino_home() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
@@ -83,18 +83,18 @@ def toy_project(tmp_path: Path) -> Path:
 
 
 class TestGateRecordUsesTargetProject:
-    """`smith gate record --cmd` must run in the project being worked on."""
+    """`awino gate record --cmd` must run in the project being worked on."""
 
-    def test_tested_gate_runs_the_projects_own_tests_not_smiths(
-        self, toy_project: Path, smith_home: Path
+    def test_tested_gate_runs_the_projects_own_tests_not_awinos(
+        self, toy_project: Path, awino_home: Path
     ) -> None:
-        opened = _open_code_run(toy_project, smith_home, "toy change", "tests/test_toy.py")
+        opened = _open_code_run(toy_project, awino_home, "toy change", "tests/test_toy.py")
         assert opened.returncode == 0, opened.stdout + opened.stderr
 
-        recorded = _run_smith(
+        recorded = _run_awino(
             ["gate", "record", "tested", "--cmd", "python -m pytest -q"],
             toy_project,
-            smith_home,
+            awino_home,
         )
         # If the bug regresses, this would silently run Smith's own ~295-test
         # suite instead of the toy project's single test.
@@ -102,7 +102,7 @@ class TestGateRecordUsesTargetProject:
         assert "PASS" in recorded.stdout
 
     def test_a_real_failure_in_the_target_project_is_reported_as_a_real_failure(
-        self, tmp_path: Path, smith_home: Path
+        self, tmp_path: Path, awino_home: Path
     ) -> None:
         """The exact failure mode the sandbox surfaced: a broken import."""
         project = tmp_path / "broken-project"
@@ -119,13 +119,13 @@ class TestGateRecordUsesTargetProject:
             encoding="utf-8",
         )
 
-        opened = _open_code_run(project, smith_home, "broken change", "tests/test_broken.py")
+        opened = _open_code_run(project, awino_home, "broken change", "tests/test_broken.py")
         assert opened.returncode == 0, opened.stdout + opened.stderr
 
-        recorded = _run_smith(
+        recorded = _run_awino(
             ["gate", "record", "tested", "--cmd", "python -m pytest -q"],
             project,
-            smith_home,
+            awino_home,
         )
         assert recorded.returncode == 1
         assert "FAIL" in recorded.stdout
@@ -136,13 +136,13 @@ class TestGateCheckFailsLoudlyWithoutGit:
     """A failed git command must never be silently treated as 'no weakening found'."""
 
     def test_diff_base_without_a_git_repo_fails_the_gate_check(
-        self, toy_project: Path, smith_home: Path
+        self, toy_project: Path, awino_home: Path
     ) -> None:
         # toy_project deliberately has no .git directory.
-        opened = _open_code_run(toy_project, smith_home, "toy change", "tests/test_toy.py")
+        opened = _open_code_run(toy_project, awino_home, "toy change", "tests/test_toy.py")
         assert opened.returncode == 0, opened.stdout + opened.stderr
 
-        checked = _run_smith(["gate", "check", "--diff-base", "HEAD"], toy_project, smith_home)
+        checked = _run_awino(["gate", "check", "--diff-base", "HEAD"], toy_project, awino_home)
         # Before the fix, this exited 0 and printed "TESTS_NOT_WEAKENED ok" /
         # "SCOPE_RESPECTED ok" for a command that never actually ran.
         assert checked.returncode == 1, checked.stdout + checked.stderr
@@ -151,7 +151,7 @@ class TestGateCheckFailsLoudlyWithoutGit:
         assert "SCOPE_RESPECTED  ok" not in checked.stdout
 
     def test_diff_base_with_a_real_git_repo_and_no_changes_passes_cleanly(
-        self, toy_project: Path, smith_home: Path
+        self, toy_project: Path, awino_home: Path
     ) -> None:
         subprocess.run(["git", "init", "-q"], cwd=str(toy_project), check=True)
         subprocess.run(["git", "add", "-A"], cwd=str(toy_project), check=True)
@@ -161,9 +161,9 @@ class TestGateCheckFailsLoudlyWithoutGit:
             check=True,
         )
 
-        opened = _open_code_run(toy_project, smith_home, "toy change", "tests/test_toy.py")
+        opened = _open_code_run(toy_project, awino_home, "toy change", "tests/test_toy.py")
         assert opened.returncode == 0, opened.stdout + opened.stderr
 
-        checked = _run_smith(["gate", "check", "--diff-base", "HEAD"], toy_project, smith_home)
+        checked = _run_awino(["gate", "check", "--diff-base", "HEAD"], toy_project, awino_home)
         assert checked.returncode == 0, checked.stdout + checked.stderr
         assert "GIT_DIFF_FAILED" not in checked.stdout

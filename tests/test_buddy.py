@@ -16,9 +16,9 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from smith import stance
-from smith.cli import buddy
-from smith.enforce import Ledger, LoopEvent, TaskClass
+from awino import stance
+from awino.cli import buddy
+from awino.enforce import Ledger, LoopEvent, TaskClass
 
 EXPECTED_STANCES = {
     "advisor",
@@ -32,7 +32,7 @@ EXPECTED_STANCES = {
 
 
 def _make_ledger(tmp_path: Path) -> Ledger:
-    state_root = tmp_path / ".smith"
+    state_root = tmp_path / ".awino"
     state_root.mkdir(parents=True, exist_ok=True)
     return Ledger(state_root)
 
@@ -162,9 +162,9 @@ def test_playbook_session_end_is_measured_from_markers(
 ) -> None:
     # Session-end firings are measured from session_ends.jsonl markers: with
     # no markers the count is a real zero, not "unmeasured".
-    from smith import session_markers
+    from awino import session_markers
 
-    state_root = tmp_path / ".smith"
+    state_root = tmp_path / ".awino"
     events = buddy._playbook_events(ledger_with_runs)
     assert events.session_end == 0
     session_markers.record_session_end(state_root)
@@ -176,7 +176,7 @@ def test_playbook_session_end_is_measured_from_markers(
 
 
 def _write_mission_and_seeds(tmp_path: Path, mission_epoch: float) -> tuple[Path, Path]:
-    state_root = tmp_path / ".smith"
+    state_root = tmp_path / ".awino"
     state_root.mkdir(parents=True, exist_ok=True)
     mission = state_root / "MISSION.md"
     mission.write_text("# Mission\n", encoding="utf-8")
@@ -211,7 +211,7 @@ def test_mission_freshness_math(tmp_path: Path) -> None:
 
 
 def test_mission_freshness_missing_mission(tmp_path: Path) -> None:
-    state_root = tmp_path / ".smith"
+    state_root = tmp_path / ".awino"
     state_root.mkdir(parents=True, exist_ok=True)
     fresh = buddy._mission_freshness(tmp_path, state_root)
     assert fresh.mission_path is None
@@ -221,7 +221,7 @@ def test_mission_freshness_missing_mission(tmp_path: Path) -> None:
 
 
 def test_mission_freshness_missing_tracker(tmp_path: Path) -> None:
-    state_root = tmp_path / ".smith"
+    state_root = tmp_path / ".awino"
     state_root.mkdir(parents=True, exist_ok=True)
     mission = state_root / "MISSION.md"
     mission.write_text("# Mission\n", encoding="utf-8")
@@ -324,7 +324,7 @@ def test_fix_refreshes_stale_mission(
     monkeypatch.chdir(tmp_path)
     mission_epoch = time.time() - 5 * 86400
     _write_mission_and_seeds(tmp_path, mission_epoch)
-    mission = tmp_path / ".smith" / "MISSION.md"
+    mission = tmp_path / ".awino" / "MISSION.md"
     old_text = mission.read_text(encoding="utf-8")
     old_mtime = mission.stat().st_mtime
     result = cli_runner.invoke(buddy.buddy_app, ["--fix"])
@@ -416,7 +416,7 @@ def test_fix_stance_miss_prints_sample_and_exact_pattern(
         in result.output
     )
     assert (
-        "ACTION  update the steel-man regex in src/smith/stance.py _RULES"
+        "ACTION  update the steel-man regex in src/awino/stance.py _RULES"
         in result.output
     )
     assert "BUDDY-FIX done: 1 correction(s) applied, 2 need a human" in result.output
@@ -437,7 +437,7 @@ def test_fix_session_end_runs_catch_up_once(
     cli_runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    state_root = tmp_path / ".smith"
+    state_root = tmp_path / ".awino"
     state_root.mkdir(parents=True, exist_ok=True)
     (state_root / "MISSION.md").write_text("# Mission\n", encoding="utf-8")
     result = cli_runner.invoke(buddy.buddy_app, ["--fix"])

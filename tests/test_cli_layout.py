@@ -1,4 +1,4 @@
-"""The ``smith.cli`` package keeps its shape.
+"""The ``awino.cli`` package keeps its shape.
 
 Three properties that a split can silently lose: each command module declares
 what it owns, library modules never reach back into the CLI, and the set of
@@ -15,9 +15,9 @@ from pathlib import Path
 
 import typer
 
-from smith import cli
+from awino import cli
 
-SRC = Path(__file__).parents[1] / "src" / "smith"
+SRC = Path(__file__).parents[1] / "src" / "awino"
 CLI_PACKAGE = SRC / "cli"
 
 # Every registered command, with sub-app prefixes. Seeded from the 4141-line
@@ -152,16 +152,16 @@ def _imports_cli(module: Path) -> bool:
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             if any(
-                alias.name == "smith.cli" or alias.name.startswith("smith.cli.")
+                alias.name == "awino.cli" or alias.name.startswith("awino.cli.")
                 for alias in node.names
             ):
                 return True
         elif isinstance(node, ast.ImportFrom):
             if node.module is not None and (
-                node.module == "smith.cli" or node.module.startswith("smith.cli.")
+                node.module == "awino.cli" or node.module.startswith("awino.cli.")
             ):
                 return True
-            if node.module == "smith" and any(alias.name == "cli" for alias in node.names):
+            if node.module == "awino" and any(alias.name == "cli" for alias in node.names):
                 return True
     return False
 
@@ -194,7 +194,7 @@ class TestCommandModulesDeclareOwnership:
 
 
 class TestLibraryNeverImportsTheCli:
-    def test_no_module_outside_cli_imports_smith_cli(self) -> None:
+    def test_no_module_outside_cli_imports_awino_cli(self) -> None:
         offenders = [
             module.relative_to(SRC).as_posix()
             for module in SRC.rglob("*.py")
@@ -202,7 +202,7 @@ class TestLibraryNeverImportsTheCli:
             and "__pycache__" not in module.parts
             and _imports_cli(module)
         ]
-        assert not offenders, f"library modules importing smith.cli: {offenders}"
+        assert not offenders, f"library modules importing awino.cli: {offenders}"
 
 
 class TestCommandSurfaceIsUnchanged:

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from smith.machine import (
+from awino.machine import (
     EDGES,
     Machine,
     Node,
@@ -90,7 +90,7 @@ class TestWorkLoopCounter:
 
 class TestLadderChoose:
     def test_six_branches_are_deterministic(self) -> None:
-        from smith.ladder import choose
+        from awino.ladder import choose
 
         assert choose("what is a harness", "awino-consult", None, []).loop == "direct"
         assert (

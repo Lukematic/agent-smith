@@ -2,7 +2,7 @@
 
 ## Contents
 
-Full-boundary tests that run the real `smith.cli` in a subprocess against a
+Full-boundary tests that run the real `awino.cli` in a subprocess against a
 throwaway project: `gate open` → `floor open` → work → `floor close`.
 
 ## Usage

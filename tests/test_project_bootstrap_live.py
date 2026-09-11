@@ -3,13 +3,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from smith.toolchain import Manager, Runner, Toolchain
+from awino.toolchain import Manager, Runner, Toolchain
 
 
 def test_black_box_fixture_matrix(tmp_path: Path, monkeypatch) -> None:
     import os
 
-    from smith import toolchain
+    from awino import toolchain
 
     monkeypatch.setattr(toolchain, "_have", lambda name: name in {"uv", "make", "python"})
 

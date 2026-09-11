@@ -15,7 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from smith import session_log
+from awino import session_log
 
 
 class TestNormalization:
@@ -136,7 +136,7 @@ def _run_hook(project: Path, event: str, payload: dict) -> subprocess.CompletedP
     env.pop("VIRTUAL_ENV", None)
     env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
     return subprocess.run(
-        [sys.executable, "-m", "smith.cli", "hook", event],
+        [sys.executable, "-m", "awino.cli", "hook", event],
         cwd=project,
         env=env,
         input=json.dumps(payload),
@@ -153,7 +153,7 @@ def _onboard(project: Path, **fields: str) -> None:
     env["AWINO_PROJECT"] = str(project)
     env.pop("VIRTUAL_ENV", None)
     env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
-    args = [sys.executable, "-m", "smith.cli", "onboard"]
+    args = [sys.executable, "-m", "awino.cli", "onboard"]
     for key, value in fields.items():
         args += ["--set", f"{key}={value}"]
     args.append("--confirm")
@@ -210,7 +210,7 @@ class TestLiveIncidentReplay:
             [
                 sys.executable,
                 "-m",
-                "smith.cli",
+                "awino.cli",
                 "note",
                 "you renamed config_key to configKey after I told you not to",
                 "--as",
@@ -226,7 +226,7 @@ class TestLiveIncidentReplay:
         assert noted.returncode == 0, noted.stdout + noted.stderr
 
         shown = subprocess.run(
-            [sys.executable, "-m", "smith.cli", "session-log", "--session", "unknown"],
+            [sys.executable, "-m", "awino.cli", "session-log", "--session", "unknown"],
             cwd=tmp_path,
             env=env,
             capture_output=True,
@@ -245,7 +245,7 @@ class TestConcurrentAppendsGetDistinctTurns:
     def test_parallel_appends_yield_unique_monotonic_turns(self, tmp_path: Path) -> None:
         import concurrent.futures as cf
 
-        from smith import session_log
+        from awino import session_log
 
         def one(i: int) -> int:
             return session_log.append(tmp_path, "sess", "user_turn", f"turn {i}").turn

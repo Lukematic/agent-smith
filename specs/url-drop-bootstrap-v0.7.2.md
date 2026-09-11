@@ -6,7 +6,7 @@ When a human starts a new project or session and pastes `https://github.com/Luke
 1. They may clone a second, private copy of A.W.I.N.O. inside the target project, causing knowledge forks and repository clutter.
 2. They may fail to check if the global engine is already installed or stale (`behind` origin/main).
 3. They may manually improvise project scaffolding (`pyproject.toml`, virtualenvs) instead of using `awino project-bootstrap` and `awino onboard`.
-4. Users fear that running updates will overwrite project-local mission (`.smith/project.yaml`), memory, or issue trackers.
+4. Users fear that running updates will overwrite project-local mission (`.awino/project.yaml`), memory, or issue trackers.
 
 ## Decision
 

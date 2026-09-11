@@ -15,10 +15,10 @@ from pathlib import Path
 
 import pytest
 
-from smith import capability
-from smith.capability import State
-from smith.paths import SmithPaths
-from smith.spawn import (
+from awino import capability
+from awino.capability import State
+from awino.paths import AwinoPaths
+from awino.spawn import (
     Assignment,
     Role,
     Runner,
@@ -30,8 +30,8 @@ from smith.spawn import (
 
 
 @pytest.fixture
-def paths() -> SmithPaths:
-    return SmithPaths.discover()
+def paths() -> AwinoPaths:
+    return AwinoPaths.discover()
 
 
 class TestProbesAreReal:
@@ -44,24 +44,24 @@ class TestProbesAreReal:
         monkeypatch.setattr(
             shutil, "which", lambda n: None if n in {"claude", "goose", "codex"} else real(n)
         )
-        cap = capability.probe_spawn(SmithPaths.discover())
+        cap = capability.probe_spawn(AwinoPaths.discover())
         assert cap.state is State.DEGRADED
         assert not cap.state.claimable
         assert "install and authenticate" in cap.limit
 
     def test_probe_confirms_a_present_capability(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(shutil, "which", lambda n: f"/usr/bin/{n}")
-        cap = capability.probe_spawn(SmithPaths.discover())
+        cap = capability.probe_spawn(AwinoPaths.discover())
         assert cap.state is State.REAL
 
     def test_missing_registry_reports_absent(self, tmp_path: Path) -> None:
-        blank = SmithPaths(root=tmp_path)
+        blank = AwinoPaths(root=tmp_path)
         blank.ensure_scaffold()
         assert capability.probe_knowledge(blank).state is State.ABSENT
 
     def test_empty_ledger_is_degraded_not_real(self, tmp_path: Path) -> None:
         # An agent with no recorded lessons must not claim experience.
-        blank = SmithPaths(root=tmp_path)
+        blank = AwinoPaths(root=tmp_path)
         blank.ensure_scaffold()
         blank.lessons.write_text("# Lessons\n\nnothing yet\n", encoding="utf-8")
         cap = capability.probe_memory(blank)
@@ -71,7 +71,7 @@ class TestProbesAreReal:
     def test_a_crashing_probe_reports_absent(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # A probe that raises proves the capability is not dependable, which is
         # information. Swallowing it would recreate the original bug.
-        def explode(_paths: SmithPaths):
+        def explode(_paths: AwinoPaths):
             raise RuntimeError("boom")
 
         monkeypatch.setattr(capability, "PROBES", (explode,))
@@ -83,32 +83,32 @@ class TestProbesAreReal:
 class TestHonestLimits:
     """Degraded capabilities must carry their limit into the claim."""
 
-    def test_every_degraded_capability_states_a_limit(self, paths: SmithPaths) -> None:
+    def test_every_degraded_capability_states_a_limit(self, paths: AwinoPaths) -> None:
         for cap in capability.assess(paths):
             if cap.state is State.DEGRADED:
                 assert cap.limit, f"{cap.name} is degraded with no stated limit"
 
-    def test_degraded_claim_includes_the_limit(self, paths: SmithPaths) -> None:
+    def test_degraded_claim_includes_the_limit(self, paths: AwinoPaths) -> None:
         for cap in capability.assess(paths):
             if cap.state is State.DEGRADED:
                 assert "but" in cap.honest_claim
 
-    def test_self_improvement_does_not_overclaim(self, paths: SmithPaths) -> None:
+    def test_self_improvement_does_not_overclaim(self, paths: AwinoPaths) -> None:
         # Refreshing an index is version tracking, not learning. Calling it
         # learning would be the wishful labelling this file guards against.
         cap = capability.probe_self_improvement(paths)
         assert cap.state is State.DEGRADED
         assert "does not discover" in cap.limit
 
-    def test_autonomy_does_not_claim_loop_level(self, paths: SmithPaths) -> None:
+    def test_autonomy_does_not_claim_loop_level(self, paths: AwinoPaths) -> None:
         cap = capability.probe_autonomy(paths)
         assert cap.state is State.DEGRADED
         assert "no scheduler" in cap.limit
 
-    def test_diagrams_are_honestly_absent(self, paths: SmithPaths) -> None:
+    def test_diagrams_are_honestly_absent(self, paths: AwinoPaths) -> None:
         assert capability.probe_diagrams(paths).state is State.ABSENT
 
-    def test_summary_counts_every_capability(self, paths: SmithPaths) -> None:
+    def test_summary_counts_every_capability(self, paths: AwinoPaths) -> None:
         caps = capability.assess(paths)
         assert sum(capability.summary(caps).values()) == len(caps)
 
@@ -233,7 +233,7 @@ class TestNoBlindTrust:
     def test_nesting_is_refused(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         # Subagents are leaf nodes. Runaway delegation is expensive and hard to see.
         monkeypatch.setenv("SMITH_SPAWN_DEPTH", "1")
-        from smith.spawn import spawn_one
+        from awino.spawn import spawn_one
 
         result = spawn_one(
             Assignment("a", Role.BUILDER, "x", ["a.py"], verification="t"),
@@ -293,7 +293,7 @@ class TestClaimsGate:
     """
 
     def test_gate_blocks_on_an_unsupported_claim(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from smith import health
+        from awino import health
 
         monkeypatch.setitem(
             capability.CLAIMED_IN_DOCS,
@@ -302,7 +302,7 @@ class TestClaimsGate:
                 "imaginary capability", State.ABSENT, "no implementation exists"
             ),
         )
-        result = health.check_capability_claims(SmithPaths.discover())
+        result = health.check_capability_claims(AwinoPaths.discover())
         assert result.blocking
         assert "imaginary capability" in result.detail
         assert result.remedy
@@ -310,29 +310,29 @@ class TestClaimsGate:
     def test_missing_optional_runner_warns_but_does_not_fail_ci(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from smith import health
-        from smith.health import Health
+        from awino import health
+        from awino.health import Health
 
         real = shutil.which
         monkeypatch.setattr(
             shutil, "which", lambda n: None if n in {"claude", "goose", "codex"} else real(n)
         )
-        result = health.check_capability_claims(SmithPaths.discover())
+        result = health.check_capability_claims(AwinoPaths.discover())
         assert not result.blocking
         assert result.health is Health.WARN
         assert "stated limit" in result.detail
 
     def test_gate_passes_when_every_claim_is_backed(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from smith import health
-        from smith.health import Health
+        from awino import health
+        from awino.health import Health
 
         monkeypatch.setattr(shutil, "which", lambda n: f"/usr/bin/{n}")
-        result = health.check_capability_claims(SmithPaths.discover())
+        result = health.check_capability_claims(AwinoPaths.discover())
         assert not result.blocking
         assert result.health in {Health.OK, Health.WARN}
 
     def test_gate_is_registered_in_the_suite(self) -> None:
         # A gate that exists but never runs is not a gate.
-        from smith import health
+        from awino import health
 
         assert health.check_capability_claims in health.FAST_CHECKS

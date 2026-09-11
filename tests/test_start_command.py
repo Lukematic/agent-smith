@@ -31,7 +31,7 @@ _CONTRACT_LABELS = (
 
 def _run_cli(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "-m", "smith.cli", *args],
+        [sys.executable, "-m", "awino.cli", *args],
         cwd=cwd,
         env={**dict(os.environ), "PYTHONPATH": str(SMITH_ROOT / "src")},
         capture_output=True,
@@ -74,7 +74,7 @@ class TestStartNeverOpensAGateRun:
     def test_start_does_not_create_a_run_ledger_entry(self, tmp_path: Path) -> None:
         project = _init_project(tmp_path)
         _run_cli(["start"], cwd=project)
-        run_dir = project / ".smith" / "run"
+        run_dir = project / ".awino" / "run"
         assert not run_dir.exists() or not any(run_dir.iterdir())
 
 

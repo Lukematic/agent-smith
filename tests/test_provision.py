@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from smith.provision import (
+from awino.provision import (
     Action,
     Step,
     StepKind,
@@ -76,8 +76,8 @@ class TestPlanIsPureAndComplete:
         project = _with_pyproject(tmp_path)
         (project / ".venv").mkdir()
         (project / ".seeds").mkdir()
-        (project / ".smith" / "run").mkdir(parents=True)
-        (project / ".smith" / "memory").mkdir(parents=True)
+        (project / ".awino" / "run").mkdir(parents=True)
+        (project / ".awino" / "memory").mkdir(parents=True)
         assert plan(project) == []
 
     def test_plan_writes_nothing(self, tmp_path: Path) -> None:
@@ -96,13 +96,13 @@ class TestPlanIsPureAndComplete:
 
 
 class TestApplyIsLoudAndConsentful:
-    def test_apply_scaffolds_smith_and_reports_it(self, tmp_path: Path) -> None:
+    def test_apply_scaffolds_state_and_reports_it(self, tmp_path: Path) -> None:
         project = _bare(tmp_path)
         steps = [s for s in plan(project) if s.kind is StepKind.SCAFFOLD_STATE]
         actions = apply_steps(project, steps, ask=lambda q: False)
-        assert (project / ".smith" / "run").is_dir()
-        assert (project / ".smith" / "memory").is_dir()
-        assert actions == [Action(StepKind.SCAFFOLD_STATE, "CREATED", ".smith/{run,memory}")]
+        assert (project / ".awino" / "run").is_dir()
+        assert (project / ".awino" / "memory").is_dir()
+        assert actions == [Action(StepKind.SCAFFOLD_STATE, "CREATED", ".awino/{run,memory}")]
 
     def test_a_declined_question_step_is_skipped_and_reported(self, tmp_path: Path) -> None:
         project = _bare(tmp_path)
@@ -125,11 +125,11 @@ class TestApplyIsLoudAndConsentful:
 
     def test_apply_never_touches_mission_or_memory(self, tmp_path: Path) -> None:
         project = _with_pyproject(tmp_path)
-        smith = project / ".smith"
-        (smith / "memory").mkdir(parents=True)
-        lessons = smith / "memory" / "lessons.md"
+        state_dir = project / ".awino"
+        (state_dir / "memory").mkdir(parents=True)
+        lessons = state_dir / "memory" / "lessons.md"
         lessons.write_text("- [2026-01-01] a durable lesson\n", encoding="utf-8")
-        project_yaml = smith / "project.yaml"
+        project_yaml = state_dir / "project.yaml"
         project_yaml.write_text("mission: keep me\n", encoding="utf-8")
         before_lessons = lessons.read_bytes()
         before_yaml = project_yaml.read_bytes()
@@ -197,7 +197,7 @@ class TestRecipeMustExist:
         assert not any(s.kind is StepKind.VERIFY_TOOLCHAIN for s in plan(project))
 
     def test_makefile_without_a_test_target_is_not_offered(self, tmp_path: Path) -> None:
-        from smith.provision import discover_verification
+        from awino.provision import discover_verification
 
         project = _with_pyproject(tmp_path)
         (project / "Makefile").write_text("lint:\n\truff check .\n", encoding="utf-8")
@@ -211,7 +211,7 @@ class TestProjectEnv:
     def test_env_prefers_the_project_venv_and_drops_the_inherited_one(self, tmp_path: Path) -> None:
         import os
 
-        from smith.provision import project_env
+        from awino.provision import project_env
 
         project = _with_pyproject(tmp_path)
         scripts = project / ".venv" / ("Scripts" if os.name == "nt" else "bin")
@@ -234,7 +234,7 @@ class TestProjectEnv:
     ) -> None:
         import os
 
-        from smith.provision import project_env
+        from awino.provision import project_env
 
         project = _bare(tmp_path)
         system_dir = r"C:\Windows" if os.name == "nt" else "/usr/bin"

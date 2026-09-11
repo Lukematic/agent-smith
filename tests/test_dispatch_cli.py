@@ -1,7 +1,7 @@
 """CLI wiring for ``awino dispatch``: the same seven-step trip S3 implements,
 reachable as one command a human or a hook can actually invoke.
 
-Uses real subprocess invocation of ``python -m smith.cli`` rather than
+Uses real subprocess invocation of ``python -m awino.cli`` rather than
 CliRunner, because the exit-code contract (nonzero unless COMPLETE) and the
 "nothing is spawned" assertions must hold for the actual process boundary a
 human would hit, not just an in-process test double.
@@ -24,7 +24,7 @@ _DELEGATE_REQUEST = (
 
 def _run_cli(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "-m", "smith.cli", *args],
+        [sys.executable, "-m", "awino.cli", *args],
         cwd=cwd,
         env={**_base_env(), "PYTHONPATH": str(SMITH_ROOT / "src")},
         capture_output=True,

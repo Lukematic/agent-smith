@@ -1,8 +1,8 @@
 """Tests for mission alignment: the driver flags (never blocks) when an
 artifact ignores the project's stated mission.
 
-Mission sources: `.smith/MISSION.md` (headings and list items) or
-`.smith/project.yaml` (`goals:` list). The keyword heuristic is documented:
+Mission sources: `.awino/MISSION.md` (headings and list items) or
+`.awino/project.yaml` (`goals:` list). The keyword heuristic is documented:
 lowercase alphanumeric words, minimum five characters, an explicit stopword
 set, case-insensitive substring matching.
 """
@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from smith import loops
-from smith.enforce import Ledger
+from awino import loops
+from awino.enforce import Ledger
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILL_MD = REPO_ROOT / "skills" / "awino-rpi" / "SKILL.md"
@@ -74,7 +74,7 @@ def event_driver(
 
 @pytest.fixture()
 def loop_ledger(tmp_path: Path) -> Ledger:
-    return Ledger(tmp_path / ".smith")
+    return Ledger(tmp_path / ".awino")
 
 
 def _write_research(driver: loops.RpiDriver, state: loops.LoopState, text: str) -> None:
@@ -84,9 +84,9 @@ def _write_research(driver: loops.RpiDriver, state: loops.LoopState, text: str) 
 
 
 def _write_mission_md(project: Path, text: str) -> None:
-    smith = project / ".smith"
-    smith.mkdir(parents=True, exist_ok=True)
-    (smith / "MISSION.md").write_text(text, encoding="utf-8")
+    state_dir = project / ".awino"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    (state_dir / "MISSION.md").write_text(text, encoding="utf-8")
 
 
 class TestMissionSources:
@@ -118,9 +118,9 @@ class TestMissionSources:
         assert "Authenticate users securely" in goals
 
     def test_project_yaml_goals_are_goals(self, project: Path) -> None:
-        smith = project / ".smith"
-        smith.mkdir(parents=True, exist_ok=True)
-        (smith / "project.yaml").write_text(
+        state_dir = project / ".awino"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        (state_dir / "project.yaml").write_text(
             "goals:\n  - Authenticate users securely\n  - title: Ship quickly\n",
             encoding="utf-8",
         )
@@ -130,8 +130,8 @@ class TestMissionSources:
 
     def test_mission_md_takes_precedence_over_yaml(self, project: Path) -> None:
         _write_mission_md(project, "# Mission\n\n## From markdown\n")
-        smith = project / ".smith"
-        (smith / "project.yaml").write_text(
+        state_dir = project / ".awino"
+        (state_dir / "project.yaml").write_text(
             "goals:\n  - From yaml\n", encoding="utf-8"
         )
         goals = loops._mission_goal_texts(project)

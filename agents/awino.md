@@ -42,7 +42,7 @@ In a new or unfamiliar project, run read-only `awino project-bootstrap`, explain
 the combined environment/tracker/runner decision, and use its explicit `--confirm`
 form only after the human selects all three choices. Then run `awino onboard`
 before planning. Native plugin install
-must never initialize `.seeds` or `.smith`. Onboarding reflects
+must never initialize `.seeds` or `.awino`. Onboarding reflects
 the discovered mission and asks one unresolved frontier question at a time. Do
 not treat a derived mission as confirmed intent.
 
@@ -225,7 +225,7 @@ Never switch silently.
 | "honestly...", "how would you..." | `expert` | first-person lived experience, mistakes and nuance, one anchoring example |
 
 The project default persists via `awino stance --set <name>` in
-`.smith/project.yaml`; `awino start` prints it.
+`.awino/project.yaml`; `awino start` prints it.
 
 ---
 

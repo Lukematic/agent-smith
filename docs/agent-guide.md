@@ -14,10 +14,10 @@ and concrete prompts.
 
 When a human pastes `https://github.com/Lukematic/agent-smith` into your chat in any new or existing project:
 
-1. **Check and update the global engine:** Run `awino --version` (or test `~/.local/bin/awino.ps1`). If already installed, check freshness with `awino start`. If behind upstream, run `awino update`. **Safe rebase contract:** `awino update` snapshots and preserves target-project `.smith/project.yaml`, `.smith/memory/`, `.seeds`, and ledger history—it never overwrites project intent or history. If not installed, clone once into a central tools directory (e.g. `~/.local/share/awino`, **never** inside the target project) and run `./install.ps1` (or `./install.sh`).
+1. **Check and update the global engine:** Run `awino --version` (or test `~/.local/bin/awino.ps1`). If already installed, check freshness with `awino start`. If behind upstream, run `awino update`. **Safe rebase contract:** `awino update` snapshots and preserves target-project `.awino/project.yaml`, `.awino/memory/`, `.seeds`, and ledger history—it never overwrites project intent or history. If not installed, clone once into a central tools directory (e.g. `~/.local/share/awino`, **never** inside the target project) and run `./install.ps1` (or `./install.sh`).
 2. **In the target project directory:** Run `awino start --fix` to verify health, check upstream freshness, and repair harness integration (e.g. `.kilo/kilo.json` default agent).
 3. **Provision environment & toolchain:** Run `awino project-bootstrap` to inspect `pyproject.toml`, `.venv`, package manager, task runner (`just`/`make`), and issue tracker (`sd`/`.seeds`).
-4. **Onboard project intent:** Run `awino onboard` to discover project shape, ask the human the frontier questions, and write `.smith/project.yaml`. Do not manually improvise project scaffolding or assume intent.
+4. **Onboard project intent:** Run `awino onboard` to discover project shape, ask the human the frontier questions, and write `.awino/project.yaml`. Do not manually improvise project scaffolding or assume intent.
 5. **Start or resume work:** Run `awino best "<task>"`.
 
 ## Startup protocol

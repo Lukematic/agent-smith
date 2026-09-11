@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from smith.harness import Harness
+from awino.harness import Harness
 
 
 def _probe(path: Path) -> bool:
@@ -31,7 +31,7 @@ class TestRooSkillsInstallToTheProbedPath:
         assert Harness.ROO.supports_skills is True
 
     def test_roo_skills_land_at_the_probed_layout(self, tmp_path: Path) -> None:
-        from smith.harness import Target
+        from awino.harness import Target
 
         target = Target(Harness.ROO, tmp_path / "roo-home", "global")
         assert target.skills_root == tmp_path / "roo-home" / "skills"
@@ -39,7 +39,7 @@ class TestRooSkillsInstallToTheProbedPath:
 
 class TestRooModeSupportStillResolvesThroughModesPy:
     def test_roo_is_a_known_editor_in_modes_py(self) -> None:
-        from smith.modes import EDITORS
+        from awino.modes import EDITORS
 
         assert "roo" in EDITORS
         label, extension_id, project_file = EDITORS["roo"]
@@ -58,7 +58,7 @@ class TestClineAndCodexAreHarnessMembers:
 
 class TestUnverifiedLocationsAreMarkedNotAssumed:
     def test_cline_global_path_is_marked_unverified_in_the_module_docs(self) -> None:
-        from smith import harness
+        from awino import harness
 
         doc = harness.__doc__ or ""
         assert "UNVERIFIED" in doc
@@ -70,18 +70,18 @@ class TestUnverifiedLocationsAreMarkedNotAssumed:
     def test_install_never_clobbers_a_human_authored_agents_md(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from smith import harness
+        from awino import harness
 
         fake_home = tmp_path / "home"
         fake_home.mkdir()
         monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
 
-        smith_home = tmp_path / "smith-home"
-        (smith_home / "agents").mkdir(parents=True)
-        (smith_home / "agents" / "awino.md").write_text(
+        awino_home = tmp_path / "awino-home"
+        (awino_home / "agents").mkdir(parents=True)
+        (awino_home / "agents" / "awino.md").write_text(
             "---\nname: awino\n---\n\nbody", encoding="utf-8"
         )
-        (smith_home / "skills").mkdir(parents=True)
+        (awino_home / "skills").mkdir(parents=True)
 
         project = tmp_path / "proj"
         project.mkdir()
@@ -89,6 +89,6 @@ class TestUnverifiedLocationsAreMarkedNotAssumed:
         (project / "AGENTS.md").write_text(human_text, encoding="utf-8")
 
         target = harness.Target(harness.Harness.CODEX, project, "project")
-        actions = harness.install(smith_home, target, skills=True)
+        actions = harness.install(awino_home, target, skills=True)
         assert (project / "AGENTS.md").read_text(encoding="utf-8") == human_text
         assert any(a.failed for a in actions)

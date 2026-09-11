@@ -112,6 +112,11 @@ candidates that were considered and preserved):
   A.W.I.N.O. The former command, package name, mode slugs, and `.smith/`
   project directory are unchanged so existing installs keep working.
 - **Phase 2:** `awino` becomes canonical while the former command remains a deprecated compatibility alias.
-- **Phase 3 (not yet done):** repository rename and directory migration, only
-  after compatibility is independently tested. This step is not taken in this
-  change — see `docs/name-options.txt` for why.
+- **Phase 3 (done):** the deprecated package name `smith` is renamed to `awino`,
+  and the project
+  state directory migrated `.smith/` -> `.awino/` with a one-shot,
+  zero-data-loss migration on first run (`awino.paths.migrate_legacy_dir`).
+  The deprecated `smith` console command, `smith-*` skill aliases, and `SMITH_*`
+  environment fallbacks remain as deprecated compatibility shims. The
+  *repository* rename (`github.com/Lukematic/agent-smith`) is still pending —
+  only the owner can rename it on github.com.
