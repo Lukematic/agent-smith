@@ -55,7 +55,14 @@ for _stream in (sys.stdout, sys.stderr):
 
 app = typer.Typer(
     add_completion=False,
-    no_args_is_help=True,
+    # NOTE: deliberately not no_args_is_help=True. Bare `awino` is the
+    # operator (the one front door): it orients on project state and narrates
+    # the single next action. invoke_without_command lets the callback below
+    # fire on a true no-args invocation; --help, --version, and every
+    # subcommand are untouched -- this only changes the no-args case, which
+    # the main callback detects via ctx.invoked_subcommand.
+    no_args_is_help=False,
+    invoke_without_command=True,
     help="A.W.I.N.O.: knowledge harness, artifact validation, and folder hygiene.",
 )
 gate_app = typer.Typer(
@@ -81,6 +88,7 @@ def version_callback(value: bool) -> None:
 
 @app.callback()
 def main(
+    ctx: typer.Context,
     version_requested: bool = typer.Option(
         False,
         "--version",
@@ -91,6 +99,13 @@ def main(
 ) -> None:
     """A.W.I.N.O. command group."""
     del version_requested
+    if ctx.invoked_subcommand is None:
+        # Bare `awino`: the operator. --help and --version are handled before
+        # this callback runs, so this branch only fires on a true no-args
+        # invocation. Subcommand dispatch is untouched.
+        from awino import operator as _operator
+
+        raise typer.Exit(_operator.run(_workspace(), _echo))
 
 
 def deprecated_smith_entry() -> None:
