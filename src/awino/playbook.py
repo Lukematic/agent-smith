@@ -400,3 +400,86 @@ STEP_SKILLS["carry-intent"] = "direct"
 STEP_SKILLS["clear-intent"] = "direct"
 DEFAULT_PLAYBOOK["session-start"].insert(1, "carry-intent")
 DEFAULT_PLAYBOOK["task-close"].append("clear-intent")
+
+
+# ── memory-write: session-end working-memory deltas ──────────────────────────
+#
+# The session-end order writes the facts/decisions deltas: session notes
+# recorded --as fact are promoted to .awino/facts.md (durable, append-only),
+# and this session's corrections run through the user-model learning rules.
+# Promotion is tracked in memory_promoted.json so a repeated session-end
+# (buddy --fix catch-up, then best --end) never double-records.
+
+_PROMOTED_FILE = "memory_promoted.json"
+
+
+def _promoted_turns(state_root: Path) -> set[str]:
+    path = state_root / _PROMOTED_FILE
+    if not path.is_file():
+        return set()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return set()
+    promoted = data.get("promoted") if isinstance(data, dict) else None
+    return set(promoted) if isinstance(promoted, list) else set()
+
+
+def _save_promoted_turns(state_root: Path, promoted: set[str]) -> None:
+    path = state_root / _PROMOTED_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"promoted": sorted(promoted)}, indent=2) + "\n",
+        encoding="utf-8",
+        newline="",
+    )
+
+
+def _step_memory_write(ctx: Context) -> list[str]:
+    from awino import session_log, session_state, working_memory
+
+    session = session_state.load(ctx.state_root)
+    if session is None:
+        return ["no active session: memory deltas skipped"]
+    sid = session.session_id
+    promoted = _promoted_turns(ctx.state_root)
+    lines: list[str] = []
+
+    store = working_memory.Facts(ctx.state_root)
+    for ask in session_log.facts(ctx.state_root, sid):
+        key = f"{sid}:{ask.turn}"
+        if key in promoted:
+            continue
+        fact_id = store.append(ask.text)
+        promoted.add(key)
+        lines.append(f"fact recorded: {fact_id} -- {ask.text[:80]}")
+
+    pending = [
+        ask
+        for ask in session_log.corrections(ctx.state_root, sid)
+        if f"{sid}:{ask.turn}" not in promoted
+    ]
+    if pending:
+        model = working_memory.UserModel.load()
+        before = len(model.get("learned", []))
+        if working_memory.UserModel.apply_corrections(
+            model, [ask.text for ask in pending]
+        ):
+            working_memory.UserModel.save(model)
+            for entry in model.get("learned", [])[before:]:
+                if entry.get("skipped"):
+                    continue
+                lines.append(
+                    f"user model: {entry['rule']} set "
+                    f"{entry['field']}={entry['to']!r}"
+                )
+        for ask in pending:
+            promoted.add(f"{sid}:{ask.turn}")
+
+    _save_promoted_turns(ctx.state_root, promoted)
+    return lines or ["no memory deltas this session"]
+
+
+STEPS["memory-write"] = _step_memory_write
+STEP_SKILLS["memory-write"] = "direct"
+DEFAULT_PLAYBOOK["session-end"].append("memory-write")

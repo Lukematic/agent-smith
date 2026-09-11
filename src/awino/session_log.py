@@ -123,7 +123,7 @@ class Ask:
 
     turn: int
     ts: str
-    kind: str  # "user_turn" | "agent_question" | "correction"
+    kind: str  # "user_turn" | "agent_question" | "correction" | "fact"
     text: str
     text_norm: str
     run_id: str | None = None
@@ -259,3 +259,13 @@ def corrections(state_root: Path, session_id: str) -> list[Ask]:
     return list(
         reversed([a for a in _read_all(log_path(state_root, session_id)) if a.kind == "correction"])
     )
+
+
+def facts(state_root: Path, session_id: str) -> list[Ask]:
+    """Session notes recorded --as fact, oldest first.
+
+    These are the session-end promotion candidates: durable project truths
+    the session surfaced, promoted to .awino/facts.md by the memory-write
+    playbook step.
+    """
+    return [a for a in _read_all(log_path(state_root, session_id)) if a.kind == "fact"]

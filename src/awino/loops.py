@@ -39,7 +39,7 @@ from typing import ClassVar
 
 import yaml
 
-from awino import heilmeier, seeds
+from awino import heilmeier, seeds, working_memory
 from awino.enforce import Ledger, LoopEvent
 from awino.paths import project_state_dir
 
@@ -1299,6 +1299,7 @@ class LoopDriver(abc.ABC):
         skill_md: Path | None = None,
         open_rpi_run=None,
         ledger: Ledger | None = None,
+        state_root: Path | None = None,
     ) -> None:
         self.project_root = project_root
         self.loops_dir = loops_dir
@@ -1312,6 +1313,10 @@ class LoopDriver(abc.ABC):
         # audit trail; the driver's JSON state stays the working state.
         # None means no trail (older tests, or callers without a ledger).
         self.ledger = ledger
+        # Project state root for working memory (checklist, decisions). None
+        # means the memory hooks are no-ops: driver-only tests and callers
+        # without project state stay deterministic and file-free.
+        self.state_root = state_root
         # Set by check() after each first-validation of an artifact: the
         # mission goals the artifact did not address, or None. The CLI prints
         # these as the human's drift notice. Transient; reset on every check().
@@ -1378,6 +1383,22 @@ class LoopDriver(abc.ABC):
             )
         )
 
+    # ── working memory ───────────────────────────────────────────────────
+    # The checklist is the now: every phase boundary updates it, and `awino
+    # best` shows the compact brief at session start. Decisions feed
+    # decisions.md with their why. Both are no-ops when the driver has no
+    # state_root, so driver-only tests stay file-free.
+
+    def _checklist(self) -> working_memory.Checklist | None:
+        if self.state_root is None:
+            return None
+        return working_memory.Checklist(self.state_root)
+
+    def _decisions(self) -> working_memory.Decisions | None:
+        if self.state_root is None:
+            return None
+        return working_memory.Decisions(self.state_root)
+
     # ── lifecycle ────────────────────────────────────────────────────────────
 
     def new(
@@ -1413,6 +1434,9 @@ class LoopDriver(abc.ABC):
             detail += f"; seed: {state.seed_id}"
         self._emit(state, "loop_started", detail=detail)
         self._emit(state, "phase_started", detail="initial phase")
+        checklist = self._checklist()
+        if checklist is not None:
+            checklist.note_loop_created(state.id, self.loop_kind, task, state.phase)
         return state
 
     @abc.abstractmethod
@@ -1590,6 +1614,15 @@ class LoopDriver(abc.ABC):
             )
             self._emit(state, "artifact_rejected", detail=detail)
         self.save(state)
+        if state.locked:
+            checklist = self._checklist()
+            if checklist is not None:
+                checklist.note_blocked(
+                    state.id,
+                    f"phase '{state.phase}' failed validation "
+                    f"{state.attempts[state.phase]}/{MAX_ATTEMPTS} times; "
+                    "a human must intervene",
+                )
 
     def approve_plan(self, state: LoopState, by: str, reason: str) -> None:
         state.approvals.append(
@@ -1607,6 +1640,14 @@ class LoopDriver(abc.ABC):
             detail=f"by={by}" + (f" reason={reason}" if reason else ""),
         )
         self.save(state)
+        decisions = self._decisions()
+        if decisions is not None:
+            decisions.record(
+                decision=f"approved {self.loop_kind} loop {state.id} plan",
+                why=reason.strip() or working_memory.WHY_MISSING,
+                source=f"loop approve --by {by} for loop {state.id}",
+                key=f"{state.id}:approval",
+            )
 
     def plan_approved(self, state: LoopState) -> bool:
         return any(a.get("phase") == "plan" for a in state.approvals)
@@ -1635,11 +1676,18 @@ class LoopDriver(abc.ABC):
         self._check_advance_allowed(state)
         nxt = self._next_phase(state)
         if nxt is None:
-            return self._complete(state)
+            self._complete(state)
+            checklist = self._checklist()
+            if checklist is not None:
+                checklist.note_done(state.id, "all phases complete")
+            return state.phase
         previous = state.phase
         state.phase = nxt
         self._emit(state, "phase_started", detail=f"advanced from '{previous}'")
         self.save(state)
+        checklist = self._checklist()
+        if checklist is not None:
+            checklist.note_phase(state.id, previous, nxt)
         return state.phase
 
     @abc.abstractmethod
@@ -1703,6 +1751,11 @@ class LoopDriver(abc.ABC):
         )
         self._emit(state, "phase_started", detail=f"re-entry of {phase!r}")
         self.save(state)
+        checklist = self._checklist()
+        if checklist is not None:
+            checklist.note_unblocked(
+                state.id, f"re-entered {phase!r} from {previous!r}: {note}"
+            )
         return state
 
     # ── mission alignment ────────────────────────────────────────────────
@@ -2010,7 +2063,11 @@ class RpiDriver(LoopDriver):
     def describe_pairing(self, state: LoopState) -> list[str]:
         """Status lines for the pair-plan phase: the Honda presented as the
         default recommendation, alternates as labeled recommendations with
-        effort, then what's asked, what's answered, what's still open."""
+        effort, then what's asked, what's answered, what's still open.
+
+        Calibrated by the user model: a human who repeatedly overrode the
+        Honda default (RULE-SCOPE-BIG) sees the bigger recommendations first.
+        """
         lines: list[str] = []
         approaches = self.pairing_approaches(state)
         if approaches:
@@ -2018,7 +2075,21 @@ class RpiDriver(LoopDriver):
                 "APPROACHES  the default recommendation is the Honda -- exactly "
                 "what was asked; alternates are recommendations, never the plan"
             )
-            for name, effort, role in approaches:
+            scope = working_memory.UserModel.recommendation_scope(
+                working_memory.UserModel.load()
+            )
+            ordered = list(approaches)
+            if scope == "big-first":
+                # The human's learned preference, not the philosophy's: the
+                # bigger recommendations lead, the Honda stays labeled.
+                ordered = [a for a in ordered if a[2] != "default"] + [
+                    a for a in ordered if a[2] == "default"
+                ]
+                lines.append(
+                    "OPTIONS  showing bigger recommendations first "
+                    "(learned: this human overrides the Honda default)"
+                )
+            for name, effort, role in ordered:
                 if role == "default":
                     lines.append(
                         f"  - {name} [DEFAULT RECOMMENDATION -- delivers exactly "
@@ -2073,6 +2144,17 @@ class RpiDriver(LoopDriver):
             "human_answered",
             detail=f"question={qid} kind={kind} by={by}: {text}",
         )
+        decisions = self._decisions()
+        if decisions is not None:
+            asked = dict(self.pairing_questions(state))
+            question = asked.get(qid, "(question text not found in brief)")
+            kind_word = "DEFAULT" if kind == "default" else "ANSWER"
+            decisions.record(
+                decision=f"{qid}: {question} -> {kind_word}: {text}",
+                why=text,
+                source=f"pair-planning {qid} in loop {state.id} (by {by})",
+                key=f"{state.id}:{qid}",
+            )
         return record
 
     def _check_advance_allowed(self, state: LoopState) -> None:
@@ -2307,6 +2389,12 @@ class RalphDriver(LoopDriver):
         self.save(state)
         report = self._escalation_report(state)
         self._emit(state, "loop_closed", phase="verify", detail=report)
+        checklist = self._checklist()
+        if checklist is not None:
+            checklist.note_blocked(
+                state.id,
+                "escalated after 3 failed verifications; a human must intervene",
+            )
         if state.seed_id:
             self.completion_seed_note = self.seed_open_note(state)
         return "done"

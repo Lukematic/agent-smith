@@ -173,15 +173,16 @@ def ask_command(
 @app.command("note")
 def note_command(
     text: str = typer.Argument(..., help="What the human said, corrected, or asked"),
-    kind: str = typer.Option("correction", "--as", help="user_turn, agent_question, or correction"),
+    kind: str = typer.Option("correction", "--as", help="user_turn, agent_question, correction, or fact"),
     run_id: str | None = typer.Option(None, "--run", help="Link to the active run, if any"),
 ) -> None:
-    """Record one session-scoped ask/instruction/correction.
+    """Record one session-scoped ask/instruction/correction/fact.
 
     This is separate from Seeds and separate from the gate ledger: it holds
     what was said this conversation, not tasks or verified evidence. Most of
     a real conversation happens with no open gate run at all, so this exists
-    independently of Run/Checkpoint rather than requiring one.
+    independently of Run/Checkpoint rather than requiring one. Notes recorded
+    --as fact are promoted to .awino/facts.md by the session-end order.
     """
     workspace = _workspace()
     session = session_state.load(workspace.state_root)
@@ -1117,6 +1118,16 @@ def stance_command(
         return
 
     _echo(f"STANCE  {current} (default for this project)")
+    # User-model calibration: learned preferences (e.g. wants challenges,
+    # prefers terse narration) are shown, never silently applied -- the
+    # stance default itself stays the project's explicit choice.
+    from awino import working_memory
+
+    calibration = working_memory.UserModel.calibration_line(
+        working_memory.UserModel.load()
+    )
+    if calibration:
+        _echo(f"STANCE_USER_MODEL  {calibration}")
     for item in stance.STANCES:
         marker = "*" if item.name == current else " "
         _echo(f"  {marker} {item.name:<17} {item.trigger_description}")
@@ -1161,6 +1172,9 @@ def _run_session_end_order() -> None:
     workspace = _workspace()
     tracker = seeds.Seeds(workspace.project.root)
     open_titles = [i.title for i in tracker.list_open()] if tracker.state()[0].usable else []
+    # "What moved this session" is measured against the previous session-end
+    # marker, so capture it before this run records a new one.
+    since = session_markers.last_session_end_time(workspace.state_root)
     for line in playbook.run_event(
         "session-end",
         workspace.state_root,
@@ -1171,6 +1185,12 @@ def _run_session_end_order() -> None:
         _echo(line)
     marker = session_markers.record_session_end(workspace.state_root)
     _echo(f"SESSION_END_MARKED  {marker}")
+    from awino import working_memory
+
+    for line in working_memory.Checklist(workspace.state_root).moves_summary_lines(
+        since
+    ):
+        _echo(line)
 
 
 @app.command("best")
@@ -1215,6 +1235,13 @@ def best_command(
             ledger=Ledger(workspace.state_root),
             open_seeds=open_titles,
         ):
+            _echo(line)
+        _echo("")
+        # The checklist is the now: compact brief (focus + blocked), never a
+        # dump, so the human starts the session knowing what's in flight.
+        from awino import working_memory
+
+        for line in working_memory.Checklist(workspace.state_root).brief_lines():
             _echo(line)
         _echo("")
         # The chain ends with the buddy report (read-only): the human sees

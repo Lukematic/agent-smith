@@ -171,6 +171,41 @@ attempt gets fresh context and a second model reviews it.
 | Per-repo install | **no by default** — one global install; repos get a minimal harness-appropriate pointer |
 | Memory store | file ledger for recall and audit (no MCP client implemented) |
 
+---
+
+## 9. Working memory (the mind to the ledger's court record)
+
+The ledger proves what happened; working memory holds what it means and
+what's next. Five pieces, all deterministic, in project state (`.awino/`)
+except the user model (`~/.awino/profile.yaml` — the human is not the
+project):
+
+- **Mission + success criteria** = the target (how we know we won vs. not).
+- **Seeds** = the commitments.
+- **Checklist** = the now. One item per loop, updated by the loop drivers at
+  every phase boundary (advance, back, lock, close). `awino best` shows the
+  compact brief — focus + blocked — never a dump.
+- **Facts / decisions** = the understanding. Facts are append-only; a
+  correction marks the old entry superseded with a dated pointer, never
+  rewriting it. Every decision records its why; a missing why is invalid and
+  buddy flags it. Pair-planning answers and plan approvals feed it
+  automatically.
+- **Ledger** = the proof.
+- **User model** = the who. How this human works, learned from explicit
+  evidence only: a small named set of deterministic rules (`RULE-*`),
+  updated by outcome verdicts and session corrections. Fields the human set
+  explicitly are never overwritten by a rule.
+- **Buddy** = the auditor. Reads all of it and reports staleness and
+  inconsistency; `--fix` applies mechanical corrections and prompts where
+  judgment is needed, never inventing rationale.
+
+Representation choice: the checklist is **JSON, not markdown**. The drivers
+rewrite it at every phase boundary and the tests assert on parsed structure;
+a markdown checklist would force every test to parse prose and every driver
+to do string surgery. The human never reads the raw file — `awino best`
+renders the brief. Facts and decisions stay markdown because humans do read
+those, as append-only logs.
+
 
 
 

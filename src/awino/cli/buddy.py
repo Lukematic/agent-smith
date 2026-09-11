@@ -20,7 +20,7 @@ from pathlib import Path
 import typer
 import yaml
 
-from awino import heilmeier, session_markers, stance
+from awino import heilmeier, session_markers, stance, working_memory
 from awino.cli import _echo, _workspace
 from awino.enforce import LOOPS, Ledger, LoopEvent, Run
 from awino.paths import project_state_dir
@@ -404,6 +404,172 @@ def _mission_freshness(
     return MissionFreshness(mission, days, closed, notes)
 
 
+# ── section 6: working memory ────────────────────────────────────────────────
+#
+# Buddy as auditor: the checklist, facts, decisions, and user model are the
+# mind to the ledger's court record, and stale-everything is a finding, not
+# silent rot. Each finding names the exact state it came from.
+
+_MEMORY_WEEK_SECONDS = 7 * 86400
+
+_ANSWERED_RE = re.compile(r"^question=(\S+)\s+kind=(\S+)\s+by=(\S+):\s*(.*)$", re.S)
+_APPROVAL_RE = re.compile(r"^by=(\S+?)(?:\s+reason=(.*))?$", re.S)
+
+
+def _recent_loop_events(events: list[LoopEvent]) -> list[LoopEvent]:
+    """Loop events from the last 7 days with a parseable timestamp."""
+    now = datetime.now(UTC)
+    out: list[LoopEvent] = []
+    for event in events:
+        at = event.at
+        try:
+            stamp = datetime.fromisoformat(at) if isinstance(at, str) else None
+        except ValueError:
+            continue
+        if stamp is None:
+            continue
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=UTC)
+        if (now - stamp).total_seconds() <= _MEMORY_WEEK_SECONDS:
+            out.append(event)
+    return out
+
+
+def _decision_key_for_event(event: LoopEvent) -> tuple[str, str] | None:
+    """The decisions.md key a decision event should have produced.
+
+    Returns (key, label): the key the drivers record under, and a human
+    label for the finding. None when the event kind makes no decision.
+    """
+    if event.kind == "human_answered":
+        match = _ANSWERED_RE.match(event.detail or "")
+        if not match:
+            return None
+        qid = match.group(1)
+        return f"{event.loop_id}:{qid}", f"pair-planning {qid} in loop {event.loop_id}"
+    if event.kind == "approval_granted":
+        return f"{event.loop_id}:approval", f"plan approval in loop {event.loop_id}"
+    return None
+
+
+def _unrecorded_decisions(
+    events: list[LoopEvent], decisions: working_memory.Decisions
+) -> list[tuple[LoopEvent, str, str]]:
+    """Decision events from the last 7 days with no decisions.md entry."""
+    out: list[tuple[LoopEvent, str, str]] = []
+    for event in _recent_loop_events(events):
+        keyed = _decision_key_for_event(event)
+        if keyed is None:
+            continue
+        key, label = keyed
+        if decisions.by_key(key) is None:
+            out.append((event, key, label))
+    return out
+
+
+def _stale_fact_refs(
+    state_root: Path, facts: working_memory.Facts
+) -> list[tuple[str, str, str]]:
+    """Superseded facts still referenced outside facts.md.
+
+    Returns (old_id, new_id, filename) triples. The correction annotations
+    inside facts.md itself are legitimate; references in decisions.md or the
+    checklist are suspect and need a human's judgment.
+    """
+    refs: list[tuple[str, str, str]] = []
+    superseded = [(f.id, f.superseded_by) for f in facts.entries() if f.superseded_by]
+    if not superseded:
+        return refs
+    sources = {
+        "decisions.md": working_memory.Decisions(state_root).path,
+        "checklist.json": working_memory.Checklist(state_root).path,
+    }
+    for old_id, new_id in superseded:
+        for name, path in sources.items():
+            if not path.is_file():
+                continue
+            if re.search(rf"\b{re.escape(old_id)}\b", path.read_text(encoding="utf-8")):
+                refs.append((old_id, new_id or "(unknown)", name))
+    return refs
+
+
+def _report_working_memory(
+    state_root: Path, events: list[LoopEvent]
+) -> None:
+    _echo("WORKING MEMORY  (checklist, facts, decisions, user model)")
+    # Checklist: the now.
+    checklist = working_memory.Checklist(state_root)
+    items = checklist.items()
+    if not items:
+        _echo("  checklist: none found (no loops yet)")
+    else:
+        focus = checklist.focus()
+        if focus is not None:
+            _echo(
+                f"  checklist focus: {focus['loop_id']} "
+                f"(phase {focus.get('phase')}, {focus.get('status')})"
+            )
+        blocked = checklist.blocked_items()
+        for item in blocked:
+            _echo(f"  BLOCKED  {item['id']}: {item['loop_id']} -- "
+                  f"{item.get('blocker') or '(no reason recorded)'}")
+        stale = _stale_checklist_prompt(checklist)
+        if stale is not None:
+            _echo(f"  STALE  {stale}")
+        else:
+            last = checklist.last_move_at()
+            if last is not None:
+                _echo(f"  checklist last moved: {last}")
+    # Decisions: the why.
+    decisions = working_memory.Decisions(state_root)
+    entries = decisions.entries()
+    week = [e for e in entries if _entry_within_week(e.at)]
+    why_less = decisions.why_less()
+    _echo(
+        f"  decisions: {len(entries)} recorded "
+        f"({len(week)} this week, {len(why_less)} with no why)"
+    )
+    for entry in why_less:
+        _echo(f"  WHY_MISSING  {entry.id} '{entry.decision[:60]}' has no recorded why")
+    unrecorded = _unrecorded_decisions(events, decisions)
+    if unrecorded:
+        _echo(
+            f"  UNRECORDED  {len(unrecorded)} decision(s) made this week, "
+            "none recorded in decisions.md:"
+        )
+        for _event, _key, label in unrecorded:
+            _echo(f"    - {label}")
+    # Facts: the understanding.
+    facts = working_memory.Facts(state_root)
+    fact_entries = facts.entries()
+    superseded = [f for f in fact_entries if f.superseded_by]
+    _echo(
+        f"  facts: {len(fact_entries)} recorded ({len(superseded)} superseded)"
+    )
+    for old_id, new_id, name in _stale_fact_refs(state_root, facts):
+        _echo(
+            f"  STALE_REF  {old_id} superseded by {new_id} but still "
+            f"referenced in {name}"
+        )
+    # User model: the who. Buddy reads it to calibrate, and says so.
+    model = working_memory.UserModel.load()
+    calibration = working_memory.UserModel.calibration_line(model)
+    if calibration:
+        _echo(f"  user model: {calibration}")
+    else:
+        _echo("  user model: no learned preferences yet "
+              "(~/.awino/profile.yaml)")
+
+
+def _entry_within_week(at: str) -> bool:
+    stamp = working_memory._parse_iso(at)
+    if stamp is None:
+        return False
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=UTC)
+    return (datetime.now(UTC) - stamp).total_seconds() <= _MEMORY_WEEK_SECONDS
+
+
 # ── the report ───────────────────────────────────────────────────────────────
 
 
@@ -509,6 +675,94 @@ def _run_report() -> None:
                 f"  objective answered; "
                 f"{len(heilmeier.success_criteria(cat))} success criteria on file"
             )
+    _echo("")
+
+    # 6. working memory: the checklist (now), facts/decisions (understanding),
+    # and the user model (who). Buddy reads these as an auditor.
+    _report_working_memory(workspace.state_root, ledger.loop_events())
+
+
+def _backfill_unrecorded_decisions(
+    ledger: Ledger, decisions: working_memory.Decisions
+) -> tuple[list[str], list[str]]:
+    """Record the decisions.md entries the ledger already saw this week.
+
+    Mechanical, never invented: the ledger event's detail supplies the
+    question, kind, by, and text (or the approver and reason). Returns
+    (fixed_labels, human_prompts): each prompt is a case where no safe
+    mechanical fix exists (a missing why, a misread detail).
+
+    Reusable pure helper so tests assert on findings, not rendered text.
+    """
+    fixed: list[str] = []
+    prompts: list[str] = []
+    for event, key, label in _unrecorded_decisions(ledger.loop_events(), decisions):
+        detail = event.detail or ""
+        if event.kind == "human_answered":
+            match = _ANSWERED_RE.match(detail)
+            if match is None:
+                prompts.append(
+                    f"could not parse ledger event for '{label}': record it "
+                    f"by hand in decisions.md (key {key})"
+                )
+                continue
+            qid, kind, _by, text = match.groups()
+            kind_word = "DEFAULT" if kind == "default" else "ANSWER"
+            decisions.record(
+                decision=f"{qid} -> {kind_word}: {text}",
+                why=text,
+                source=(
+                    f"backfilled by buddy --fix from ledger human_answered "
+                    f"event (loop {event.loop_id})"
+                ),
+                key=key,
+            )
+            fixed.append(label)
+        elif event.kind == "approval_granted":
+            match = _APPROVAL_RE.match(detail)
+            if match is None:
+                prompts.append(
+                    f"could not parse ledger event for '{label}': record it "
+                    f"by hand in decisions.md (key {key})"
+                )
+                continue
+            _by, reason = match.groups()
+            why = reason.strip() if reason else ""
+            decisions.record(
+                decision=f"approved loop {event.loop_id} plan",
+                why=why or working_memory.WHY_MISSING,
+                source=(
+                    f"backfilled by buddy --fix from ledger approval_granted "
+                    f"event (loop {event.loop_id})"
+                ),
+                key=key,
+            )
+            fixed.append(label)
+            if not why:
+                prompts.append(
+                    f"approve with a reason next time: '{label}' has no "
+                    f"recorded why; add it in decisions.md ({key})"
+                )
+    return fixed, prompts
+
+
+def _stale_checklist_prompt(checklist: working_memory.Checklist) -> str | None:
+    """Prompt text when the checklist hasn't moved in CHECKLIST_STALE_DAYS."""
+    last = checklist.last_move_at()
+    if not checklist.items() or last is None:
+        return None
+    stamp = working_memory._parse_iso(last)
+    if stamp is None:
+        return None
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=UTC)
+    days = int((datetime.now(UTC) - stamp).total_seconds() // 86400)
+    if days < working_memory.CHECKLIST_STALE_DAYS:
+        return None
+    return (
+        f"checklist hasn't moved in {days} days (last: {last}) -- archive "
+        "the items or confirm the work is still in flight"
+    )
 
 
 # ── --fix: mechanical corrections ────────────────────────────────────────────
@@ -844,6 +1098,45 @@ def _run_fix() -> None:
                     'awino mission --set "exams=<claim> -> <verify command>"'
                 )
                 need_human += 1
+    _echo("")
+
+    # 6. working memory: mechanical backfills only. A why, a verdict, and a
+    # judgment about a stale reference are human; the record of a decision
+    # the ledger already saw is mechanical. --fix never invents rationale.
+    _echo("WORKING MEMORY")
+    decisions = working_memory.Decisions(state_root)
+    fixed, prompts = _backfill_unrecorded_decisions(ledger, decisions)
+    if not fixed and not prompts:
+        _echo("  all this week's ledger decisions are recorded in decisions.md")
+    for label in fixed:
+        _echo(f"  FIX backfilled decision '{label}' from ledger event")
+        applied += 1
+    for prompt in prompts:
+        _echo(f"  ACTION  {prompt}")
+        need_human += 1
+    for entry in decisions.why_less():
+        _echo(
+            f"  PROMPT  decision {entry.id} '{entry.decision[:60]}' has no "
+            f"recorded why -- add it in decisions.md (key {entry.key or 'none'})"
+        )
+        need_human += 1
+    facts = working_memory.Facts(state_root)
+    for old_id, new_id, name in _stale_fact_refs(state_root, facts):
+        _echo(
+            f"  PROMPT  {old_id} was superseded by {new_id} but is still "
+            f"referenced in {name} -- update the reference or confirm it means "
+            "the old entry"
+        )
+        need_human += 1
+    checklist = working_memory.Checklist(state_root)
+    stale_prompt = _stale_checklist_prompt(checklist)
+    if stale_prompt is not None:
+        _echo(f"  PROMPT  {stale_prompt}")
+        need_human += 1
+    model = working_memory.UserModel.load()
+    calibration = working_memory.UserModel.calibration_line(model)
+    if calibration:
+        _echo(f"  user model: {calibration}")
     _echo("")
 
     _echo(f"BUDDY-FIX done: {applied} correction(s) applied, {need_human} need a human")

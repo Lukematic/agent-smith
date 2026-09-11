@@ -18,7 +18,7 @@ from pathlib import Path
 
 import typer
 
-from awino import heilmeier, loops
+from awino import heilmeier, loops, working_memory
 from awino.cli import _echo, _ledger, _workspace
 from awino.enforce import LoopEvent
 from awino.paths import AwinoPaths
@@ -84,6 +84,8 @@ def _driver_for_kind(kind: str) -> loops.LoopDriver:
         "loops_dir": _loops_dir(),
         "skill_md": _skill_md_for(kind),
         "ledger": _ledger(),
+        # Working memory: the checklist and decisions live in project state.
+        "state_root": workspace.state_root,
     }
     if kind == "rpi":
         return loops.RpiDriver(open_rpi_run=_open_rpi_run, **common)
@@ -119,6 +121,22 @@ def _resolve_driver_and_state(
     return driver, state
 
 
+def _terse_narration() -> bool:
+    """Whether the user model asks for terse narration.
+
+    Terse mode drops the additive PURPOSE/YOU/CHECK narration lines; the
+    stable machine-readable lines (PHASE, ARTIFACT, LOOP, ...) always stay.
+    Calibration degrades to normal when the profile is unreadable.
+    """
+    try:
+        return (
+            working_memory.UserModel.narration(working_memory.UserModel.load())
+            == "terse"
+        )
+    except Exception:
+        return False
+
+
 def _print_phase_start(driver: loops.LoopDriver, state: loops.LoopState) -> None:
     """Print the PHASE/ARTIFACT machine lines, then additive narration
     (purpose, human role, check why), then the skill's prompt block."""
@@ -129,15 +147,16 @@ def _print_phase_start(driver: loops.LoopDriver, state: loops.LoopState) -> None
         _echo(f"ARTIFACT  {artifact}")
     else:
         _echo(f"ARTIFACT  {driver.no_artifact_note}")
-    blurb = driver.phase_blurbs.get(state.phase)
-    if blurb:
-        _echo(f"PURPOSE  {blurb}")
-    role = driver.human_roles.get(state.phase)
-    if role:
-        _echo(f"YOU  {role}")
-    why = driver.check_whys.get(state.phase)
-    if why:
-        _echo(f"CHECK  {why}")
+    if not _terse_narration():
+        blurb = driver.phase_blurbs.get(state.phase)
+        if blurb:
+            _echo(f"PURPOSE  {blurb}")
+        role = driver.human_roles.get(state.phase)
+        if role:
+            _echo(f"YOU  {role}")
+        why = driver.check_whys.get(state.phase)
+        if why:
+            _echo(f"CHECK  {why}")
     _echo("")
     _echo(phase.prompt_block(driver))
     if isinstance(driver, loops.RpiDriver) and state.phase == "pair-plan":
@@ -160,10 +179,10 @@ def _print_run_opened(
     if state.seed_id:
         _echo(f"seed: {state.seed_id} (stays open until the loop's own completion)")
     purpose = driver.loop_purpose
-    if purpose:
+    if purpose and not _terse_narration():
         _echo(f"PURPOSE  {purpose}")
     role = driver.human_roles.get(first_phase)
-    if role:
+    if role and not _terse_narration():
         _echo(f"YOU  {role}")
     _echo("")
     _echo(phase.prompt_block(driver))
@@ -660,19 +679,30 @@ def loop_close(
             detail=detail,
         )
     )
-    _echo(
-        "PURPOSE  record the loop's outcome; `awino buddy` reports outcome "
-        "rates from these verdicts"
+    # Outcome verdicts update the user model: what the verdict's note says
+    # about how the work landed teaches how this human works.
+    model = working_memory.UserModel.load()
+    if working_memory.UserModel.apply_verdict(model, verdict, note):
+        working_memory.UserModel.save(model)
+        _echo("USER_MODEL  updated from this verdict (see ~/.awino/profile.yaml)")
+    # The verdict is also the loop's closing boundary for the checklist.
+    working_memory.Checklist(workspace.state_root).note_verdict(
+        state.id, verdict, note.strip()
     )
-    _echo(
-        f"YOU  answer honestly: yes ({_VERDICT_MEANINGS['yes']}), "
-        f"partial ({_VERDICT_MEANINGS['partial']}), "
-        f"no ({_VERDICT_MEANINGS['no']})"
-    )
-    _echo(
-        "CHECK  the goal above is the yardstick: a verdict means nothing "
-        "without the goal it was measured against"
-    )
+    if not _terse_narration():
+        _echo(
+            "PURPOSE  record the loop's outcome; `awino buddy` reports outcome "
+            "rates from these verdicts"
+        )
+        _echo(
+            f"YOU  answer honestly: yes ({_VERDICT_MEANINGS['yes']}), "
+            f"partial ({_VERDICT_MEANINGS['partial']}), "
+            f"no ({_VERDICT_MEANINGS['no']})"
+        )
+        _echo(
+            "CHECK  the goal above is the yardstick: a verdict means nothing "
+            "without the goal it was measured against"
+        )
     _echo(f"VERDICT  {verdict}")
     if note.strip():
         _echo(f"note: {note.strip()}")
