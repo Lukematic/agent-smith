@@ -157,11 +157,19 @@ def test_playbook_task_close_counts_closed_runs(ledger_with_runs: Ledger) -> Non
     assert events.task_close == 2
 
 
-def test_playbook_session_end_is_unmeasured(ledger_with_runs: Ledger) -> None:
-    # best --end records no marker, so it must be reported as unmeasured,
-    # not as zero firings.
+def test_playbook_session_end_is_measured_from_markers(
+    ledger_with_runs: Ledger, tmp_path: Path
+) -> None:
+    # Session-end firings are measured from session_ends.jsonl markers: with
+    # no markers the count is a real zero, not "unmeasured".
+    from smith import session_markers
+
+    state_root = tmp_path / ".smith"
     events = buddy._playbook_events(ledger_with_runs)
-    assert events.session_end is None
+    assert events.session_end == 0
+    session_markers.record_session_end(state_root)
+    session_markers.record_session_end(state_root)
+    assert buddy._playbook_events(ledger_with_runs).session_end == 2
 
 
 # ── (d) mission freshness math ───────────────────────────────────────────────

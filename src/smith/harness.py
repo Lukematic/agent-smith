@@ -13,6 +13,15 @@ So each target is verified against a real installation rather than assumed.
 | Copilot | `<prompts>/<name>.chatmode.md` | `description` plus `tools` |
 | Goose | `~/.agents/agents/<name>.md` | plugin at `~/.agents/plugins/` |
 | Cursor | `.cursor/rules/<name>.mdc` | `alwaysApply` |
+| Cline | project `.clinerules` (global `~/.cline` is UNVERIFIED) | plain markdown file |
+| OpenAI Codex | `~/.codex/AGENTS.md`, project `AGENTS.md` | plain markdown, NO frontmatter |
+
+Cline's global location is UNVERIFIED: no Cline-owned global dot-directory was
+confirmed against a real installation (Cline's documented mechanism is the
+project-level `.clinerules` file), so `~/.cline` is only ever a detection
+candidate — it is used solely when the directory actually exists. The Codex
+locations are documented Codex CLI behavior: global instructions live at
+`~/.codex/AGENTS.md`, project instructions in `AGENTS.md` at the project root.
 
 The two bugs this file exists to prevent, both found on a real machine:
 
@@ -46,6 +55,8 @@ class Harness(StrEnum):
     CURSOR = "cursor"
     COPILOT = "copilot"
     ROO = "roo"
+    CLINE = "cline"
+    CODEX = "codex"
 
     @property
     def label(self) -> str:
@@ -56,6 +67,8 @@ class Harness(StrEnum):
             Harness.CURSOR: "Cursor",
             Harness.COPILOT: "GitHub Copilot",
             Harness.ROO: "Roo Code",
+            Harness.CLINE: "Cline",
+            Harness.CODEX: "OpenAI Codex",
         }[self]
 
     @property
@@ -65,10 +78,22 @@ class Harness(StrEnum):
         Kilo uses `~/.config/kilo`, not `~/.kilo`. Copilot uses the VS Code user
         prompts directory. Both were wrong in an earlier version and produced
         installs that looked successful and did nothing.
+
+        `~/.codex` is the documented Codex CLI configuration directory (global
+        AGENTS.md instructions live at `~/.codex/AGENTS.md`). `~/.cline` is
+        UNVERIFIED: Cline's documented mechanism is the project-level
+        `.clinerules` file, and no Cline-owned global dot-directory was
+        confirmed against a real installation. It exists here only so
+        detection can fire if such a directory is ever present.
         """
         home = Path.home()
         if self is Harness.KILO:
             return home / ".config" / "kilo"
+        if self is Harness.CLINE:
+            # UNVERIFIED global location - see module docstring. Detection
+            # only fires when the directory exists, so an absent guessed path
+            # is harmless.
+            return home / ".cline"
         if self is Harness.COPILOT:
             if os.name == "nt":
                 return home / "AppData" / "Roaming" / "Code" / "User" / "prompts"
@@ -82,11 +107,26 @@ class Harness(StrEnum):
             return project / ".github" / "chatmodes"
         if self is Harness.KILO:
             return project / ".kilo"
+        if self in (Harness.CLINE, Harness.CODEX):
+            # File-at-root mechanisms: Cline reads `.clinerules` at the project
+            # root, Codex reads `AGENTS.md` at the project root. Neither
+            # harness reads a project-owned subdirectory (Codex does NOT read
+            # `.codex/` in a project), so the target root IS the project dir
+            # itself (persona_dir is "" for both). The persona file is written
+            # through ownership.safe_write, which refuses to overwrite a
+            # non-installer-owned destination rather than clobbering human
+            # content - so a pre-existing human-authored AGENTS.md or
+            # .clinerules is left untouched and reported as FAILED.
+            return project
         return project / f".{self}"
 
     @property
     def persona_dir(self) -> str:
-        """Subdirectory holding personas, relative to the harness root."""
+        """Subdirectory holding personas, relative to the harness root.
+
+        Cline and Codex are file-at-root mechanisms (`.clinerules` /
+        `AGENTS.md` live directly in the target root), hence the empty string.
+        """
         return {
             Harness.CLAUDE: "agents",
             Harness.AGENTS: "agents",
@@ -98,11 +138,18 @@ class Harness(StrEnum):
             Harness.CURSOR: "rules",
             Harness.COPILOT: "",
             Harness.ROO: "",
+            Harness.CLINE: "",
+            Harness.CODEX: "",
         }[self]
 
     @property
     def persona_filename(self) -> str:
-        """Copilot encodes the artifact type in the filename suffix."""
+        """Copilot encodes the artifact type in the filename suffix.
+
+        Cline's project-level mechanism is the `.clinerules` file at the
+        project root; Codex's is `AGENTS.md` at the project root (global
+        instructions live at `~/.codex/AGENTS.md`).
+        """
         return {
             Harness.CLAUDE: "awino.md",
             Harness.AGENTS: "awino.md",
@@ -110,6 +157,8 @@ class Harness(StrEnum):
             Harness.CURSOR: "awino.mdc",
             Harness.COPILOT: "awino.chatmode.md",
             Harness.ROO: "awino.md",
+            Harness.CLINE: ".clinerules",
+            Harness.CODEX: "AGENTS.md",
         }[self]
 
     @property
@@ -121,12 +170,25 @@ class Harness(StrEnum):
         proven against a real installation. Writing an additional persona file
         to an unproven ~/.roo/agents/ path here would be a guessed location,
         not a verified one, so this is skills-only for Roo.
+
+        Cline and Codex DO install a persona file, but at a path the human
+        also owns (project `.clinerules` / `AGENTS.md`, or the Codex user's
+        own `~/.codex/AGENTS.md`). The write goes through
+        ownership.safe_write, which refuses to overwrite a destination that
+        is not installer-owned: a pre-existing human-authored file is left
+        untouched and reported as FAILED, never clobbered.
         """
         return self is not Harness.ROO
 
     @property
     def supports_skills(self) -> bool:
-        """Cursor rules and Copilot chat modes are context, not model-invoked skills."""
+        """Cursor rules and Copilot chat modes are context, not model-invoked skills.
+
+        Cline's `.clinerules` is likewise plain context with no model-invoked
+        skills mechanism, and the Codex CLI has no skills directory - so both
+        are False here. install() reports a SKIPPED action rather than
+        silently doing nothing.
+        """
         return self in {Harness.CLAUDE, Harness.AGENTS, Harness.KILO, Harness.ROO}
 
     @property
@@ -471,6 +533,15 @@ already open, human-selected session.
             header.append(f"model: {model}")
         header.append("---")
         return "\n".join(header) + "\n\n" + body
+
+    if harness in (Harness.CLINE, Harness.CODEX):
+        # Both read a plain markdown file at the project root - `.clinerules`
+        # for Cline, `AGENTS.md` for Codex - with no frontmatter convention.
+        # AGENTS.md conventionally carries NO frontmatter, so the body goes in
+        # as-is with only an HTML-comment provenance header, which is inert
+        # markdown for both readers.
+        provenance = "<!-- installed by A.W.I.N.O. (`awino install`); safe to delete -->\n\n"
+        return provenance + body
 
     # Goose reads the file as written.
     return text

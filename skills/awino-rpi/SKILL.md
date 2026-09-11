@@ -1,6 +1,6 @@
 ---
 name: awino-rpi
-description: Research then Plan then Implement for complex multi-file changes. Use for refactors, restructures, splitting a module into a package, migrations, feature additions, large upgrades, and documentation overhauls where jumping to code would drift
+description: Research, pair-planning, Plan, then Implement for complex multi-file changes. Use for refactors, restructures, splitting a module into a package, migrations, feature additions, large upgrades, and documentation overhauls where jumping to code would drift
 ---
 
 # A.W.I.N.O. RPI
@@ -8,10 +8,10 @@ description: Research then Plan then Implement for complex multi-file changes. U
 Most agent failures on large changes are not capability failures — they are
 **context failures**. The work spans more than can be safely held at once, so the
 agent drifts. RPI trades speed for correctness by splitting understanding,
-decision-making, and execution into separate sessions.
+pairing, decision-making, and execution into separate sessions.
 
-**One goal per session.** This is the load-bearing constraint. Research, plan, and
-implement must not share a context window.
+**One goal per session.** This is the load-bearing constraint. Research,
+pair-planning, plan, and implement must not share a context window.
 
 ## When NOT to use this
 
@@ -24,6 +24,7 @@ large upgrades, incident cleanup, docs overhauls.
 ```
 thoughts/
   research/YYYY-MM-DD-HHmm-<topic>.md
+  pairing/YYYY-MM-DD-HHmm-<topic>.md
   plans/YYYY-MM-DD-HHmm-<description>.md
 ```
 
@@ -98,9 +99,53 @@ rerun research with a sharper topic — that is the system working, not a failur
 
 ---
 
-## Phase 2 — Plan (new session)
+## Phase 2 — Pair-planning
 
-Read the research document first. Then, in order:
+**Job: plan together and adjust. The agent decomposes and proposes; the human decides; the ledger captures why.**
+
+Read the research document first. Then write `thoughts/pairing/YYYY-MM-DD-HHmm-<topic>.md`:
+
+```markdown
+# Pairing brief: <topic>
+
+## Sub-problems
+The distinct pieces of the work, one per line.
+
+## Candidate approaches
+Two or three options, each as a `###` subheading, each with its trade-offs
+spelled out. Mark trade-offs explicitly — the word "trade-off" (or "pro:" /
+"con:") must appear under every approach. The driver checks for the marker,
+not the insight.
+
+### A: <name>
+What it is. trade-off: what it costs and what it buys.
+
+### B: <name>
+What it is. trade-off: what it costs and what it buys.
+
+## Questions
+Explicit questions needing human input, one per line in `Qn:` format:
+
+Q1: which approach?
+Q2: who approves the plan?
+```
+
+**Then stop.** The driver prints the questions verbatim. The human answers each
+with `awino loop answer --question Q1 --answer "..."`, or declares a default
+with `awino loop default --question Q2 --reason "..."`. The loop does not
+advance to planning until every question has an answer or a declared default:
+an unanswered question is a decision the plan would have to guess, and guessing
+is what this phase exists to prevent. Re-answering overwrites; the ledger keeps
+both answers.
+
+---
+
+## Phase 3 — Plan (new session)
+
+Read the research document (Phase 1) and the pairing brief (Phase 2) first — the recorded human
+decisions are injected into your prompt as "Human decisions so far", and your
+plan's `## Decisions` section must trace every decision to a pairing question
+(`Q1`) or mark it `default:` with a reason. Then, in order:
 
 1. **Ask clarifying questions.** Full removal or deprecation? How should config
    cleanup behave? Where do the tests live? Do not guess where a question exists.
@@ -118,6 +163,9 @@ thoughts/research/...
 
 ## Decisions made
 | Question | Answer | Rationale |
+
+One row per pairing question, referencing its `Qn:` id — the driver validates
+the trace, so a decision that answers no asked question fails validation.
 
 ## Phase 1 — <name>
 - [ ] Exact file path — exact change
@@ -146,9 +194,9 @@ research only what changed, patch the plan. Do not start over.
 
 ---
 
-## Phase 3 — Implement (new session)
+## Phase 4 — Implement (new session)
 
-Read the plan **completely** before touching anything.
+Read the plan (Phase 3) **completely** before touching anything.
 
 Then per phase, in order:
 1. Execute the phase's items.
@@ -197,6 +245,7 @@ beats accumulating failed attempts in one window.
 | `RESEARCH_CONTAMINATION` | opinions or fixes recorded during research |
 | `MISSING_INPUT_ANNOTATED_INSTEAD_OF_GENERATED` | absence of prior output reported as infeasibility without first searching for and running the generator |
 | `PLAN_WITHOUT_RESEARCH` | planning on assumptions instead of documented reality |
+| `UNPAIRED_PLAN` | planning with pairing questions unanswered (the driver refuses the advance) |
 | `UNDERSPECIFIED_PLAN` | plan assumes context the implementer will not have |
 | `PLAN_DRIFT` | improvising during implement instead of iterating the plan |
 | `PHASE_SKIP` | moving on before the success criterion passed |
@@ -206,7 +255,7 @@ beats accumulating failed attempts in one window.
 
 ## Completion
 
-Done when: research reviewed, plan approved, every phase's success criterion has
+Done when: research reviewed, pairing questions answered, plan approved, every phase's success criterion has
 pasted passing output, and every checkbox in the plan is ticked or explicitly
 deferred with a reason.
 

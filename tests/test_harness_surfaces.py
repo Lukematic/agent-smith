@@ -1,13 +1,13 @@
-"""Roo as a probe-verified harness target, and Cline/Codex explicitly deferred
-rather than guessed at.
+"""Roo as a probe-verified harness target; Cline/Codex now real members.
 
 An operator with no floor is worse than no elevator: shipping a skills
 directory for a tool whose persona location was never proven would satisfy
-the letter of "any tool" while breaking the spirit - the human would get
-capabilities with no way to select the agent that uses them. So Roo, whose
-persona *and* skills paths are both proven (mode support via modes.py,
-skills via a verified ~/.roo/skills/<name>/SKILL.md), gets full treatment.
-Cline and Codex get a real skills path and an honest, reported gap.
+the letter of "any tool" while breaking the spirit. Roo, Cline, and Codex
+are modeled only through mechanisms with documented or probed locations;
+anything unverified (Cline's global ``~/.cline``) is marked UNVERIFIED in
+harness.py and never presented as proven. File-at-root targets
+(``AGENTS.md``, ``.clinerules``) install through ownership.safe_write, which
+refuses to overwrite human-authored files.
 """
 
 from __future__ import annotations
@@ -48,16 +48,26 @@ class TestRooModeSupportStillResolvesThroughModesPy:
         assert project_file == ".roomodes"
 
 
-class TestClineAndCodexAreNotHarnessMembers:
-    def test_cline_is_not_a_harness_member(self) -> None:
-        assert "cline" not in {h.value for h in Harness}
+class TestClineAndCodexAreHarnessMembers:
+    def test_cline_is_a_harness_member(self) -> None:
+        assert "cline" in {h.value for h in Harness}
 
-    def test_codex_is_not_a_harness_member(self) -> None:
-        assert "codex" not in {h.value for h in Harness}
+    def test_codex_is_a_harness_member(self) -> None:
+        assert "codex" in {h.value for h in Harness}
 
 
-class TestNothingIsWrittenToUnprovenTools:
-    def test_installing_every_known_harness_never_touches_cline_or_codex_dirs(
+class TestUnverifiedLocationsAreMarkedNotAssumed:
+    def test_cline_global_path_is_marked_unverified_in_the_module_docs(self) -> None:
+        from smith import harness
+
+        doc = harness.__doc__ or ""
+        assert "UNVERIFIED" in doc
+        # The mark must sit next to the claim it qualifies, not elsewhere.
+        cline_pos = doc.find("~/.cline")
+        assert cline_pos != -1
+        assert "UNVERIFIED" in doc[max(0, cline_pos - 200) : cline_pos + 200]
+
+    def test_install_never_clobbers_a_human_authored_agents_md(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from smith import harness
@@ -73,9 +83,12 @@ class TestNothingIsWrittenToUnprovenTools:
         )
         (smith_home / "skills").mkdir(parents=True)
 
-        for member in harness.Harness:
-            target = harness.Target(member, member.global_root, "global")
-            harness.install(smith_home, target, skills=True, overwrite=True)
+        project = tmp_path / "proj"
+        project.mkdir()
+        human_text = "# My instructions\n\nDo not touch.\n"
+        (project / "AGENTS.md").write_text(human_text, encoding="utf-8")
 
-        assert not (fake_home / ".cline").exists()
-        assert not (fake_home / ".codex").exists()
+        target = harness.Target(harness.Harness.CODEX, project, "project")
+        actions = harness.install(smith_home, target, skills=True)
+        assert (project / "AGENTS.md").read_text(encoding="utf-8") == human_text
+        assert any(a.failed for a in actions)

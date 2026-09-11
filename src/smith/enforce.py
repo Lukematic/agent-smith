@@ -370,6 +370,10 @@ LOOP_EVENT_KINDS: tuple[str, ...] = (
     "approval_granted",
     "phase_reentered",
     "loop_closed",
+    "mission_drift_flagged",
+    "verify_passed",
+    "verify_failed",
+    "human_answered",
 )
 
 

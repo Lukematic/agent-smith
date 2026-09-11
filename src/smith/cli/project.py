@@ -33,8 +33,10 @@ from smith import (
     recall,
     seeds,
     session_log,
+    session_markers,
     session_state,
     stance,
+    stance_verify,
     stepper,
 )
 from smith.cli import (
@@ -1062,6 +1064,12 @@ def stance_command(
     for_text: str = typer.Option(
         None, "--for", help="Print the stance this message calls for, and why"
     ),
+    verify_name: str = typer.Option(
+        None, "--verify", help="Check an agent response against a stance's rules"
+    ),
+    response_path: str = typer.Option(
+        None, "--response", help="File containing the agent response to check with --verify"
+    ),
 ) -> None:
     """Show, set, or detect the conversational stance.
 
@@ -1069,6 +1077,10 @@ def stance_command(
     steel-man, teach-back - switched by the human's own words rather than a
     name they must remember. Switches are never silent: callers print one
     STANCE line whenever detection differs from the current stance.
+
+    --verify runs the layer-3 critic: a deterministic keyword check of an
+    agent response against a stance's rules, which is heuristic by design
+    (see the stance_verify module).
     """
     workspace = _workspace()
     project = workspace.project.root
@@ -1092,10 +1104,65 @@ def stance_command(
             _echo(detected.rules)
         return
 
+    if verify_name is not None:
+        _stance_verify(verify_name, response_path)
+        return
+
     _echo(f"STANCE  {current} (default for this project)")
     for item in stance.STANCES:
         marker = "*" if item.name == current else " "
         _echo(f"  {marker} {item.name:<17} {item.trigger_description}")
+
+
+def _stance_verify(stance_name: str, response_path: str | None) -> None:
+    """Run the layer-3 stance critic on a response file.
+
+    Exits 0 when the response passes every check, 1 when it fails any (one
+    line per failed rule), 2 when the stance is unknown or the file is
+    unreadable.
+    """
+    if response_path is None:
+        _echo("REFUSED  --verify requires --response <file>")
+        raise typer.Exit(2)
+    try:
+        response_text = Path(response_path).read_text(encoding="utf-8")
+    except OSError as exc:
+        _echo(f"REFUSED  cannot read {response_path}: {exc}")
+        raise typer.Exit(2) from None
+    try:
+        failures = stance_verify.verify(stance_name, response_text)
+    except ValueError:
+        _echo(f"REFUSED  unknown stance: {stance_name}")
+        raise typer.Exit(2) from None
+    if not failures:
+        _echo(f"STANCE_VERIFY  {stance_name}  compliant")
+        return
+    _echo(f"STANCE_VERIFY  {stance_name}  NON-COMPLIANT")
+    for rule in failures:
+        _echo(f"  - {rule}")
+    raise typer.Exit(1)
+
+
+def _run_session_end_order() -> None:
+    """Run the session-end order for ``awino best --end``.
+
+    Factored out of best_command so tests exercise this exact code path
+    rather than a copy: run the playbook's session-end order, print its
+    lines, then record the session-end marker the buddy report counts.
+    """
+    workspace = _workspace()
+    tracker = seeds.Seeds(workspace.project.root)
+    open_titles = [i.title for i in tracker.list_open()] if tracker.state()[0].usable else []
+    for line in playbook.run_event(
+        "session-end",
+        workspace.state_root,
+        workspace.project.root,
+        ledger=Ledger(workspace.state_root),
+        open_seeds=open_titles,
+    ):
+        _echo(line)
+    marker = session_markers.record_session_end(workspace.state_root)
+    _echo(f"SESSION_END_MARKED  {marker}")
 
 
 @app.command("best")
@@ -1126,14 +1193,7 @@ def best_command(
     tracker = seeds.Seeds(workspace.project.root)
     open_titles = [i.title for i in tracker.list_open()] if tracker.state()[0].usable else []
     if end:
-        for line in playbook.run_event(
-            "session-end",
-            workspace.state_root,
-            workspace.project.root,
-            ledger=Ledger(workspace.state_root),
-            open_seeds=open_titles,
-        ):
-            _echo(line)
+        _run_session_end_order()
         return
 
     ctx = _step_context(confirm_budget, answer, verify, scope)

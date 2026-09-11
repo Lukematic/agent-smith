@@ -20,8 +20,10 @@ from smith import cli
 SRC = Path(__file__).parents[1] / "src" / "smith"
 CLI_PACKAGE = SRC / "cli"
 
-# Every registered command, with sub-app prefixes, as it stood in the 4141-line
-# cli.py before the package split. 89 names.
+# Every registered command, with sub-app prefixes. Seeded from the 4141-line
+# cli.py before the package split (89 names), extended as commands were added
+# afterwards: buddy (Phase 1), loop run ralph / loop run delegate / loop
+# answer / loop default (Phase 2). 99 names.
 PRE_SPLIT_COMMANDS = frozenset(
     {
         "ask",
@@ -79,7 +81,11 @@ PRE_SPLIT_COMMANDS = frozenset(
         "buddy check",
         "loop approve",
         "loop back",
+        "loop answer",
+        "loop default",
         "loop next",
+        "loop run delegate",
+        "loop run ralph",
         "loop run rpi",
         "loop status",
         "mission",
@@ -208,8 +214,8 @@ class TestCommandSurfaceIsUnchanged:
         )
 
     def test_command_count_is_exactly_the_registered_set(self) -> None:
-        assert len(PRE_SPLIT_COMMANDS) == 95
-        assert len(_registered(cli.app)) == 95
+        assert len(PRE_SPLIT_COMMANDS) == 99
+        assert len(_registered(cli.app)) == 99
 
     def test_public_entry_points_survive(self) -> None:
         assert isinstance(cli.app, typer.Typer)

@@ -19,7 +19,7 @@ from pathlib import Path
 
 import typer
 
-from smith import stance
+from smith import session_markers, stance
 from smith.cli import _echo, _workspace
 from smith.enforce import LOOPS, Ledger, LoopEvent, Run
 
@@ -177,23 +177,24 @@ def _loop_honesty(ledger: Ledger) -> tuple[dict[str, tuple[int, int]], str]:
 @dataclass(frozen=True)
 class PlaybookEvents:
     task_close: int
-    session_end: int | None  # None: no marker is recorded, so it is unmeasured
+    session_end: int  # measured from session_ends.jsonl markers, one per firing
 
 
 def _playbook_events(ledger: Ledger) -> PlaybookEvents:
     """How often each playbook order actually fired.
 
     Honest accounting: ``playbook.run_event`` appends no markers to state (it
-    returns text lines the caller prints), so there is no per-firing record.
-    The closest real evidence for task-close is runs carrying close markers
+    returns text lines the caller prints), so there is no per-firing record
+    for task-close; the closest real evidence is runs carrying close markers
     (closed_at set by mark_complete, which is exactly where the task-close
-    order fires from ``gate close`` and the stepper's close node). ``best
-    --end`` writes no marker at all, so session-end is unmeasured, not zero.
+    order fires from ``gate close`` and the stepper's close node).
+    Session-end firings are counted from the session_ends.jsonl markers that
+    ``best --end`` and buddy's --fix catch-up append once per firing.
     """
     runs = _iter_runs(ledger)
     return PlaybookEvents(
         task_close=sum(1 for run in runs if run.closed_at is not None),
-        session_end=None,
+        session_end=session_markers.count_session_ends(ledger.state_root),
     )
 
 
@@ -368,13 +369,10 @@ def _run_report() -> None:
     _echo("")
 
     # 3. playbook events
-    _echo("PLAYBOOK EVENTS  (playbook steps append no markers; counted from run close markers)")
+    _echo("PLAYBOOK EVENTS  (task-close from run markers; session-end from session_ends.jsonl)")
     events = _playbook_events(ledger)
     _echo(f"  task-close: {events.task_close} (runs with close markers)")
-    if events.session_end is None:
-        _echo("  session-end: unmeasured (best --end records no marker)")
-    else:
-        _echo(f"  session-end: {events.session_end}")
+    _echo(f"  session-end: {events.session_end} (firings recorded in session_ends.jsonl)")
     _echo("")
 
     # 4. mission freshness
@@ -592,10 +590,11 @@ def _run_fix() -> None:
             need_human += 1
     _echo("")
 
-    # 3. playbook events: session-end never fires on its own, so run the
-    # session-end order once now. One-shot catch-up, no looping.
+    # 3. playbook events: the session-end order fires only via `best --end`
+    # or this catch-up, so when no marker exists run the order once now.
+    # One-shot catch-up, no looping; the firing is recorded as a marker.
     _echo("PLAYBOOK EVENTS")
-    if playbook_events.session_end is None:
+    if playbook_events.session_end == 0:
         try:
             lines = playbook.run_event(
                 "session-end",
@@ -611,6 +610,8 @@ def _run_fix() -> None:
         else:
             for line in lines:
                 _echo(f"  FIX {line}")
+            marker = session_markers.record_session_end(state_root)
+            _echo(f"  FIX SESSION_END_MARKED  {marker}")
             applied += 1
     else:
         _echo("  session-end is measured; no catch-up needed")

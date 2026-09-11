@@ -50,7 +50,7 @@ def link(
 @app.command("install")
 def install_command(
     which: str = typer.Option(
-        None, "--harness", help="claude, agents, kilo, or cursor. Default: all detected."
+        None, "--harness", help="claude, agents, kilo, cursor, copilot, roo, cline, codex. Default: all detected."
     ),
     scope: str = typer.Option("global", "--scope", help="global or project"),
     project: bool = typer.Option(False, "--project", help="Shorthand for --scope project"),
