@@ -267,6 +267,38 @@ class TestRalphVerifyFailRetry:
         assert not state.locked
         assert state.phase != "done"
 
+    def test_retry_routing_keeps_checklist_in_sync(
+        self, project: Path, tmp_path: Path
+    ) -> None:
+        """Regression: the verify->retry routing must advance the
+        working-memory checklist, or the spine's capture step refuses the
+        next `loop next` ("checklist still shows phase 'verify' but the loop
+        is at 'retry'") -- bricking every Ralph loop whose check fails once.
+        """
+        driver = loops.RalphDriver(
+            project_root=project,
+            loops_dir=tmp_path / "loops",
+            skill_md=RALPH_SKILL,
+            state_root=tmp_path / ".awino",
+        )
+        state = driver.new("fix the flaky test", check="false")
+        _write_attempt(driver, state, ATTEMPT_OK)
+        assert driver.check(state) == []
+        assert driver.advance(state) == "verify"
+        assert driver.advance(state) == "retry"
+        checklist = driver._checklist()
+        assert checklist is not None
+        item = next(
+            entry
+            for entry in checklist.items()
+            if entry.get("loop_id") == state.id
+        )
+        assert item["phase"] == "retry"
+        # The next advance (retry -> verify) must not be spine-blocked.
+        _write_attempt(driver, state, ATTEMPT_OK + "\nSecond try, addressing the failure.\n")
+        assert driver.check(state) == []
+        assert driver.advance(state) == "verify"
+
     def test_failed_verification_emits_verify_failed_with_evidence(
         self, event_driver: loops.RalphDriver, loop_ledger: Ledger
     ) -> None:

@@ -4461,6 +4461,9 @@ class RalphDriver(LoopDriver):
             detail=f"advanced from 'verify' after failed verification #{failures}",
         )
         self.save(state)
+        checklist = self._checklist()
+        if checklist is not None:
+            checklist.note_phase(state.id, "verify", "retry")
         return "retry"
 
     def _next_phase(self, state: LoopState) -> str | None:
