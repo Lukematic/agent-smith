@@ -178,6 +178,11 @@ def test_every_hook_uses_the_plugin_relative_launcher() -> None:
 
 def test_missing_uv_launcher_is_truthfully_degraded(tmp_path: Path) -> None:
     env = os.environ.copy()
+    # The launcher prepends $HOME/.local/bin to PATH itself (the installer puts
+    # uv there), so a faithful "uv is missing" simulation must also neutralize
+    # HOME; otherwise the test's own sandbox uv would be found and the
+    # degraded path under test would never run.
+    env["HOME"] = str(tmp_path)
     uv_bin = shutil.which("uv")
     if uv_bin:
         uv_dir = str(Path(uv_bin).parent)

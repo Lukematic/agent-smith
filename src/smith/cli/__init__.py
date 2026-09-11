@@ -217,6 +217,9 @@ def _require_valid_plan(ledger: Ledger, run_id: str) -> None:
 
 # Command modules register themselves against the apps above on import. This
 # must stay at the bottom: each module imports the helpers defined here.
-from smith.cli import dispatch, gate, install, knowledge, maintain, project  # noqa: E402
+from smith.cli import buddy, dispatch, gate, install, knowledge, loopctl, maintain, project  # noqa: E402
 
-del dispatch, gate, install, knowledge, maintain, project
+app.add_typer(buddy.buddy_app, name="buddy")
+app.add_typer(loopctl.loop_app, name="loop")
+
+del buddy, dispatch, gate, install, knowledge, loopctl, maintain, project

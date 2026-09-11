@@ -8,9 +8,20 @@ current stance.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
-from smith.stance import STANCES, Stance, detect, load_default, save_default
+import pytest
+
+from smith.stance import (
+    STANCES,
+    Stance,
+    baseline_stance,
+    detect,
+    load_default,
+    resolve_stance,
+    save_default,
+)
 
 
 class TestCatalogShape:
@@ -75,6 +86,121 @@ class TestPersistence:
 
         with pytest.raises(ValueError, match="unknown stance"):
             save_default(tmp_path, "sycophant")
+
+
+class TestParaphraseDetection:
+    """Every stance fires on the original phrasing and a new paraphrase."""
+
+    CASES = [
+        # (stance, original-style prompt, new paraphrase prompt)
+        (
+            "advisor",
+            "fix the failing test in ci",
+            "run the suite",
+        ),
+        (
+            "first-principles",
+            "let's break this down into fundamentals",
+            "what are the first principles behind this design",
+        ),
+        (
+            "steel-man",
+            "I think we should rewrite the whole module in rust",
+            "play devil's advocate on my plan to rewrite the module",
+        ),
+        (
+            "assumption-audit",
+            "so that means the cache is the bottleneck",
+            "what am I missing in concluding the cache is the bottleneck",
+        ),
+        (
+            "teach-back",
+            "teach me how the ledger works",
+            "help me understand how the ledger works",
+        ),
+        (
+            "research-intake",
+            "research what agent memory approaches exist",
+            "look into what agent memory approaches exist",
+        ),
+        (
+            "expert",
+            "honestly, how would you handle this burnout",
+            "as a human, how would you handle this burnout",
+        ),
+    ]
+
+    @pytest.mark.parametrize("stance,original,paraphrase", CASES)
+    def test_original_phrasing_fires(self, stance: str, original: str, paraphrase: str) -> None:
+        hit = detect(original)
+        if stance == "advisor":
+            assert hit is None  # advisor is the no-match default
+        else:
+            assert hit is not None and hit.name == stance
+
+    @pytest.mark.parametrize("stance,original,paraphrase", CASES)
+    def test_paraphrase_fires(self, stance: str, original: str, paraphrase: str) -> None:
+        hit = detect(paraphrase)
+        if stance == "advisor":
+            assert hit is None
+        else:
+            assert hit is not None and hit.name == stance
+
+    def test_more_paraphrases_fire_steel_man(self) -> None:
+        for prompt in (
+            "I'm leaning toward rewriting it in rust",
+            "challenge this plan before I present it",
+            "push back on the proposal",
+            "give me the other side of this argument",
+            "poke holes in my design",
+        ):
+            assert detect(prompt).name == "steel-man", prompt
+
+    def test_specific_intents_still_checked_before_broader_ones(self) -> None:
+        # Expert-ish framing around a stated position must steel-man.
+        assert detect("honestly, I think we should rewrite it").name == "steel-man"
+        # Position-challenging language must not leak into assumption-audit.
+        assert detect("poke holes in my plan to ship Friday").name == "steel-man"
+
+
+class TestChallengeMeBaseline:
+    def _write_profile(self, tmp_path: Path, text: str) -> Path:
+        profile = tmp_path / "profile.yaml"
+        profile.write_text(text, encoding="utf-8")
+        return profile
+
+    def test_challenge_me_true_makes_neutral_prompt_advisor(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        profile = self._write_profile(tmp_path, "challenge_me: true\n")
+        monkeypatch.setenv("AWINO_PROFILE", str(profile))
+        resolved = resolve_stance("what time is it")
+        assert resolved is not None
+        assert resolved.name == "advisor"
+
+    def test_specific_match_still_wins_over_challenge_me(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        profile = self._write_profile(tmp_path, "challenge_me: true\n")
+        monkeypatch.setenv("AWINO_PROFILE", str(profile))
+        assert resolve_stance("teach me how the ledger works").name == "teach-back"
+
+    def test_no_profile_keeps_existing_behavior(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("AWINO_PROFILE", str(tmp_path / "no-such-file.yaml"))
+        assert resolve_stance("what time is it") is None
+        assert resolve_stance("what time is it", current="steel-man").name == "steel-man"
+
+    def test_challenge_me_false_or_missing_key_keeps_existing_behavior(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        for text in ("challenge_me: false\n", "other_key: 1\n"):
+            profile = self._write_profile(tmp_path, text)
+            monkeypatch.setenv("AWINO_PROFILE", str(profile))
+            assert resolve_stance("what time is it") is None
+
+    def test_baseline_stance_reads_explicit_path(self, tmp_path: Path) -> None:
+        assert baseline_stance(tmp_path / "nope.yaml") == "default"
+        assert baseline_stance(self._write_profile(tmp_path, "challenge_me: true\n")) == "advisor"
+        assert baseline_stance(self._write_profile(tmp_path, "challenge_me: false\n")) == "default"
+
+    def test_advisor_carries_the_challenge_rules(self) -> None:
+        rules = Stance.by_name("advisor").rules
+        assert "Disagree in three lines" in rules
+        assert "No validation phrases" in rules
 
 
 class TestStanceShape:

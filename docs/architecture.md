@@ -26,7 +26,7 @@ mistake structurally impossible rather than warning against it in prose.
 ```
 ┌─ L5  LOOPS     ── direct | RPI | Ralph | delegate — chosen per problem shape
 ├─ L4  FACTORY   ── authors agents, skills, and tools; lint blocks bad output
-├─ L3  MEMORY    ── Memory MCP for recall + file ledger for audit (dual-write)
+├─ L3  MEMORY    ── file ledger for recall + audit (no MCP client; see below)
 ├─ L2  RETRIEVAL ── topic -> registry -> fetch raw.githubusercontent -> cache
 └─ L1  CONSTITUTION ── AWINO.md: harness-over-prompt, named failure modes,
                        spec-as-contract, tool restriction, cost awareness
@@ -124,8 +124,9 @@ Stop after any phase. Each is independently useful — build a room, not the hou
    `MANIFEST.json`. Fresh cache is reused free; stale is refetched.
 4. **Distillation, not accumulation.** What survives is a line in
    `memory/expertise/<domain>.jsonl`, not chapter text. Cache is disposable.
-5. **Memory entries are one line.** Memory MCP rides in every prompt. Anything
-   longer lives in a file and the entry points at the path.
+5. **Memory entries are one line.** There is no MCP client: recall reads the
+   file ledger directly. Anything longer lives in a file and the entry points
+   at the path.
 6. **Appendices at directory granularity.** 111 nested example configs are a
    browse-on-demand corpus entered via `_index.md`, not 111 registry entries.
 
@@ -168,7 +169,7 @@ attempt gets fresh context and a second model reviews it.
 | Where emitted agents go | `emitted/` staging; human promotes to `~/.agents/agents/` |
 | Refresh cadence | `--auto-update` on the plugin + staleness warning after 14 days |
 | Per-repo install | **no by default** — one global install; repos get a minimal harness-appropriate pointer |
-| Memory store | both: Memory MCP for recall, file ledger for audit; file wins |
+| Memory store | file ledger for recall and audit (no MCP client implemented) |
 
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -8,6 +9,8 @@ import pytest
 
 from smith.harness import Harness, Target, _link_or_copy, install
 from smith.ownership import manifest_path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture
@@ -145,3 +148,106 @@ def test_exact_link_is_skipped(tmp_path: Path) -> None:
     except OSError:
         pytest.skip("symlinks unavailable")
     assert _link_or_copy(source, destination)[0] == "SKIPPED"
+
+
+# ── install reliability (workstream 1) ────────────────────────────────────────
+
+
+def test_installer_scripts_are_executable_in_git_index() -> None:
+    """Fresh POSIX clones must be able to run ./install.sh directly."""
+    result = subprocess.run(
+        ["git", "ls-files", "-s", "install.sh", "bootstrap.sh", "bin/awino"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    modes = {line.split()[-1]: line.split()[0] for line in result.stdout.splitlines()}
+    assert modes == {
+        "install.sh": "100755",
+        "bootstrap.sh": "100755",
+        "bin/awino": "100755",
+    }
+
+
+def test_launcher_finds_uv_in_local_bin_not_on_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """bin/awino must prepend ~/.local/bin to PATH before checking for uv."""
+    home = tmp_path / "home"
+    local_bin = home / ".local" / "bin"
+    local_bin.mkdir(parents=True)
+    fake_uv = local_bin / "uv"
+    fake_uv.write_text("#!/bin/sh\nprintf 'uv-ok\\n'\n", encoding="utf-8")
+    fake_uv.chmod(0o755)
+
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")  # deliberately no ~/.local/bin
+    monkeypatch.delenv("AWINO_PROJECT", raising=False)
+    monkeypatch.delenv("VIRTUAL_ENV", raising=False)
+    monkeypatch.delenv("CONDA_PREFIX", raising=False)
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "bin" / "awino"), "--version"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "uv-ok" in result.stdout  # only the fake uv prints this
+
+
+def test_launcher_still_degrades_gracefully_without_uv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    monkeypatch.delenv("AWINO_PROJECT", raising=False)
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "bin" / "awino"), "doctor"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "uv" in result.stderr
+
+
+def _install_summary_snippet() -> str:
+    text = (REPO_ROOT / "install.sh").read_text(encoding="utf-8")
+    begin = text.index("# BEGIN_INSTALL_SUMMARY")
+    end = text.index("# END_INSTALL_SUMMARY")
+    return text[begin:end]
+
+
+def _run_install_summary(doctor_failed: int, tests_failed: int) -> str:
+    """Evaluate the real install_summary function from install.sh in isolation."""
+    script = _install_summary_snippet() + f"\ninstall_summary {doctor_failed} {tests_failed}\n"
+    result = subprocess.run(["sh", "-c", script], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    return result.stdout
+
+
+def test_failure_summary_names_tests_when_doctor_is_clean() -> None:
+    out = _run_install_summary(0, 1)
+    assert "test suite" in out.lower()
+    assert "doctor" not in out.lower()
+
+
+def test_failure_summary_names_doctor_when_tests_pass() -> None:
+    out = _run_install_summary(1, 0)
+    assert "doctor" in out.lower()
+    assert "test suite" not in out.lower()
+
+
+def test_failure_summary_names_both_when_both_fail() -> None:
+    out = _run_install_summary(1, 1)
+    assert "doctor" in out.lower()
+    assert "test suite" in out.lower()
+
+
+def test_install_tail_reports_the_failed_step() -> None:
+    tail = (REPO_ROOT / "install.sh").read_text(encoding="utf-8")
+    assert 'install_summary "$DOCTOR_FAILED" "$TESTS_FAILED"' in tail
+    assert "Fix what the doctor reported" not in tail

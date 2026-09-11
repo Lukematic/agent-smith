@@ -4,6 +4,27 @@ set -u
 export AWINO_PROJECT="${AWINO_PROJECT:-$PWD}"
 PLUGIN_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
+# Sanitize no_proxy/NO_PROXY: bracketed IPv6 literals (e.g. [::1]) make
+# aiohttp/yarl raise "InvalidURL: Invalid port" when reading proxy env.
+for _pv in no_proxy NO_PROXY; do
+  eval "_pval=\${$_pv:-}"
+  case "$_pval" in
+    *\[*)
+      _pval=$(printf '%s\n' "$_pval" | tr ',' '\n' | grep -v '\[' | paste -sd ',' -)
+      eval "export $_pv=\$_pval"
+      ;;
+  esac
+done
+unset _pv _pval
+
+# The installer puts uv in ~/.local/bin, which may not be on PATH yet in a
+# fresh shell. Prepend it before the availability check so a just-installed
+# uv is never reported as missing.
+case ":${PATH:-}:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) export PATH="$HOME/.local/bin:${PATH:-}" ;;
+esac
+
 if ! command -v uv >/dev/null 2>&1; then
   echo "DEGRADED: A.W.I.N.O. agent and skills are active, but the deterministic ledger CLI needs uv and Python." >&2
   echo "Install uv, then run this command again. The locked CLI environment will be prepared automatically." >&2

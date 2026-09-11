@@ -18,6 +18,7 @@ every session without asking.
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -111,7 +112,8 @@ _RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "teach-back",
         re.compile(
-            r"\b(teach|explain (it|this|to me)|i don'?t understand|walk me through)\b", re.I
+            r"\b(teach|explain (it|this|to me)|i don'?t understand|walk me through|help me understand)\b",
+            re.I,
         ),
     ),
     (
@@ -127,11 +129,19 @@ _RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ),
     (
         "assumption-audit",
-        re.compile(r"\b(so that means|which implies|so it'?s|that means the)\b", re.I),
+        re.compile(
+            r"\b(so that means|which implies|so it'?s|that means the|what am i missing)\b",
+            re.I,
+        ),
     ),
     (
         "steel-man",
-        re.compile(r"\b(i think we|we should|my plan is|i believe|i'?m convinced)\b", re.I),
+        re.compile(
+            r"\b(i think we|we should|my plan is|i believe|i'?m convinced"
+            r"|leaning towards?|challenge this|push back on|play devil'?s advocate"
+            r"|give me the other side|poke holes in)\b",
+            re.I,
+        ),
     ),
     (
         "expert",
@@ -148,6 +158,44 @@ def detect(text: str) -> Stance | None:
         if pattern.search(text):
             return Stance.by_name(name)
     return None
+
+
+def profile_path() -> Path:
+    """Path to the user-level profile; AWINO_PROFILE overrides for tests."""
+    override = os.environ.get("AWINO_PROFILE")
+    return Path(override) if override else Path.home() / ".smith" / "profile.yaml"
+
+
+_CHALLENGE_ME = re.compile(r"^challenge_me:\s*true\s*$", re.M | re.I)
+
+
+def baseline_stance(profile: Path | None = None) -> str:
+    """The baseline stance when no specific stance matches.
+
+    With ``challenge_me: true`` in ~/.smith/profile.yaml the baseline is
+    advisor (the one with the disagree-in-three-lines rules); otherwise the
+    baseline is "default", i.e. no forced stance and behavior is unchanged.
+    """
+    path = profile if profile is not None else profile_path()
+    if path.is_file():
+        if _CHALLENGE_ME.search(path.read_text(encoding="utf-8")):
+            return "advisor"
+    return "default"
+
+
+def resolve_stance(prompt: str, current: str | None = None) -> Stance | None:
+    """Resolve a prompt to a stance: a specific match wins, else the baseline.
+
+    With ``challenge_me: true`` a neutral prompt resolves to advisor instead
+    of None; otherwise None (keep current) is returned exactly as detect()
+    would, so callers see no behavior change.
+    """
+    detected = detect(prompt)
+    if detected is not None:
+        return detected
+    if baseline_stance() == "advisor":
+        return Stance.by_name("advisor")
+    return Stance.by_name(current) if current else None
 
 
 _STANCE_LINE = re.compile(r"^stance:\s*(\S+)\s*$", re.M)

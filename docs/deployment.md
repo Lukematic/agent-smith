@@ -146,8 +146,8 @@ keep their harness-specific frontmatter current.
 
 ## Memory policy
 
-When Memory MCP is available, A.W.I.N.O. may dual-write short recall records to MCP and
-append-only files. The files are the audit ledger and win on disagreement.
+There is no Memory MCP client: A.W.I.N.O. writes short recall records to
+append-only files only. The files are the audit ledger.
 
 Categories:
 

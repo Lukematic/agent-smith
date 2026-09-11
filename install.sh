@@ -38,6 +38,17 @@ ok()   { printf "${GREEN}  OK    %s${NC}\n" "$1"; }
 warn() { printf "${YELLOW}  WARN  %s${NC}\n" "$1"; }
 bad()  { printf "${RED}  FAIL  %s${NC}\n" "$1"; }
 
+# BEGIN_INSTALL_SUMMARY
+# Pure summary of which verification step(s) failed. $1 = doctor flag,
+# $2 = tests flag (0 = passed). Prints one line per failed step so the report
+# names the actual failure instead of implying the doctor found problems.
+install_summary() {
+    [ "${1:-1}" -ne 0 ] && printf "  Health check failed: fix what 'awino doctor' reported, then run: uv run awino fix\n"
+    [ "${2:-1}" -ne 0 ] && printf "  Test suite failed: inspect the failures above, then run: uv run pytest -q\n"
+    return 0
+}
+# END_INSTALL_SUMMARY
+
 echo
 echo "A.W.I.N.O. installer"
 echo "  source: $AWINO_ROOT"
@@ -182,7 +193,7 @@ uv run pytest -q || TESTS_FAILED=1
 echo
 if [ "$DOCTOR_FAILED" -ne 0 ] || [ "$TESTS_FAILED" -ne 0 ]; then
     printf "${RED}INSTALL INCOMPLETE${NC}\n"
-    echo "  Fix what the doctor reported, then run: uv run awino fix"
+    install_summary "$DOCTOR_FAILED" "$TESTS_FAILED"
     exit 1
 fi
 
