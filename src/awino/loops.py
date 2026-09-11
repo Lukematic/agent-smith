@@ -168,6 +168,20 @@ def _goal_item_text(item: object) -> str:
     return ""
 
 
+def mission_goal_statement(project_root: Path) -> str:
+    """The mission goal statement a loop outcome is measured against.
+
+    The first goal text from the project's own mission sources
+    (``.awino/MISSION.md``, else the ``goals:`` list in
+    ``.awino/project.yaml``) -- the same sources the mission-alignment check
+    measures artifacts against. Returns ``"unstated"`` when no mission source
+    names a goal: A.W.I.N.O. never invents a mission, so neither does the
+    outcome verdict.
+    """
+    goals = _mission_goal_texts(project_root)
+    return goals[0] if goals else "unstated"
+
+
 def _mission_keywords(goal_texts: list[str]) -> set[str]:
     keywords: set[str] = set()
     for text in goal_texts:

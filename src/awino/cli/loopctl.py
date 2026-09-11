@@ -1,4 +1,4 @@
-"""owns: loop run rpi, loop run ralph, loop run delegate, loop next, loop status, loop approve, loop back, loop answer, loop default
+"""owns: loop run rpi, loop run ralph, loop run delegate, loop next, loop status, loop approve, loop back, loop answer, loop default, loop close
 
 The loop CLI: the machine drives phases, the model thinks inside them.
 Every command here is deterministic -- the model calls these rather than
@@ -13,13 +13,16 @@ is additive around them, never a replacement.
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import typer
 
 from awino import loops
 from awino.cli import _echo, _ledger, _workspace
+from awino.enforce import LoopEvent
 from awino.paths import AwinoPaths
+from awino.seeds import Seeds
 
 loop_app = typer.Typer(
     no_args_is_help=True,
@@ -422,3 +425,170 @@ def loop_default(
         )
     else:
         _echo(f"All questions answered. Advance with: awino loop next --id {state.id}")
+
+
+# ── outcome verdict ──────────────────────────────────────────────────────────
+
+_VERDICTS = ("yes", "partial", "no")
+
+_VERDICT_MEANINGS = {
+    "yes": "the goal was accomplished",
+    "partial": "part of the goal was accomplished",
+    "no": "the goal was not accomplished",
+}
+
+
+def _verdict_seed_context(
+    project_root: Path, driver: loops.LoopDriver, state: loops.LoopState
+) -> tuple[str | None, str, str]:
+    """Seed title (or None), the seed's resulting status, and the next action.
+
+    Read-only: the verdict records the seed's status, it never changes it.
+    The loop's own terminal semantics -- Ralph/Delegate close the seed on
+    verified success, RPI hands it to the gate ledger, escalation leaves it
+    open -- are untouched.
+    """
+    seed_id = state.seed_id
+    recorded = (
+        "nothing follows: the verdict is recorded; "
+        "`awino buddy` reports outcome rates"
+    )
+    by_hand = (
+        "check the seeds tracker by hand, then close the seed by hand "
+        "when the work is truly done"
+    )
+    if not seed_id:
+        return None, "n/a: no seed attached", recorded
+    try:
+        tracker = Seeds(project_root)
+        usable, message = tracker.state()
+        issue = tracker.show(seed_id) if usable else None
+    except Exception as exc:
+        return None, f"unknown: seeds tracker unreadable ({exc})", by_hand
+    if not usable:
+        return None, f"unknown: seeds tracker unavailable ({message})", by_hand
+    title = issue.title if issue is not None else None
+    if issue is None:
+        return None, "unknown: the seed is not in the tracker", by_hand
+    if not issue.open:
+        return title, "closed already", recorded
+    if isinstance(driver, loops.RpiDriver):
+        run = state.gate_run_id or "<run>"
+        return (
+            title,
+            "still open: the RPI loop hands the seed to the gate ledger; "
+            "it closes with the gate evidence, not with this loop",
+            f"finish gate evidence, run `awino work-close --run {run}`, "
+            f"then `awino gate close --run {run}`",
+        )
+    if state.locked:
+        return (
+            title,
+            "still open: escalation leaves the seed open because the work "
+            "is unverified",
+            driver.seed_open_note(state),
+        )
+    if state.phase != "done":
+        return (
+            title,
+            "still open: the loop has not completed, and a seed closes only "
+            "on successful verification",
+            "finish the loop, or close the seed by hand when the work is "
+            "truly done",
+        )
+    # Ralph/Delegate completed with the seed still open: verified success
+    # should have closed it, so closure failed or the seed was reopened.
+    return (
+        title,
+        f"still open: {driver.seed_open_note(state)}",
+        "close the seed by hand when the work is truly done",
+    )
+
+
+@loop_app.command("close")
+def loop_close(
+    loop_id: str = typer.Option(None, "--id", help="Loop id; defaults to the current one"),
+    verdict: str = typer.Option(
+        None, "--verdict", help="Outcome verdict: yes, partial, or no"
+    ),
+    note: str = typer.Option("", "--note", help="Short note on the outcome"),
+) -> None:
+    """Record the outcome verdict for a loop: did it accomplish the goal?
+
+    Asks the outcome question directly -- "Did this accomplish the goal?" --
+    with the loop's goal context (mission goal / seed title), then records an
+    outcome_verdict ledger event. `awino buddy` reports outcome rates from
+    these verdicts: outcomes are the scoreboard.
+    """
+    driver, state = _resolve_driver_and_state(loop_id)
+    workspace = _workspace()
+    goal = loops.mission_goal_statement(workspace.project.root)
+    seed_title, seed_status, next_action = _verdict_seed_context(
+        workspace.project.root, driver, state
+    )
+
+    # The outcome question always prints: the human answers it by rerunning
+    # with --verdict.
+    _echo("Did this accomplish the goal?")
+    _echo(f"  goal: {goal}")
+    if state.seed_id:
+        seed_line = f"  seed: {state.seed_id}"
+        if seed_title:
+            seed_line += f" - {seed_title}"
+        _echo(seed_line)
+    else:
+        _echo("  seed: none")
+
+    if verdict is None:
+        _echo(
+            "REFUSED  missing --verdict: rerun with "
+            f"--verdict yes|partial|no --id {state.id}"
+        )
+        raise typer.Exit(2)
+    verdict = verdict.strip().lower()
+    if verdict not in _VERDICTS:
+        _echo(
+            f"REFUSED  bad --verdict {verdict!r}: expected one of "
+            f"{', '.join(_VERDICTS)}"
+        )
+        raise typer.Exit(2)
+
+    detail = "; ".join(
+        [
+            f"verdict: {verdict}",
+            f"loop_id: {state.id}",
+            f"loop_kind: {driver.loop_kind}",
+            f"seed: {state.seed_id if state.seed_id else 'none'}",
+            f"goal: {goal}",
+            f"seed_status: {seed_status}",
+            *([f"note: {note.strip()}"] if note.strip() else []),
+        ]
+    )
+    _ledger().record_loop_event(
+        LoopEvent(
+            loop_id=state.id,
+            loop_kind=driver.loop_kind,
+            phase=state.phase,
+            kind="outcome_verdict",
+            at=datetime.now(UTC).isoformat(),
+            detail=detail,
+        )
+    )
+    _echo(
+        "PURPOSE  record the loop's outcome; `awino buddy` reports outcome "
+        "rates from these verdicts"
+    )
+    _echo(
+        f"YOU  answer honestly: yes ({_VERDICT_MEANINGS['yes']}), "
+        f"partial ({_VERDICT_MEANINGS['partial']}), "
+        f"no ({_VERDICT_MEANINGS['no']})"
+    )
+    _echo(
+        "CHECK  the goal above is the yardstick: a verdict means nothing "
+        "without the goal it was measured against"
+    )
+    _echo(f"VERDICT  {verdict}")
+    if note.strip():
+        _echo(f"note: {note.strip()}")
+    _echo(f"seed: {seed_status}")
+    _echo(f"next: {next_action}")

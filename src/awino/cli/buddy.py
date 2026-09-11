@@ -171,6 +171,61 @@ def _loop_honesty(ledger: Ledger) -> tuple[dict[str, tuple[int, int]], str]:
     )
 
 
+# ── section 0: outcome rates ─────────────────────────────────────────────────
+#
+# The scoreboard. The owner's question is "what did we need to accomplish,
+# and did we?"; the sections below measure how honestly the machine ran, not
+# whether the work landed. Verdicts come from `awino loop close`, which
+# records one outcome_verdict ledger event per loop with a
+# "verdict: yes|partial|no" detail.
+
+_VERDICT_RE = re.compile(r"(?:^|;)\s*verdict\s*:\s*(yes|partial|no)\b", re.IGNORECASE)
+
+
+def _outcome_rates(
+    events: list[LoopEvent],
+) -> tuple[dict[str, dict[str, int]], list[tuple[str, str]]]:
+    """Verdict counts per loop kind, and loops closed without a verdict.
+
+    The latest outcome_verdict event per loop wins (a verdict can be
+    re-recorded). Returns (per_kind, unmeasured): per_kind maps loop kind to
+    {"yes": n, "partial": n, "no": n}, and unmeasured is a sorted list of
+    (loop_id, loop_kind) with a loop_closed event but no verdict.
+    """
+    latest: dict[str, tuple[str, str]] = {}
+    closed: dict[str, str] = {}
+    for event in events:
+        if event.kind == "loop_closed":
+            closed.setdefault(event.loop_id, event.loop_kind)
+        elif event.kind == "outcome_verdict":
+            match = _VERDICT_RE.search(event.detail or "")
+            if match:
+                latest[event.loop_id] = (event.loop_kind, match.group(1).lower())
+    per_kind: dict[str, dict[str, int]] = {}
+    for _loop_id, (kind, verdict) in latest.items():
+        counts = per_kind.setdefault(kind, {"yes": 0, "partial": 0, "no": 0})
+        counts[verdict] += 1
+    unmeasured = sorted(
+        (loop_id, kind) for loop_id, kind in closed.items() if loop_id not in latest
+    )
+    return per_kind, unmeasured
+
+
+def _counts_line(counts: dict[str, int]) -> str:
+    """'N verdicts: a accomplished (x%), b partial (y%), c not (z%)'."""
+    total = sum(counts.values())
+
+    def _pct(n: int) -> str:
+        return f"{100.0 * n / total:.0f}%" if total else "n/a"
+
+    return (
+        f"{total} verdicts: "
+        f"{counts['yes']} accomplished ({_pct(counts['yes'])}), "
+        f"{counts['partial']} partial ({_pct(counts['partial'])}), "
+        f"{counts['no']} not ({_pct(counts['no'])})"
+    )
+
+
 # ── section 3: playbook events ───────────────────────────────────────────────
 
 
@@ -332,6 +387,26 @@ def _run_report() -> None:
     ledger = Ledger(workspace.state_root)
     _echo("BUDDY  mechanism effectiveness from real state")
     _echo(f"  project={workspace.project.name}  state={workspace.state_root}")
+    _echo("")
+
+    # 0. outcome rates (the headline: outcomes are the scoreboard)
+    _echo("OUTCOME RATES  (verdicts from `awino loop close`; outcomes are the scoreboard)")
+    per_kind, unmeasured = _outcome_rates(ledger.loop_events())
+    if not per_kind:
+        _echo("  none found (no outcome_verdict events in loops.jsonl)")
+    else:
+        total = {"yes": 0, "partial": 0, "no": 0}
+        for counts in per_kind.values():
+            for verdict, n in counts.items():
+                total[verdict] += n
+        _echo(f"  project {workspace.project.name}: {_counts_line(total)}")
+        order = [loop for loop in LOOPS if loop in per_kind] + sorted(
+            set(per_kind) - set(LOOPS)
+        )
+        for kind in order:
+            _echo(f"  {kind}: {_counts_line(per_kind[kind])}")
+    for loop_id, kind in unmeasured:
+        _echo(f"  UNMEASURED  outcome unmeasured: loop {loop_id} (kind {kind})")
     _echo("")
 
     # 1. stance self-test
@@ -528,6 +603,22 @@ def _run_fix() -> None:
 
     _echo("BUDDY-FIX  mechanical corrections, in report section order")
     _echo(f"  project={workspace.project.name}  state={state_root}")
+    _echo("")
+
+    # 0. outcome rates: a verdict is a human judgment, never auto-invented.
+    # For each loop closed without one, print the exact command the human
+    # should run.
+    _echo("OUTCOME RATES")
+    _, unmeasured = _outcome_rates(events)
+    if not unmeasured:
+        _echo("  every closed loop has a verdict (no correction needed)")
+    for loop_id, kind in unmeasured:
+        _echo(f"  UNMEASURED  outcome unmeasured: loop {loop_id} (kind {kind})")
+        _echo(
+            f"  PROMPT  run: awino loop close --id {loop_id} "
+            "--verdict yes|partial|no"
+        )
+        need_human += 1
     _echo("")
 
     # 1. stance self-test: the code fix stays human, so print the exact
