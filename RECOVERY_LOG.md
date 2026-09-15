@@ -88,3 +88,57 @@ touch, and never confuse "health said something" with "health is fine".
 - GUI hook activation on the affected Windows installations: unverified.
 - `IdentityMap.capture` is the shared constructor for the exam-start
   identity record required in Phase 3.
+
+## Phase 2 — One plan-bound durable controller (2026-09-15)
+
+Mission: the loop controllers and the machine controller share one durable
+plan-bound controller with write-ahead idempotent events, ask-first
+approvals, budget ceilings, and status derived from stored facts.
+
+### What changed
+
+- `src/awino/controller.py` (new): `PlanController` — per-plan durable
+  state (`plans/<plan_id>/plan.json`: revision, scope, approval state +
+  provenance, budgets/used, pending action ids, verifier, pending
+  approvals). All mutation goes through `submit_event`: the event is
+  journaled BEFORE state is mutated (write-ahead); a repeated `event_id`
+  replays the recorded outcome without re-applying; `expected_revision`
+  mismatches refuse with `PlanConflict` (the revision check runs against
+  disk-fresh state under a cross-platform atomic lock, so a stale second
+  "process" genuinely refuses); budget charges past a ceiling refuse with
+  `PlanBudgetExhausted` leaving no journal trace. Crash recovery re-applies
+  journaled events the plan file does not yet reflect (`_apply` is pure, so
+  recovery never double-counts).
+- Shared services in `controller.py`, used by every entry point:
+  `preflight` (blocking problems from stored state), `request_approval` /
+  `require_approval` (every consequential action asks first; the ask is
+  recorded, then `ApprovalRequired` refuses until a human grants with a
+  name), `grant_approval` / `invalidate_approval`, `record_review`
+  (ship/revise/blocked only), `close_plan` (refuses with pending actions,
+  pending approvals, or an unapproved plan), `charge_budget`,
+  `queue_action` / `apply_action`.
+- Knowledge through the controller: `consult_knowledge` (budget-charged,
+  persisted accounting via `accounting_key=plan-<id>`, records a receipt)
+  is idempotent per question — asking again replays without re-charging;
+  `answer_from_knowledge` cites the recorded receipt and refuses without
+  one (`KnowledgeReceiptRequired`). One service for the best / battery /
+  claude / exam flows.
+- Explicit adapters keep entry-point APIs distinct: `for_plan`,
+  `for_loop`, `for_machine` — same preflight/approval/review/closure/
+  status, no surface merge. No LangGraph, no parallel controller: the
+  existing controllers are retained and evolve through this service.
+- `src/awino/knowledge.py`: `KnowledgeStore` accepts `accounting_key` /
+  `accounting_dir`; the opened-file accounting persists to disk, so a fresh
+  store with the same key resumes instead of resetting the budget (the
+  reported 0.8 bug). `reset_budget()` drops the persisted file too — a new
+  task never inherits the old task's consumption. New persisted knowledge
+  receipts (`record_knowledge_receipt` / `knowledge_receipt` /
+  `require_knowledge_receipt`) under `<state>/knowledge_receipts/`.
+- `src/awino/stance_verify.py`: substance floor. Empty responses are
+  refused for every stance and thinking mode (`response is empty`);
+  marker-only responses (`I disagree`, `on the other hand` with no content)
+  are refused (`no substantive content beyond stance markers`). The check
+  fires only when no other rule failed, so every existing named failure is
+  byte-identical.
+- Tests: `tests/test_controller_closure.py` (new, 30 tests), 
+...[truncated 1797 chars]

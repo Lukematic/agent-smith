@@ -239,3 +239,58 @@ def test_cli_existing_set_and_for_behavior_is_untouched(
     result = cli_runner.invoke(cli_app, ["stance", "--for", "I think we should rewrite it"])
     assert result.exit_code == 0, result.output
     assert "STANCE  -> steel-man" in result.output
+
+
+# ── verify(): substance floor (Phase 2 hardening) ─────────────────────────
+# An empty response, or one that is only stance markers with no actual
+# content, used to pass the heuristic. A critic that passes nothing
+# checked nothing, so both are refused.
+
+
+@pytest.mark.parametrize(
+    "stance",
+    [
+        "advisor",
+        "steel-man",
+        "teach-back",
+        "first-principles",
+        "assumption-audit",
+        "research-intake",
+        "expert",
+    ],
+)
+def test_empty_response_is_refused_for_every_stance(stance: str) -> None:
+    assert stance_verify.verify(stance, "") == ["response is empty"]
+    assert stance_verify.verify(stance, "   \n  ") == ["response is empty"]
+
+
+def test_empty_thinking_output_is_refused() -> None:
+    assert stance_verify.verify("premortem", "") == ["response is empty"]
+
+
+@pytest.mark.parametrize(
+    ("stance", "marker_only"),
+    [
+        ("advisor", "I disagree"),
+        ("steel-man", "On the other hand"),
+        ("teach-back", "Can you explain?"),
+        ("first-principles", "First principles"),
+        ("expert", "Honestly"),
+    ],
+)
+def test_marker_only_response_is_refused(stance: str, marker_only: str) -> None:
+    assert stance_verify.verify(stance, marker_only) == [
+        "no substantive content beyond stance markers"
+    ]
+
+
+def test_marker_with_real_content_still_passes() -> None:
+    assert stance_verify.verify("advisor", "I disagree: the data shows churn rose.") == []
+
+
+def test_sycophancy_keeps_its_exact_failure() -> None:
+    # The substance check only fires when nothing else failed, so existing
+    # named failures are unchanged.
+    assert stance_verify.verify(
+        "first-principles", "Great question! You're absolutely right, excellent point."
+    ) == ["no validation phrases"]
