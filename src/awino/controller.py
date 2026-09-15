@@ -63,6 +63,9 @@ _PLAN_NAME = "plan.json"
 _LOCK_NAME = ".lock"
 _LOCK_TIMEOUT_S = 10.0
 _STALE_LOCK_S = 60.0
+# The plan state's host_activity list is a bounded quick view; the journal
+# is the unbounded record.
+_HOST_ACTIVITY_CAP = 500
 
 
 # ── errors ────────────────────────────────────────────────────────────────
@@ -146,6 +149,11 @@ class PlanState:
     last_review: dict[str, Any] | None = None
     status: str = "open"  # open | closed
     contracts: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # Append-only trail of host-boundary activations (session start, user
+    # turn, tool result) recorded by the per-host adapters in
+    # ``awino.hosts``. Capped: the journal is the full record; this is the
+    # quick "who touched the plan and when" view.
+    host_activity: list[dict[str, Any]] = field(default_factory=list)
     created_at: str = ""
     updated_at: str = ""
 
@@ -362,6 +370,28 @@ def _apply(state: dict[str, Any], event: ControllerEvent) -> tuple[dict[str, Any
     elif kind == "plan_closed":
         state["status"] = "closed"
         outcome["status"] = "closed"
+    elif kind in ("host_session_started", "host_user_turn", "host_tool_result"):
+        # Host-boundary activation from one of the awino.hosts adapters.
+        # Records who touched the plan and when; never mutates plan
+        # substance (scope, approvals, budgets). The journal holds the full
+        # payload; host_activity is the bounded quick view.
+        boundary = {
+            "host_session_started": "session_start",
+            "host_user_turn": "user_turn",
+            "host_tool_result": "tool_result",
+        }[kind]
+        activity = list(state.get("host_activity", []))
+        entry = {
+            "at": event.at,
+            "host": payload["host"],
+            "boundary": boundary,
+            "session_id": payload.get("session_id", "unknown"),
+            "evidence": payload.get("evidence", "unverified"),
+            "detail": payload.get("detail", ""),
+        }
+        activity.append(entry)
+        state["host_activity"] = activity[-_HOST_ACTIVITY_CAP:]
+        outcome["recorded"] = entry
     else:
         raise PlanError(f"unknown controller event kind: {kind!r}")
 

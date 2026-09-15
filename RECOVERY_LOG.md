@@ -217,3 +217,99 @@ approvals, budget ceilings, and status derived from stored facts.
 - Known limitation: `for_plan`/`for_loop`/`for_machine` adapters and the
   best/battery/claude/exam CLI answer paths have not all been explicitly
   rewired through the shared knowledge service yet (carried from Phase 2).
+
+## Phase 4 — Real per-turn host activation (2026-09-15)
+
+Mission: each supported host activates the SAME plan controller at
+session start, user turn, and tool-result boundaries — with recursion
+protection and honest evidence labels. Missing live-host evidence means
+assisted/unverified status, never parity.
+
+### What changed
+
+- `src/awino/hosts/` (new package): three SEPARATE host adapters sharing
+  one base.
+  - `base.py`: `HostAdapter` ABC (two host-specific pieces: `detect_live()`
+    and `missing_api_surface()`; everything else shared so no host can
+    quietly diverge), `HostStatus`, `Evidence` labels
+    (live/double_driven/unverified/unsupported), `UnknownHost`,
+    `get_adapter()` — an unknown host name raises, never silently passes.
+    Boundary methods `session_start`/`user_turn`/`tool_result` fire
+    idempotent controller events; `session_start` returns the controller's
+    pending-work status lines (starting a session shows pending work;
+    nothing runs unattended). Per-host evidence files under
+    `<state>/hosts/<host>/evidence.jsonl`.
+  - `claude_code.py`: detects via `claude` on PATH or `CLAUDE_PLUGIN_ROOT`;
+    documents the real seam (`hooks/hooks.json` events -> `awino hook
+    <event>`) and what the host API does NOT provide.
+  - `kilo.py`, `roo.py`: VS Code-extension-dir detection heuristic
+    (documented as heuristic); both spell out that no extension/hook API
+    exists in this tree and host-side wiring is missing, not invented.
+  - `recursion.py`: `guarded(event)` context manager — env-carried depth
+    token (`AWINO_HOOK_DEPTH`) + event chain (`AWINO_HOOK_CHAIN`) so the
+    guard survives into child processes. Same-event re-entry or nesting
+    raises `HookRecursionRefused`; env is always restored.
+- `src/awino/controller.py`: `PlanState.host_activity` (bounded at 500;
+  the journal is the unbounded record) and three new `_apply` event kinds:
+  `host_session_started`, `host_user_turn`, `host_tool_result`. They record
+  who touched the plan and when; they never mutate plan substance. Old plan
+  files load fine (new field has a default).
+- `src/awino/cli/maintain.py`: the existing `awino hook` command now runs
+  its body inside the recursion guard; a recursive invocation is refused
+  with a clear message and exit code 3. Behavior for single invocations is
+  unchanged.
+- Tests: `tests/test_hook_recursion.py` (guard allow/refuse paths, env
+  restoration, CLI exit-3 refusal via real subprocess),
+  `tests/test_kilo.py` / `tests/test_roo.py` (adapter identity, unverified
+  reporting, per-host evidence round-trip), `tests/test_per_turn_activation.py`
+  (full double-driven journey per host through one controller: session
+  start -> user turn -> plan edit -> approval -> execution -> tool result ->
+  restart recovery; boundary redelivery applies once; a detected binary
+  never upgrades evidence to live).
+
+### Per-host evidence report (this environment, 2026-09-15)
+
+| host        | detected_live | evidence    | missing APIs / notes                                  |
+|-------------|---------------|-------------|-------------------------------------------------------|
+| claude_code | no            | unverified  | no `claude` CLI here; hook seam exists in tree        |
+| kilo        | no            | unverified  | no VS Code/Kilo here; no extension API in tree        |
+| roo         | no            | unverified  | no VS Code/Roo here; no extension API in tree          |
+
+No live host exists in this Linux sandbox, so no live journey evidence
+could be produced. All journey evidence is `double_driven` and labeled as
+such in both the controller journal and the per-host evidence files.
+Automatic parity is NOT claimed for any host. A deliberately unsupported
+host name (`clippy`) raises `UnknownHost` with the supported list.
+
+### Verification
+
+- Gate (`tests/test_claude.py` does not exist in this tree — excluded, not
+  invented): `pytest tests/test_claude_plugin.py tests/test_kilo.py
+  tests/test_roo.py tests/test_hook_recursion.py
+  tests/test_per_turn_activation.py` → 58 passed, 2 skipped (pre-existing
+  Claude-CLI-absent skips), 1 failed — the pre-existing environmental
+  `test_clean_plugin_cache_prepares_locked_environment_and_runs_doctor`
+  (fails identically on the clean tree).
+- New tests: 47 passed.
+- `ruff check` and `ruff format` clean on all touched files (fixed 21
+  auto-fixable findings plus 7 manual: B904, PTH111/112, RUF005, SIM117).
+- Full suite: 1711 passed, 4 skipped, 16 failed — all 16 verified
+  pre-existing by re-running the suspicious subset in a worktree at the
+  Phase 3 baseline `310c401` (14/14 failed identically there, including the
+  hook-routing and recovery-cutover ones). Zero regressions from Phase 4.
+- Two real bugs caught by my own tests mid-phase: `_apply`'s boundary-name
+  mapping would have raised KeyError on `host_session_started`, and
+  `event_count` is a method (test-only fix).
+
+### Carry-forwards
+
+- Host-side wiring on real machines: the Claude Code plugin's
+  `hooks/hooks.json` still fires `awino hook <event>`; calling the new
+  adapter boundary methods from host integrations (plugin hooks, Kilo/Roo
+  extension lifecycle hooks) is a deployment step needing the user's
+  Windows host and is NOT done here.
+- Live per-host journeys (session start -> intent -> plan edit -> approval
+  -> execution -> restart) remain unverified by design; the adapters,
+  recursion guard, and evidence pipeline are the deliverable.
+- Carried from Phase 2/3: best/battery/claude/exam CLI answer paths are not
+  all rewired through the shared knowledge service yet.
