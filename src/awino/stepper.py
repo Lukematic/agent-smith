@@ -46,7 +46,12 @@ Action = Callable[[Machine, StepContext], str]
 
 def _locate(m: Machine, ctx: StepContext) -> str:
     """Where are we: health, provisioning gaps, relevant lessons, the mission's
-    state, and the stance the human's words call for. All reads."""
+    state, and the stance the human's words call for. All reads.
+
+    Observations: "healthy" (route on), "missing" (provision first), or
+    "unhealthy" (blocking health gates are failing: stop for a human decision,
+    never proceed as if healthy).
+    """
     from awino import heilmeier, stance
 
     results = health.run_all(ctx.paths, fast=True)
@@ -76,6 +81,9 @@ def _locate(m: Machine, ctx: StepContext) -> str:
 
     if failing:
         ctx.say(f"HEALTH  {len(failing)} failing: {', '.join(r.name for r in failing)}")
+        # A blocking failure is not "healthy with a note": the machine stops
+        # for a human decision instead of routing on as if all were well.
+        return "unhealthy"
     if auto:
         ctx.say(f"MISSING  {', '.join(s.kind.value for s in auto)}")
         return "missing"

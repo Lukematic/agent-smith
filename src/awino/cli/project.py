@@ -56,7 +56,7 @@ from awino.enforce import (
     TaskClass,
     adjudicate,
 )
-from awino.toolchain import Manager, Toolchain, tool_install_command
+from awino.toolchain import Manager, Tool, Toolchain, tool_install_command
 
 
 @app.command("project-scaffold")
@@ -744,6 +744,20 @@ def onboard_command(
         _echo("  awino onboard --confirm")
 
 
+def _home_version() -> str:
+    """Installed distribution version of this A.W.I.N.O. checkout.
+
+    The startup contract names the source; the version pins which source it
+    was, so "it worked on my machine" is checkable instead of folklore.
+    """
+    try:
+        from importlib.metadata import version
+
+        return version("awino-harness")
+    except Exception:
+        return "unknown"
+
+
 def _bootstrap_status(project: Path, intent: onboarding.ProjectIntent | None) -> str:
     if onboarding.bootstrap_current(project, intent):
         assert intent is not None and intent.bootstrap is not None
@@ -1343,7 +1357,17 @@ def start_command(
 
     try:
         chain = _toolchain(workspace)
-        toolchain_line = ", ".join(sorted(chain.summary())) or "unknown"
+        # Show the actual usable tools, not the dictionary category names:
+        # "lint=ruff check ..." tells the human what runs; "lint" does not.
+        summary = chain.summary()
+        parts = []
+        for name in sorted(summary):
+            tool = summary[name]
+            if isinstance(tool, Tool) and tool.usable:
+                parts.append(f"{name}={tool.command}")
+            else:
+                parts.append(f"{name}=unavailable")
+        toolchain_line = ", ".join(parts) or "unknown"
     except Exception as exc:
         toolchain_line = f"unknown ({exc})"
 
@@ -1425,6 +1449,7 @@ def start_command(
     except Exception:
         pass
 
+    _echo(f"Source: {workspace.home.root} ({_home_version()})")
     _echo(f"Project: {project_line}")
     _echo(f"Mission confidence: {mission_confidence}")
     _echo(f"Toolchain: {toolchain_line}")

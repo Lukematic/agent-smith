@@ -50,6 +50,7 @@ EDGES: dict[tuple[Node, str], Node] = {
     (Node.IDLE, "start"): Node.LOCATE,
     (Node.LOCATE, "healthy"): Node.ROUTE,
     (Node.LOCATE, "missing"): Node.PROVISION,
+    (Node.LOCATE, "unhealthy"): Node.STOP,  # blocking health failed: human decision, not routing
     (Node.PROVISION, "provisioned"): Node.LOCATE,
     (Node.PROVISION, "declined"): Node.LOCATE,
     (Node.ROUTE, "high"): Node.LADDER,

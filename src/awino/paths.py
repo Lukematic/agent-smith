@@ -10,11 +10,17 @@ Two roots, deliberately separated:
 Conflating them causes the two symmetric failures: writing a project's ledger into
 A.W.I.N.O. pollutes the shared install, and copying A.W.I.N.O. into each project forks the
 knowledge base. One place knows the difference, and that is this module.
+
+``IdentityMap`` is the unified identity record: source (runtime home), target
+(project), state (state root), interpreter, and plugin artifact in one place,
+so startup, migration, and exams cannot disagree about which installation
+they are running from.
 """
 
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -89,6 +95,54 @@ def user_config_dir() -> Path:
     """The per-user config directory, migrating ``~/.smith`` to ``~/.awino`` once."""
     home = _user_home()
     return migrate_legacy_dir(home / LEGACY_STATE_DIR, home / STATE_DIR)
+
+
+@dataclass(frozen=True)
+class IdentityMap:
+    """One record naming source, target, state, interpreter, and plugin.
+
+    Every identity-sensitive operation (startup reporting, the journaled
+    ``.smith`` -> ``.awino`` cutover, exams) builds this from the same
+    resolvers, so two commands cannot disagree about which installation,
+    which project, or which interpreter they are running as.
+    """
+
+    runtime_home: Path
+    """Source: the A.W.I.N.O. installation this process is running from."""
+    target_project: Path
+    """Target: the project the work is about (may equal the home root)."""
+    state_root: Path
+    """State: the canonical state directory for the target project."""
+    interpreter: str
+    """Python interpreter executing this process (``sys.executable``)."""
+    plugin_artifact: Path | None
+    """The Claude plugin artifact, when this installation ships one."""
+
+    @classmethod
+    def capture(
+        cls,
+        runtime_home: Path,
+        target_project: Path,
+        state_root: Path,
+        plugin_artifact: Path | None = None,
+    ) -> IdentityMap:
+        return cls(
+            runtime_home=runtime_home,
+            target_project=target_project,
+            state_root=state_root,
+            interpreter=sys.executable,
+            plugin_artifact=plugin_artifact,
+        )
+
+    def as_dict(self) -> dict[str, str]:
+        """JSON-serialisable form for journals and reports."""
+        return {
+            "runtime_home": str(self.runtime_home),
+            "target_project": str(self.target_project),
+            "state_root": str(self.state_root),
+            "interpreter": self.interpreter,
+            "plugin_artifact": str(self.plugin_artifact) if self.plugin_artifact else "",
+        }
 
 
 @dataclass(frozen=True)
