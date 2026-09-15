@@ -241,6 +241,14 @@ class AwinoPaths:
         return self.knowledge / "cache"
 
     @property
+    def templates(self) -> Path:
+        return self.root / "templates"
+
+    @property
+    def task_contract_template(self) -> Path:
+        return self.templates / "task-contract.yaml"
+
+    @property
     def manifest(self) -> Path:
         return self.knowledge / "MANIFEST.json"
 

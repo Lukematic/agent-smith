@@ -142,3 +142,78 @@ approvals, budget ceilings, and status derived from stored facts.
   byte-identical.
 - Tests: `tests/test_controller_closure.py` (new, 30 tests), 
 ...[truncated 1797 chars]
+
+## Phase 3 — shared planning and assignment contract (2026-09-15)
+
+- `src/awino/task_contract.py` (new): one `TaskContract` datatype.
+  Schema version, contract/plan revisions, role, objective, file scope,
+  context paths, verification, budgets, verifier, dependencies; states
+  draft/approved/invalid/invalidated/superseded/closed with legal
+  transitions. `normalize()` canonicalizes wording/whitespace/scope
+  ordering/role; `validate()` enforces the spawn path's invariants
+  (read-only roles declare no file scope; writing roles declare scope and
+  a verification command). `revision_hash()` binds an approval grant to
+  the exact content reviewed. `apply_human_edit()` records who/when/
+  before/after per field; material edits (scope/action/budget, default
+  fail-closed) invalidate approval, caller-declared cosmetic edits keep it:
+  `approval_covers()` reverse-applies recorded non-material edits and
+  requires the reverted content to hash to the granted hash; anything
+  unrecorded or material fails the binding. `assert_current()` /
+  `rebase_contract()` implement staleness against the plan revision; the
+  contract's own lifecycle events (save/grant/invalidate) advance
+  `plan_revision_seen` past themselves, so a contract is never stale
+  against its own bookkeeping — only against unrelated plan movement.
+- One planning brief type `task-brief/v1`: `render_prefilled_draft()`
+  emits an editable Markdown draft from a template contract;
+  `apply_brief_edits()` parses it back (missing/unknown sections fail
+  closed). Template `templates/task-contract.yaml` documents every field,
+  the material-field list, the state machine, and the brief sections; the
+  test suite asserts the template stays in sync with the module. Ships in
+  the wheel via the existing `templates` force-include
+  (`awino/_bundle/templates`); `AwinoPaths.templates` /
+  `task_contract_template` resolve it in a checkout and in a bundle.
+- Controller lifecycle: `save_contract` / `request_contract_approval` /
+  `grant_contract_approval` / `invalidate_contract_approval` /
+  `rebase_contract` / `supersede_contract` journal through the Phase 2
+  `PlanController` (same write-ahead event journal, idempotent event ids,
+  revision-conflict refusal); contract state is part of status snapshots.
+  Revision history persists per contract (`current.json` plus per-revision
+  snapshots).
+- Spawn binding: `Assignment.contract: ContractRef | None`; `spawn_one`
+  validates the stored contract (`check_contract_ref`) before writing or
+  executing the worker prompt — stale revision, unapproved state,
+  moved-on plan, or broken approval binding refuses; the stored file is
+  the single source, reloaded after validation so a tampered passed object
+  cannot inject content. The prompt carries the authoritative revision and
+  `task-brief/v1` identity via `render_contract_block()`.
+- Dispatch binding: `run_dispatch` and `open_floor` accept an optional
+  contract; both validate the STORED contract via `check_contract_ref`
+  (so a custom executor bypassing `spawn_one` is still gated) and rebuild
+  the assignment from the reloaded file. `open_floor` requires `project`
+  when a contract is given, to resolve the canonical state root.
+- CLI: `awino dispatch --contract plan/contract[@revision]` and
+  `awino floor open --contract ...`; the pinned form refuses when the
+  stored revision differs; malformed/unknown references refuse at the CLI
+  boundary (exit 2), and the dispatch gate re-validates against disk.
+- Gate (spec files that exist; `tests/test_spawn.py` and
+  `tests/test_claude.py` do not exist in this tree — recorded, not
+  invented): `pytest tests/test_claude_plugin.py
+  tests/test_task_contract.py` → 96 passed, 2 skipped (pre-existing
+  Claude-CLI-absent skips), 1 failed — the failure is the pre-existing
+  environmental `test_clean_plugin_cache...` (fails identically on the
+  clean tree).
+- `tests/test_task_contract.py`: 85 tests — normalization, validation,
+  template sync, human-edit provenance, cosmetic-vs-material approval
+  binding (incl. tamper rejection), staleness/rebase, persistence/history,
+  brief round-trips, spawn refusal paths, dispatch gate incl.
+  stored-state authority, `ContractRef.parse`, CLI option resolution.
+- Full suite: 1664 passed, 4 skipped, 16 failed — all 16 reproduce
+  identically on the clean pre-change tree (environmental: bracketed-IPv6
+  proxy encoding test, 3 gate-review-workflow, 3 dispatch-cli, 3 best-cli,
+  claude-plugin cache, health real-project, hook-routing compaction,
+  isolation cross-project, 2 recovery-cutover startup-reporting). Zero
+  regressions attributable to Phase 3.
+- `ruff check` clean on all touched files.
+- Known limitation: `for_plan`/`for_loop`/`for_machine` adapters and the
+  best/battery/claude/exam CLI answer paths have not all been explicitly
+  rewired through the shared knowledge service yet (carried from Phase 2).

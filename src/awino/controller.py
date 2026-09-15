@@ -145,6 +145,7 @@ class PlanState:
     pending_approvals: list[dict[str, Any]] = field(default_factory=list)
     last_review: dict[str, Any] | None = None
     status: str = "open"  # open | closed
+    contracts: dict[str, dict[str, Any]] = field(default_factory=dict)
     created_at: str = ""
     updated_at: str = ""
 
@@ -304,6 +305,60 @@ def _apply(state: dict[str, Any], event: ControllerEvent) -> tuple[dict[str, Any
         outcome["verdict"] = payload["verdict"]
     elif kind == "knowledge_receipt":
         outcome["question_hash"] = payload["question_hash"]
+    elif kind == "contract_saved":
+        contracts = {k: dict(v) for k, v in state.get("contracts", {}).items()}
+        entry = contracts.get(payload["contract_id"], {})
+        entry.update(
+            {
+                "contract_revision": payload["contract_revision"],
+                "state": payload["state"],
+                "brief_type": payload.get("brief_type"),
+                "role": payload.get("role"),
+                "plan_revision_seen": payload.get("plan_revision_seen"),
+            }
+        )
+        contracts[payload["contract_id"]] = entry
+        state["contracts"] = contracts
+        outcome["contract_revision"] = payload["contract_revision"]
+    elif kind == "contract_approved":
+        contracts = {k: dict(v) for k, v in state.get("contracts", {}).items()}
+        entry = contracts.setdefault(payload["contract_id"], {})
+        entry.update(
+            {
+                "contract_revision": payload["contract_revision"],
+                "state": "approved",
+                "approved_by": payload.get("by"),
+                "revision_hash": payload.get("revision_hash"),
+            }
+        )
+        contracts[payload["contract_id"]] = entry
+        state["contracts"] = contracts
+        outcome["state"] = "approved"
+    elif kind == "contract_invalidated":
+        contracts = {k: dict(v) for k, v in state.get("contracts", {}).items()}
+        entry = contracts.setdefault(payload["contract_id"], {})
+        entry.update(
+            {
+                "contract_revision": payload["contract_revision"],
+                "state": "invalidated",
+                "invalidation_reason": payload.get("reason"),
+            }
+        )
+        contracts[payload["contract_id"]] = entry
+        state["contracts"] = contracts
+        outcome["state"] = "invalidated"
+    elif kind == "contract_superseded":
+        contracts = {k: dict(v) for k, v in state.get("contracts", {}).items()}
+        entry = contracts.setdefault(payload["contract_id"], {})
+        entry.update(
+            {
+                "contract_revision": payload["contract_revision"],
+                "state": "superseded",
+            }
+        )
+        contracts[payload["contract_id"]] = entry
+        state["contracts"] = contracts
+        outcome["state"] = "superseded"
     elif kind == "plan_closed":
         state["status"] = "closed"
         outcome["status"] = "closed"
@@ -538,6 +593,14 @@ class PlanController:
             ],
             "approvals_granted": len(state["approvals"]),
             "verifier": state["verifier"],
+            "contracts": {
+                cid: {
+                    "revision": entry.get("contract_revision"),
+                    "state": entry.get("state"),
+                    "brief_type": entry.get("brief_type"),
+                }
+                for cid, entry in sorted(state.get("contracts", {}).items())
+            },
             "last_review": state["last_review"],
             "events": self.event_count(),
             "updated_at": state["updated_at"],

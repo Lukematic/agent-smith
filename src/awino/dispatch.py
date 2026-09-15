@@ -39,6 +39,10 @@ from awino.spawn import (
     spawn_one,
 )
 from awino.spawn import verify as spawn_verify
+from awino.task_contract import (
+    TaskContract,
+    render_contract_block,
+)
 
 HealthCheck = Callable[..., list[Result]]
 SpawnExecutor = Callable[[Assignment, Path, Path, Runner], SpawnResult]
@@ -267,7 +271,24 @@ def _build_assignment(
     feedback: str | None,
     file_scope: list[str],
     verification: str,
+    contract: TaskContract | None = None,
 ) -> Assignment:
+    if contract is not None:
+        # One source: the approved contract, not a re-derived assignment.
+        # The worker carries a ContractRef; spawn_one resolves it against
+        # the stored contract and refuses anything stale or unapproved.
+        objective = contract.objective
+        if feedback:
+            objective += f"\n\nThe previous floor's independent verification failed with:\n{feedback}"
+        return Assignment(
+            agent_id=f"dispatch-f{floor_number}-{skill}",
+            role=Role(contract.role),
+            objective=objective,
+            file_scope=list(contract.file_scope),
+            context_paths=list(contract.context_paths),
+            verification=contract.verification,
+            contract=contract.to_ref(),
+        )
     objective = f"Dispatched to {skill} for: {task}"
     if feedback:
         objective += f"\n\nThe previous floor's independent verification failed with:\n{feedback}"
@@ -366,6 +387,7 @@ def run_dispatch(
     verify_fn: DispatchVerifier = spawn_verify,
     depth: Callable[[], int] = current_depth,
     health_check: HealthCheck = run_all,
+    contract: TaskContract | None = None,
 ) -> DispatchResult:
     """The full trip: match -> confirm -> dispatch -> wait -> verify -> route -> record.
 
@@ -415,11 +437,37 @@ def run_dispatch(
     if not pre.ok:
         return _terminal(ledger, run_id, DispatchOutcome.BLOCKED, [], pre.detail, budget, decision)
 
+    if contract is not None:
+        # Approval is asked at brief-review time, not mid-spawn. The
+        # canonical check reads the STORED contract, not the passed object:
+        # a custom executor bypasses spawn_one, so only the file on disk is
+        # authoritative for revision, staleness, and the approval binding.
+        from awino.paths import project_state_dir
+        from awino.task_contract import check_contract_ref, load_contract
+
+        state_root = project_state_dir(project)
+        problems = check_contract_ref(state_root, contract.to_ref())
+        if problems:
+            return _terminal(
+                ledger,
+                run_id,
+                DispatchOutcome.BLOCKED,
+                [],
+                "contract refused: " + "; ".join(problems),
+                budget,
+                decision,
+            )
+        # The stored contract is the single source from here on: a tampered
+        # passed object cannot inject content the grant did not cover.
+        contract = load_contract(state_root, contract.plan_id, contract.contract_id)
+
     floors: list[DispatchFloor] = []
     feedback: str | None = None
     skill = pre.reroute_to or decision.skill.name
     for number in range(1, budget + 1):
-        assignment = _build_assignment(request, skill, number, feedback, file_scope, verification)
+        assignment = _build_assignment(
+            request, skill, number, feedback, file_scope, verification, contract
+        )
         spawned = execute(assignment, awino_home, project, runner)
         spawned = verify_fn(spawned, assignment, project)
         floor = DispatchFloor(number, skill, spawned, spawned.verified)
@@ -550,15 +598,23 @@ def _write_floor_prompt(
     floor: int,
     max_floors: int,
     feedback: str | None,
+    contract: TaskContract | None = None,
 ) -> FloorState:
     invocation_id = f"dispatch-f{floor}-{skill}-{uuid.uuid4().hex[:10]}"
-    assignment = _build_assignment(request, skill, floor, feedback, file_scope, verification)
+    assignment = _build_assignment(
+        request, skill, floor, feedback, file_scope, verification, contract
+    )
     prompt = (
         f"<!-- invocation: {invocation_id} -->\n"
         + assignment.render(awino_home)
         + "\n\n## The skill you were routed to - follow this procedure\n\n"
         + _skill_text(awino_home, skill)
     )
+    if contract is not None:
+        # The portable path executes outside spawn_one, so the prompt itself
+        # carries the authoritative contract reference: the harness reads
+        # the stored contract file as the single source, not this copy.
+        prompt += "\n\n" + render_contract_block(contract)
     scratch = ledger.state_root / "assignments"
     scratch.mkdir(parents=True, exist_ok=True)
     prompt_path = scratch / f"{invocation_id}.md"
@@ -573,21 +629,29 @@ def _write_floor_prompt(
         verification=verification,
         max_floors=max_floors,
     )
+    payload: dict[str, object] = {
+        "floor": floor,
+        "invocation_id": invocation_id,
+        "max_floors": max_floors,
+        "prompt_path": str(prompt_path),
+        "request": request,
+        "skill": skill,
+        "awino_home": str(awino_home),
+        "verification": verification,
+        "file_scope": list(file_scope),
+    }
+    if contract is not None:
+        payload["contract"] = {
+            "plan_id": contract.plan_id,
+            "contract_id": contract.contract_id,
+            "revision": contract.contract_revision,
+            "brief_type": contract.brief_type,
+        }
     ledger.append_artifact(
         run_id,
         "dispatch-pending",
         invocation_id,
-        {
-            "floor": floor,
-            "invocation_id": invocation_id,
-            "max_floors": max_floors,
-            "prompt_path": str(prompt_path),
-            "request": request,
-            "skill": skill,
-            "awino_home": str(awino_home),
-            "verification": verification,
-            "file_scope": list(file_scope),
-        },
+        payload,
     )
     return state
 
@@ -715,6 +779,7 @@ def open_floor(
     max_floors: int = MAX_ATTEMPTS,
     role: str = "worker",
     project: Path | None = None,
+    contract: TaskContract | None = None,
 ) -> FloorState:
     """Route the request and write the floor-1 prompt for whatever harness is
     present to execute. Raises rather than guessing when routing is not
@@ -730,6 +795,25 @@ def open_floor(
         raise ValueError(f"max_floors must be between 1 and {MAX_ATTEMPTS}")
     if not verification.strip():
         raise ValueError("a real verification command is required")
+
+    if contract is not None:
+        # Same rule as run_dispatch: approval is asked at brief-review time.
+        # The canonical check reads the STORED contract: the portable floor
+        # prompt executes outside spawn_one, so only the file on disk is
+        # authoritative for revision, staleness, and the approval binding.
+        if project is None:
+            raise ValueError(
+                "project is required when opening a floor with a contract: "
+                "the stored contract is validated, not the passed object"
+            )
+        from awino.paths import project_state_dir
+        from awino.task_contract import check_contract_ref, load_contract
+
+        state_root = project_state_dir(project)
+        problems = check_contract_ref(state_root, contract.to_ref())
+        if problems:
+            raise ValueError("contract refused: " + "; ".join(problems))
+        contract = load_contract(state_root, contract.plan_id, contract.contract_id)
 
     pending = ledger.latest_artifact(run_id, "dispatch-pending")
     closed = ledger.artifacts(run_id, "dispatch-floor")
@@ -770,6 +854,7 @@ def open_floor(
         next_floor,
         max_floors,
         None,
+        contract,
     )
 
 
