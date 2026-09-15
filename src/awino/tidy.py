@@ -30,6 +30,9 @@ ROOT_ALLOWED = frozenset(
         # Required recovery work log (see the recovery workplan): a named
         # deliverable like the other root docs, not stray clutter.
         "RECOVERY_LOG.md",
+        # The recovery specification governing the recovery branch: the
+        # workplan the branch implements, not stray clutter.
+        "HARNESS_FIX_SPEC.md",
         "bootstrap.ps1",
         "bootstrap.sh",
         "install.ps1",

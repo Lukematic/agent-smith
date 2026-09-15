@@ -28,7 +28,8 @@ CLI_PACKAGE = SRC / "cli"
 # packs, Phase 2), buddy health (repo hygiene, Phase 2), think + loop think /
 # loop explain / loop probe-answer / loop suggest / loop suggest-answer
 # (critical thinking modes, Phase 2), loop confirm-problem (the lawyer move:
-# applicability check, Phase 2). 111 names.
+# applicability check, Phase 2), release verify / publish / push / tag
+# (release gate, Phase 5). 115 names.
 PRE_SPLIT_COMMANDS = frozenset(
     {
         "ask",
@@ -115,6 +116,10 @@ PRE_SPLIT_COMMANDS = frozenset(
         "proof verify",
         "push",
         "registry-json",
+        "release publish",
+        "release push",
+        "release tag",
+        "release verify",
         "remember",
         "resume",
         "review-doc",
@@ -231,8 +236,8 @@ class TestCommandSurfaceIsUnchanged:
         )
 
     def test_command_count_is_exactly_the_registered_set(self) -> None:
-        assert len(PRE_SPLIT_COMMANDS) == 111
-        assert len(_registered(cli.app)) == 111
+        assert len(PRE_SPLIT_COMMANDS) == 115
+        assert len(_registered(cli.app)) == 115
 
     def test_public_entry_points_survive(self) -> None:
         assert isinstance(cli.app, typer.Typer)

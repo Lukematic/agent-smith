@@ -313,3 +313,76 @@ host name (`clippy`) raises `UnknownHost` with the supported list.
   recursion guard, and evidence pipeline are the deliverable.
 - Carried from Phase 2/3: best/battery/claude/exam CLI answer paths are not
   all rewired through the shared knowledge service yet.
+
+## Phase 5 — Artifact behavior and release gate (2026-09-15)
+
+### What was built
+- `src/awino/exam.py`: probes now record the subprocess return code; a probe
+  FIRES only on exit 0 AND expected text. Expected text from a crashed
+  subprocess is explicitly not a pass. New `launcher_resolves()` guard proves
+  the probe command is a real executable running `awino.cli`; new pure
+  `probe_fired()` makes the pass/fail decision unit-testable.
+- `src/awino/manifest.py` (new): one generated capability manifest
+  (`src/awino/capabilities.json`, 95 capabilities, shipped in the wheel).
+  `verify_manifest` rebuilds from the tree and reports every difference:
+  claimed-but-missing, provided-but-unlisted, version mismatch, missing
+  bundle entry. `verify_wheel` checks a built wheel for the manifest, the
+  bundle, and the `awino = awino.cli:app` entry point. Library modules never
+  import `awino.cli` — the command surface is passed in (test_cli_layout
+  architectural rule honored).
+- `src/awino/release.py` (new): `verify_artifact` returns a report with
+  specific reasons, never raises for brokenness. `release_gate` raises
+  `ReleaseRefused` (broken artifact, reasons name the exact problem) or
+  `AuthorizationRequired` (good artifact, no explicit authorization). With
+  authorization on a good artifact it returns the verified capability list;
+  the gate verifies and never publishes by itself.
+- `src/awino/cli/release.py` (new, `owns: release verify, release publish,
+  release push, release tag`): `awino release verify [--root]` lists verified
+  capabilities or names exactly what is broken (exit 1);
+  `awino release publish|push|tag` refuse without `--authorize` (exit 3).
+- `src/awino/cli/__init__.py`: `registered_command_names()` helper; `release`
+  group registered. Pinned command dump in tests/test_cli_layout.py extended
+  111 -> 115 with the four new commands.
+- `src/awino/hosts/README.md` (new): FAIR README for the Phase 4 hosts
+  package — `folder_docs` health gate was failing without it.
+- `src/awino/tidy.py`: `HARNESS_FIX_SPEC.md` added to `ROOT_ALLOWED` (named
+  recovery deliverable, same precedent as `RECOVERY_LOG.md`) — `structure`
+  health gate was failing on it as a root stray.
+
+### Evidence
+- Phase 5 gate: `pytest tests/test_exam.py tests/test_manifest.py
+  tests/test_artifact_matrix.py -o addopts= -q` → **32 passed** (run twice,
+  after the layout fixes: 39 passed incl. test_cli_layout).
+- Adversarial exam proof: `probe_fired` is False for exit≠0 with expected
+  text present (three variants), False for exit 0 without the text, True
+  only for exit 0 + text; `_run` proven to capture real nonzero codes via
+  `("gate", "open")` subprocess; `launcher_resolves` rejects a bogus
+  interpreter.
+- Broken artifact proof: tree with `memory/lessons.md` deleted →
+  `verify_artifact` reports exactly that file; manifest claiming
+  `cmd:bogus-capability` → "manifest claims cmd:bogus-capability but the
+  tree does not provide it"; `release_gate` raises `ReleaseRefused` naming
+  the file; `awino release verify --root <broken>` exits 1 printing REFUSED
+  + the filename; `awino release publish` (no flag) exits 3 on the
+  authorization refusal.
+- Wheel proof: `uv build --wheel` → `verify_wheel` clean; packaged manifest
+  parses, version 0.8.0; entry points expose `awino = awino.cli:app`.
+- Full suite: **1751 passed, 4 skipped, 4 failed** — all 4 verified
+  pre-existing (1 cli_encoding proxy-env issue; 3 gate_review_workflow fail
+  identically on the d9883a5 worktree). `ruff check` and `ruff format`
+  clean on all touched files. `awino doctor --fast`: fail=0.
+- Incidental fixes (pre-existing, verified on baseline, fixed rather than
+  left): `folder_docs` (hosts/ README) and `structure` (spec doc
+  allow-list) health gates — `awino best` refused in this checkout before;
+  `tests/test_best_cli.py` now passes (4/4).
+
+### Carry-forwards for the human
+- Windows deployment: install the branch on the Windows machine, run
+  `awino release verify`, `awino doctor`, and the exam; wire the Phase 4
+  host adapters to the real Claude Code/Kilo/Roo integrations.
+- Live per-host journeys remain unverified by design (no hosts in this
+  sandbox); adapters report `unverified`, never parity.
+- Carried from Phase 2/3: best/battery/claude/exam CLI answer paths not all
+  rewired through the shared knowledge service yet.
+- Publishing the wheel still needs the human's separate authorization; the
+  gate is built and tested, the act is not done.

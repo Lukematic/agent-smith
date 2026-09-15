@@ -127,6 +127,26 @@ gate_app.add_typer(gate_plan_app, name="plan")
 app.add_typer(floor_app, name="floor")
 
 
+def registered_command_names() -> list[str]:
+    """Every registered command, with sub-app prefixes (e.g. "release verify").
+
+    Lives in the CLI layer because library modules must never import
+    ``awino.cli`` (see tests/test_cli_layout.py); library code that needs the
+    command surface (e.g. the capability manifest) takes it as a parameter.
+    """
+    names: set[str] = set()
+
+    def walk(typer_app: typer.Typer, prefix: str = "") -> None:
+        for command in typer_app.registered_commands:
+            name = command.name or command.callback.__name__.replace("_", "-")
+            names.add(prefix + name)
+        for group in typer_app.registered_groups:
+            walk(group.typer_instance, f"{prefix}{group.name} ")
+
+    walk(app)
+    return sorted(names)
+
+
 # ── shared helpers ───────────────────────────────────────────────────────────
 
 
@@ -249,11 +269,13 @@ from awino.cli import (  # noqa: E402
     maintain,
     project,
     proof,
+    release,
     think,
 )
 
 app.add_typer(buddy.buddy_app, name="buddy")
 app.add_typer(loopctl.loop_app, name="loop")
 app.add_typer(proof.proof_app, name="proof")
+app.add_typer(release.release_app, name="release")
 
-del brief, buddy, dispatch, gate, install, knowledge, loopctl, maintain, project, proof, think
+del brief, buddy, dispatch, gate, install, knowledge, loopctl, maintain, project, proof, release, think
