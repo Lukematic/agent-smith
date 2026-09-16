@@ -40,7 +40,7 @@ from typing import ClassVar
 
 import yaml
 
-from awino import heilmeier, seeds, skill_receipts, working_memory
+from awino import controller, heilmeier, seeds, skill_receipts, working_memory
 from awino.enforce import Ledger, LoopEvent
 from awino.paths import AwinoPaths, project_state_dir
 
@@ -2183,6 +2183,11 @@ class LoopDriver(abc.ABC):
         # means the memory hooks are no-ops: driver-only tests and callers
         # without project state stay deterministic and file-free.
         self.state_root = state_root
+        # Loop state remains the phase-specific record, while this adapter
+        # carries cross-entry approval/review/action facts. The project state
+        # root is stable across new LoopDriver processes, so CLI commands do
+        # not depend on the driver instance that first opened the loop.
+        self.controller_state_root = state_root or project_state_dir(project_root)
         # Set by check() after each first-validation of an artifact: the
         # mission goals the artifact did not address, or None. The CLI prints
         # these as the human's drift notice. Transient; reset on every check().
@@ -2558,6 +2563,7 @@ class LoopDriver(abc.ABC):
             heilmeier.load(project_state_dir(self.project_root))
         )
         self.save(state)
+        controller.for_loop(self.controller_state_root, state.id)
         detail = f"task: {task}"
         if state.seed_id is not None:
             detail += f"; seed: {state.seed_id}"
@@ -2783,6 +2789,12 @@ class LoopDriver(abc.ABC):
             detail=f"by={by}" + (f" reason={reason}" if reason else ""),
         )
         self.save(state)
+        plan = controller.for_loop(self.controller_state_root, state.id)
+        approval_id = "rpi-plan-approved"
+        try:
+            plan.require_approval(approval_id)
+        except controller.ApprovalRequired:
+            controller.grant_approval(plan.controller, approval_id, by=by, plan_level=True)
         self._note_precedents(
             state,
             area="approval",
@@ -2988,6 +3000,9 @@ class LoopDriver(abc.ABC):
             return state.phase
         previous = state.phase
         state.phase = nxt
+        if previous == "plan" and nxt == "implement":
+            plan = controller.for_loop(self.controller_state_root, state.id)
+            controller.queue_action(plan.controller, "rpi-implement")
         self._emit(state, "phase_started", detail=f"advanced from '{previous}'")
         self.save(state)
         checklist = self._checklist()
@@ -4135,6 +4150,12 @@ class RpiDriver(LoopDriver):
             )
         detail["note"] = note
         state.handoff = detail
+        # The RPI loop has completed its planning/implementation handoff, not
+        # the project's gate-ledger completion. Mark only the queued loop
+        # action applied; deliberately do not record a shipping review or close
+        # the controller, because `awino gate close` still owns that verdict.
+        plan = controller.for_loop(self.controller_state_root, state.id)
+        controller.apply_action(plan.controller, "rpi-implement", "handed off to gate ledger")
         state.phase = "done"
         self._emit(
             state,
