@@ -75,6 +75,24 @@ def test_wheel_only_artifact_verifies(tmp_path: Path) -> None:
     assert packaged.version == "0.8.0"
     assert len(packaged.provides) >= 90
 
+    # Inventory alone is not behavioral proof. Execute the console command
+    # supplied by the wheel in uv's isolated tool environment so imports cannot
+    # silently resolve to this source checkout.
+    smoke = subprocess.run(
+        [uv, "tool", "run", "--from", str(wheels[0]), "awino", "--version"],
+        cwd=tmp_path,
+        env={
+            key: value
+            for key, value in os.environ.items()
+            if key not in {"PYTHONPATH", "AWINO_PROJECT", "SMITH_PROJECT"}
+        },
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    assert smoke.returncode == 0, smoke.stdout + smoke.stderr
+    assert smoke.stdout.strip() == "awino 0.8.0"
+
 
 def test_verify_wheel_rejects_a_wheel_without_manifest(tmp_path: Path) -> None:
     fake = tmp_path / "fake-0.1-py3-none-any.whl"

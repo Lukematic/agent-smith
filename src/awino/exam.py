@@ -68,6 +68,22 @@ def probe_fired(probe: Probe, returncode: int, output: str) -> bool:
     return returncode == 0 and probe.expect in output
 
 
+def _exam_environment(project: Path) -> dict[str, str]:
+    """Return a controlled subprocess environment for one disposable exam.
+
+    The process must import the source being examined, but it must not inherit
+    the caller's project/state overrides.  Otherwise a command launched from a
+    project with ``AWINO_PROJECT`` set can appear to pass by reading that
+    project's state instead of the fixture created by :func:`_fixture`.
+    """
+    preserved = ("PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "HOME", "USERPROFILE")
+    env = {key: os.environ[key] for key in preserved if key in os.environ}
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
+    env["AWINO_PROJECT"] = str(project)
+    env.pop("SMITH_PROJECT", None)
+    return env
+
+
 def _fixture(root: Path) -> None:
     (root / ".git").mkdir(parents=True)
     (root / "README.md").write_text("# Exam Fixture\n", encoding="utf-8")
@@ -138,7 +154,7 @@ def _run(argv: tuple[str, ...], cwd: Path, stdin: str) -> tuple[int, str]:
         [sys.executable, "-m", "awino.cli", *argv],
         cwd=cwd,
         input=stdin or None,
-        env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])},
+        env=_exam_environment(cwd),
         capture_output=True,
         text=True,
         encoding="utf-8",

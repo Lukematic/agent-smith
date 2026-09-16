@@ -47,7 +47,7 @@ def test_the_exam_covers_the_capabilities_the_human_asked_about() -> None:
 # A failing subprocess can never pass through expected text alone, and a probe
 # only counts when its command is a real executable that ran clean.
 
-from awino.exam import Probe, _run, launcher_resolves, probe_fired  # noqa: E402
+from awino.exam import Probe, _exam_environment, _run, launcher_resolves, probe_fired  # noqa: E402
 
 
 def test_probe_fires_only_on_clean_exit_with_evidence() -> None:
@@ -82,3 +82,12 @@ def test_run_captures_nonzero_return_codes(tmp_path: Path) -> None:
     # really fails. _run must report that instead of swallowing it.
     code, _ = _run(("gate", "open"), tmp_path, "")
     assert code != 0
+
+
+def test_exam_environment_targets_only_its_disposable_fixture(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("AWINO_PROJECT", "C:/must-not-leak")
+    monkeypatch.setenv("SMITH_PROJECT", "C:/legacy-must-not-leak")
+    env = _exam_environment(tmp_path)
+    assert env["AWINO_PROJECT"] == str(tmp_path)
+    assert "SMITH_PROJECT" not in env
+    assert "awino" in env["PYTHONPATH"].lower()
