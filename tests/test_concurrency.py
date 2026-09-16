@@ -8,6 +8,7 @@ resubmissions converge on the one recorded outcome.
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 
 import pytest
@@ -67,6 +68,35 @@ class TestDuplicateSubmissions:
         )
         assert one == two
         assert plan.state.budget_used["floors"] == 2
+
+    def test_concurrent_instances_use_distinct_atomic_temp_files(self, root: Path) -> None:
+        """Windows must not share a fixed plan.json.tmp between writers."""
+        first = PlanController.create(root, "p", budgets={"floors": 5})
+        second = PlanController.load(root, "p")
+        barrier = threading.Barrier(2)
+        errors: list[Exception] = []
+
+        def submit(plan: PlanController, event_id: str, action_id: str) -> None:
+            try:
+                barrier.wait()
+                plan.submit_event(
+                    event_id=event_id, kind="action_queued", payload={"action_id": action_id}
+                )
+            except (
+                Exception
+            ) as exc:  # concurrent stale conflicts are allowed; OS write errors are not
+                errors.append(exc)
+
+        workers = [
+            threading.Thread(target=submit, args=(first, "evt-a", "a")),
+            threading.Thread(target=submit, args=(second, "evt-b", "b")),
+        ]
+        for worker in workers:
+            worker.start()
+        for worker in workers:
+            worker.join()
+        assert not [error for error in errors if isinstance(error, PermissionError)]
+        assert not list((root / "plans" / "p").glob("*.tmp"))
 
 
 class TestConflictingConcurrentEdits:

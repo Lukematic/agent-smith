@@ -33,6 +33,7 @@ import contextlib
 import json
 import os
 import re
+import tempfile
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -193,9 +194,18 @@ def _now() -> str:
 
 def _atomic_write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    tmp.replace(path)
+    # A fixed ``plan.json.tmp`` races with another writer that has not yet
+    # acquired or released the OS-visible lock (notably Windows test workers).
+    # Use a unique file in the same directory so replace remains atomic on the
+    # target filesystem while concurrent writers never share a temp path.
+    fd, name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent, text=True)
+    tmp = Path(name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        tmp.replace(path)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def _plan_dir(state_root: Path, plan_id: str) -> Path:
