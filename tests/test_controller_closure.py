@@ -226,6 +226,24 @@ class TestClosure:
         with pytest.raises(PlanNotClosable, match="must approve the plan before closure"):
             C.close_plan(plan, by="luke")
 
+    @pytest.mark.parametrize("verdict", ["revise", "blocked"])
+    def test_closure_refuses_a_non_shipping_latest_review(
+        self, plan: PlanController, verdict: str
+    ) -> None:
+        self._approvable(plan)
+        C.record_review(plan, verdict=verdict, detail="verification did not clear", by="reviewer")
+        with pytest.raises(PlanNotClosable, match=f"latest review is {verdict!r}"):
+            C.close_plan(plan, by="luke")
+        assert plan.state.status != "closed"
+
+    def test_a_shipping_review_after_blocked_review_allows_closure(
+        self, plan: PlanController
+    ) -> None:
+        self._approvable(plan)
+        C.record_review(plan, verdict="blocked", detail="first verification failed", by="reviewer")
+        C.record_review(plan, verdict="ship", detail="remediation verified", by="reviewer")
+        assert C.close_plan(plan, by="luke")["status"] == "closed"
+
     def test_closure_succeeds_when_clean(self, plan: PlanController) -> None:
         self._approvable(plan)
         C.queue_action(plan, "a1")

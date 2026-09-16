@@ -821,6 +821,11 @@ def close_plan(controller: PlanController, *, by: str) -> dict[str, Any]:
             f"{len(state.pending_approvals)} pending approval(s): "
             f"{', '.join(a['action_id'] for a in state.pending_approvals)}"
         )
+    review = state.last_review
+    if review is not None and review["verdict"] in {"revise", "blocked"}:
+        raise PlanNotClosable(
+            f"latest review is {review['verdict']!r}; resolve it with a new ship review before closure"
+        )
     if state.approval_state != "approved":
         raise PlanNotClosable(
             f"plan approval is {state.approval_state!r}; a human must approve the plan before closure"
