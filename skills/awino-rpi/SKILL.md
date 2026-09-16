@@ -328,5 +328,12 @@ Done when: research reviewed, pairing questions answered, plan approved, every p
 pasted passing output, and every checkbox in the plan is ticked or explicitly
 deferred with a reason.
 
+## Task Contract References
+
+For production-ready plan contracts, policy blocks, and delegation templates,
+refer to `references/task-contract-examples.md` relative to this skill directory.
+Use the 8-block contract format (Goal, Context, Instruction Priority, Autonomy,
+Tools/Delegation, Output, Verification, Stop Condition) for structured tasks.
+
 Grounding: chapters/9-mental-models/3-specs-as-source-code.md,
 chapters/4-context/2-context-strategies.md, chapters/7-patterns/1-plan-build-review.md
