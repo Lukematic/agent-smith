@@ -676,6 +676,7 @@ class PlanController:
             "last_review": state["last_review"],
             "skill_status": state.get("skill_status"),
             "stance_status": state.get("stance_status"),
+            "host_activity": list(state.get("host_activity", [])),
             "events": self.event_count(),
             "updated_at": state["updated_at"],
         }
@@ -1040,6 +1041,57 @@ def _get_or_create(
         return PlanController.create(
             state_root, plan_id, scope=scope, budgets=budgets, verifier=verifier
         )
+
+
+def render_header(state_root: Path, plan_id: str | None = None) -> str:
+    """The canonical header line built from stored facts only:
+    [A.W.I.N.O. | phase: <p> | loop: <l> | run: <r> | knowledge: <n>/3 | skill: <s> | stance: <st> | host: <h>]
+    """
+    import contextlib
+
+    from awino.enforce import Ledger
+    from awino.knowledge import KnowledgeStore
+    from awino.paths import AwinoPaths
+
+    ledger = Ledger(state_root)
+    run_id = "none"
+    loop = "direct"
+    phase = "idle"
+    skill = "none"
+    stance = "advisor"
+    host = "unrecorded"
+
+    cur = ledger.inspect_current()
+    ctl: PlanController | None = None
+    if plan_id:
+        with contextlib.suppress(Exception):
+            ctl = PlanController.load(state_root, plan_id)
+    elif cur.status == "active" and cur.run:
+        run_id = cur.run.run_id
+        loop = cur.run.loop
+        with contextlib.suppress(Exception):
+            ctl = PlanController.load(state_root, f"machine-{run_id}")
+
+    if ctl is not None:
+        snap = ctl.status_snapshot()
+        phase = snap["status"]
+        if snap.get("skill_status"):
+            skill = snap["skill_status"]["skill"]
+        if snap.get("stance_status"):
+            stance = snap["stance_status"]["stance"]
+        if snap.get("host_activity"):
+            host = snap["host_activity"][-1]["host"]
+
+    k_count = 0
+    with contextlib.suppress(Exception):
+        paths = AwinoPaths.discover(state_root.parent)
+        store = KnowledgeStore(paths, accounting_key=f"plan-{ctl.plan_id}" if ctl else "default")
+        k_count = len(store.opened)
+
+    return (
+        f"[A.W.I.N.O. | phase: {phase} | loop: {loop} | run: {run_id} | "
+        f"knowledge: {k_count}/3 | skill: {skill} | stance: {stance} | host: {host}]"
+    )
 
 
 def for_plan(

@@ -19,6 +19,7 @@ from awino import (
     capability,
     cli,
     completion_review,
+    controller,
     exam,
     fix,
     health,
@@ -1312,6 +1313,15 @@ def resume_command() -> None:
     elif checkpoint.selected_decision:
         _echo(f"decision: {checkpoint.selected_decision} by {checkpoint.decided_by}")
     _echo(f"next: {checkpoint.next_action}")
+
+
+@app.command("header")
+def header_command(
+    plan_id: str = typer.Option(None, "--plan", help="Specific plan id"),
+) -> None:
+    """Print the canonical A.W.I.N.O. status header from stored facts."""
+    workspace = _workspace()
+    _echo(controller.render_header(workspace.state_root, plan_id))
 
 
 @app.command("start")
