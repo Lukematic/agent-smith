@@ -56,6 +56,7 @@ EXEMPT: dict[str, str] = {
     "assignments": "ephemeral prompt files for workers and reviewers",
     "reviews": "reviewer verdict JSON files",
     "backups": "timestamped update snapshots, generated and gitignored",
+    "archive": "archived state from tidy runs and cutovers",
     "site-packages": "vendored dependencies",
 }
 
