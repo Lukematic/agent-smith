@@ -8,6 +8,7 @@ ledger, and apart from cli/ so the actions can be driven by tests directly.
 
 from __future__ import annotations
 
+import hashlib
 import subprocess
 import sys
 from collections.abc import Callable
@@ -31,6 +32,7 @@ class StepContext:
     catalog: SkillCatalog
     confirmed_budget: bool = False
     answer: str | None = None
+    response: str | None = None
     verify: str | None = None
     scope: list[str] | None = None
     lines: list[str] | None = None
@@ -243,6 +245,45 @@ def _execute(_m: Machine, ctx: StepContext) -> str:
         if adapter is None or _m.controller_action_id is None:
             ctx.say("REFUSED  controller action is missing; do not claim execution completed")
             return "waiting"
+        stance_name = _m.stance or "advisor"
+        if ctx.response:
+            resp_path = Path(ctx.response)
+            if resp_path.is_file():
+                resp_text = resp_path.read_text(encoding="utf-8", errors="replace")
+            else:
+                resp_text = str(ctx.response)
+            resp_hash = hashlib.sha256(resp_text.encode("utf-8")).hexdigest()[:16]
+            from awino import stance_verify
+
+            try:
+                failures = stance_verify.verify(stance_name, resp_text)
+            except ValueError:
+                failures = [f"unknown stance: {stance_name}"]
+            if failures:
+                ctx.say(f"STANCE_REVISE  {stance_name}: {'; '.join(failures)}")
+                adapter.controller.submit_event(
+                    event_id=f"stance-check-{resp_hash}",
+                    kind="stance_checked",
+                    payload={
+                        "stance": stance_name,
+                        "status": "failed",
+                        "failures": failures,
+                        "response_hash": resp_hash,
+                    },
+                )
+                return "waiting"
+            adapter.controller.submit_event(
+                event_id=f"stance-check-{resp_hash}",
+                kind="stance_checked",
+                payload={"stance": stance_name, "status": "checked", "response_hash": resp_hash},
+            )
+            ctx.say(f"STANCE_CHECK  {stance_name} passed (hash={resp_hash})")
+        else:
+            adapter.controller.submit_event(
+                event_id=f"stance-unverified-{_m.controller_action_id}",
+                kind="stance_unverified",
+                payload={"stance": stance_name, "status": "unverified"},
+            )
         controller.apply_action(adapter.controller, _m.controller_action_id, "worker reported done")
         return "executed"
     ctx.say(

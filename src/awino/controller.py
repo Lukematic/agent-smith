@@ -150,6 +150,8 @@ class PlanState:
     last_review: dict[str, Any] | None = None
     status: str = "open"  # open | closed
     contracts: dict[str, dict[str, Any]] = field(default_factory=dict)
+    skill_status: dict[str, Any] | None = None
+    stance_status: dict[str, Any] | None = None
     # Append-only trail of host-boundary activations (session start, user
     # turn, tool result) recorded by the per-host adapters in
     # ``awino.hosts``. Capped: the journal is the full record; this is the
@@ -387,6 +389,29 @@ def _apply(state: dict[str, Any], event: ControllerEvent) -> tuple[dict[str, Any
     elif kind == "plan_closed":
         state["status"] = "closed"
         outcome["status"] = "closed"
+    elif kind == "stance_checked":
+        state["stance_status"] = {
+            "stance": payload.get("stance", "advisor"),
+            "status": payload.get("status", "checked"),
+            "response_hash": payload.get("response_hash", ""),
+            "at": event.at,
+        }
+        outcome.update(state["stance_status"])
+    elif kind == "stance_unverified":
+        state["stance_status"] = {
+            "stance": payload.get("stance", "advisor"),
+            "status": "unverified",
+            "at": event.at,
+        }
+        outcome.update(state["stance_status"])
+    elif kind == "skill_selected":
+        state["skill_status"] = {
+            "skill": payload.get("skill", ""),
+            "version": payload.get("version", ""),
+            "status": payload.get("status", "selected"),
+            "at": event.at,
+        }
+        outcome.update(state["skill_status"])
     elif kind in ("host_session_started", "host_user_turn", "host_tool_result"):
         # Host-boundary activation from one of the awino.hosts adapters.
         # Records who touched the plan and when; never mutates plan
@@ -649,6 +674,8 @@ class PlanController:
                 for cid, entry in sorted(state.get("contracts", {}).items())
             },
             "last_review": state["last_review"],
+            "skill_status": state.get("skill_status"),
+            "stance_status": state.get("stance_status"),
             "events": self.event_count(),
             "updated_at": state["updated_at"],
         }
@@ -679,6 +706,17 @@ class PlanController:
             lines.append(f"SCOPE  {', '.join(snap['scope'])}")
         if snap["verifier"]:
             lines.append(f"VERIFIER  {snap['verifier']}")
+        if snap.get("skill_status"):
+            sk = snap["skill_status"]
+            lines.append(f"SKILL  {sk['skill']} ({sk.get('status', 'selected')})")
+        if snap.get("stance_status"):
+            st = snap["stance_status"]
+            if st.get("response_hash"):
+                lines.append(
+                    f"STANCE  {st['stance']} ({st.get('status', 'checked')}, hash={st['response_hash']})"
+                )
+            else:
+                lines.append(f"STANCE  {st['stance']} ({st.get('status', 'unverified')})")
         if snap["last_review"]:
             review = snap["last_review"]
             lines.append(f"REVIEW  {review['verdict']} by {review['by']} at {review['at']}")
