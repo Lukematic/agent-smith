@@ -144,10 +144,16 @@ class TestBudgets:
         assert plan.state.budget_used["floors"] == 2
 
     def test_preflight_reports_an_exhausted_budget(self, plan: PlanController) -> None:
+        aid = C.request_approval(plan, "approve plan")
+        C.grant_approval(plan, aid, by="luke", plan_level=True)
         assert C.preflight(plan) == []
         C.charge_budget(plan, "floors", 2)
         problems = C.preflight(plan)
         assert any("budget exhausted: floors 2/2" in p for p in problems)
+
+    def test_preflight_reports_unapproved_plan(self, plan: PlanController) -> None:
+        problems = C.preflight(plan)
+        assert any("human must approve the plan" in p for p in problems)
 
     def test_non_positive_charge_refuses(self, plan: PlanController) -> None:
         with pytest.raises(PlanError):
@@ -209,6 +215,13 @@ class TestClosure:
     def _approvable(self, plan: PlanController) -> None:
         aid = C.request_approval(plan, "approve plan")
         C.grant_approval(plan, aid, by="luke", plan_level=True)
+        C.record_review(plan, verdict="ship", detail="verified clean", by="reviewer")
+
+    def test_closure_refuses_without_a_review(self, plan: PlanController) -> None:
+        aid = C.request_approval(plan, "approve plan")
+        C.grant_approval(plan, aid, by="luke", plan_level=True)
+        with pytest.raises(PlanNotClosable, match=r"recorded review.*required"):
+            C.close_plan(plan, by="luke")
 
     def test_closure_refuses_pending_actions(self, plan: PlanController) -> None:
         self._approvable(plan)
@@ -304,10 +317,13 @@ class TestAdaptersKeepEntryPointsDistinct:
 
     def test_adapter_shares_preflight_review_closure(self, root: Path) -> None:
         adapter = C.for_plan(root, "p9", verifier="pytest -q")
+        assert any("human must approve the plan" in p for p in adapter.preflight())
+        aid = adapter.request_approval("approve plan")
+        C.grant_approval(adapter.controller, aid, by="luke", plan_level=True)
         assert adapter.preflight() == []
-        aid = adapter.request_approval("consequential work")
+        aid_work = adapter.request_approval("consequential work")
         with pytest.raises(ApprovalRequired):
-            adapter.require_approval(aid)
+            adapter.require_approval(aid_work)
         assert adapter.status_lines()[0] == "VIA  plan adapter"
         assert any("VERIFIER  pytest -q" in line for line in adapter.status_lines())
 
@@ -315,6 +331,7 @@ class TestAdaptersKeepEntryPointsDistinct:
         adapter = C.for_machine(root, "run-2")
         aid = adapter.request_approval("approve plan")
         C.grant_approval(adapter.controller, aid, by="luke", plan_level=True)
+        adapter.record_review(verdict="ship", detail="verified clean", by="reviewer")
         assert adapter.close(by="luke")["status"] == "closed"
 
 

@@ -174,12 +174,19 @@ def _open(m: Machine, ctx: StepContext) -> str:
         run.run_id,
         budgets={"work_iterations": budget},
         verifier=ctx.verify or "verification discovered at work",
+        scope=ctx.scope or [],
     )
     approval_id = "machine-budget-confirmed"
     try:
         adapter.require_approval(approval_id)
     except controller.ApprovalRequired:
-        controller.grant_approval(adapter.controller, approval_id, by="human", plan_level=True)
+        controller.grant_approval(adapter.controller, approval_id, by="human", plan_level=False)
+    if Gate.PLANNED not in CONTRACTS[task_class]:
+        plan_app_id = "machine-plan-approved"
+        try:
+            adapter.require_approval(plan_app_id)
+        except controller.ApprovalRequired:
+            controller.grant_approval(adapter.controller, plan_app_id, by="human", plan_level=True)
     m.controller_plan_id = adapter.controller.plan_id
     ctx.say(f"RUN {run.run_id}  class={task_class}  loop={m.loop}")
     ctx.say(f"CONTROLLER  plan={adapter.controller.plan_id} approval=recorded")

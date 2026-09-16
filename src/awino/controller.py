@@ -203,7 +203,14 @@ def _atomic_write_json(path: Path, payload: Any) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
-        tmp.replace(path)
+        for attempt in range(5):
+            try:
+                tmp.replace(path)
+                break
+            except PermissionError:
+                if attempt == 4:
+                    raise
+                time.sleep(0.01)
     finally:
         tmp.unlink(missing_ok=True)
 
@@ -691,8 +698,10 @@ def preflight(controller: PlanController) -> list[str]:
     problems: list[str] = []
     if state.status == "closed":
         problems.append(f"plan {state.plan_id!r} is closed")
-    if state.approval_state == "invalidated":
-        problems.append("plan approval was invalidated; a human must re-approve before work")
+    if state.approval_state != "approved":
+        problems.append(
+            f"plan approval is {state.approval_state!r}; a human must approve the plan before work starts"
+        )
     for name, ceiling in state.budgets.items():
         used = state.budget_used.get(name, 0)
         if used >= ceiling:
@@ -831,14 +840,16 @@ def close_plan(controller: PlanController, *, by: str) -> dict[str, Any]:
             f"{len(state.pending_approvals)} pending approval(s): "
             f"{', '.join(a['action_id'] for a in state.pending_approvals)}"
         )
-    review = state.last_review
-    if review is not None and review["verdict"] in {"revise", "blocked"}:
-        raise PlanNotClosable(
-            f"latest review is {review['verdict']!r}; resolve it with a new ship review before closure"
-        )
     if state.approval_state != "approved":
         raise PlanNotClosable(
             f"plan approval is {state.approval_state!r}; a human must approve the plan before closure"
+        )
+    review = state.last_review
+    if review is None or review.get("verdict") != "ship":
+        raise PlanNotClosable(
+            "a recorded review with verdict 'ship' is required before closure"
+            if review is None
+            else f"latest review is {review['verdict']!r}; resolve it with a new ship review before closure"
         )
     return controller.submit_event(
         event_id=f"plan-closed-r{state.plan_revision + 1}",
@@ -958,6 +969,18 @@ class PlanAdapter:
     def require_approval(self, action_id: str) -> dict[str, Any]:
         return require_approval(self.controller, action_id)
 
+    def queue_action(self, action_id: str) -> dict[str, Any]:
+        return queue_action(self.controller, action_id)
+
+    def apply_action(self, action_id: str, outcome: str = "done") -> dict[str, Any]:
+        return apply_action(self.controller, action_id, outcome)
+
+    def record_review(self, *, verdict: str, detail: str = "", by: str = "human") -> dict[str, Any]:
+        return record_review(self.controller, verdict=verdict, detail=detail, by=by)
+
+    def charge_budget(self, budget: str, amount: int = 1) -> dict[str, Any]:
+        return charge_budget(self.controller, budget, amount)
+
     def close(self, *, by: str = "human") -> dict[str, Any]:
         return close_plan(self.controller, by=by)
 
@@ -966,13 +989,19 @@ def _get_or_create(
     state_root: Path,
     plan_id: str,
     *,
-    budgets: dict[str, int] | None,
-    verifier: str | None,
+    scope: list[str] | None = None,
+    budgets: dict[str, int] | None = None,
+    verifier: str | None = None,
 ) -> PlanController:
     try:
-        return PlanController.load(state_root, plan_id)
+        ctl = PlanController.load(state_root, plan_id)
+        if scope is not None and not ctl.state.scope:
+            ctl.set_scope(scope)
+        return ctl
     except PlanNotFound:
-        return PlanController.create(state_root, plan_id, budgets=budgets, verifier=verifier)
+        return PlanController.create(
+            state_root, plan_id, scope=scope, budgets=budgets, verifier=verifier
+        )
 
 
 def for_plan(
@@ -997,12 +1026,15 @@ def for_loop(
     state_root: Path,
     loop_id: str,
     *,
+    scope: list[str] | None = None,
     budgets: dict[str, int] | None = None,
     verifier: str | None = None,
 ) -> PlanAdapter:
     """Bind a loop controller's run: the loop keeps its driver and state;
     the plan carries the durable approval/budget/event trail."""
-    controller = _get_or_create(state_root, f"loop-{loop_id}", budgets=budgets, verifier=verifier)
+    controller = _get_or_create(
+        state_root, f"loop-{loop_id}", scope=scope, budgets=budgets, verifier=verifier
+    )
     return PlanAdapter(entry_point="loop", controller=controller)
 
 
@@ -1010,10 +1042,13 @@ def for_machine(
     state_root: Path,
     run_id: str,
     *,
+    scope: list[str] | None = None,
     budgets: dict[str, int] | None = None,
     verifier: str | None = None,
 ) -> PlanAdapter:
     """Bind a machine run (`awino best` / `awino step`): the machine keeps
     its node table; the plan carries the durable trail."""
-    controller = _get_or_create(state_root, f"machine-{run_id}", budgets=budgets, verifier=verifier)
+    controller = _get_or_create(
+        state_root, f"machine-{run_id}", scope=scope, budgets=budgets, verifier=verifier
+    )
     return PlanAdapter(entry_point="machine", controller=controller)
