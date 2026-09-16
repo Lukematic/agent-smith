@@ -17,7 +17,7 @@ COMMANDS = registered_command_names()
 
 def test_build_manifest_version_matches_pyproject() -> None:
     built = M.build_manifest(ROOT, COMMANDS)
-    assert built.version == "0.8.0"
+    assert built.version == "0.8.1"
     assert built.name
 
 
@@ -85,5 +85,5 @@ def test_verify_reports_missing_manifest() -> None:
 def test_packaged_manifest_loads_from_the_installed_package() -> None:
     packaged = M.load_packaged_manifest()
     assert packaged is not None
-    assert packaged.version == "0.8.0"
+    assert packaged.version == "0.8.1"
     assert len(packaged.provides) >= 90

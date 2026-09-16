@@ -1264,6 +1264,8 @@ def detect_test_weakening(diff: str) -> list[str]:
         for line in diff.splitlines()
         if (match := re.search(r"^\+\s*def\s+(test_[A-Za-z0-9_]+)", line))
     }
+    added_assert_count = len(re.findall(r"^\+(?!\+\+).*\bassert\b", diff, re.MULTILINE))
+    removed_assert_count = len(re.findall(r"^\-(?!\-\-).*\bassert\b", diff, re.MULTILINE))
     current_file = ""
     in_test_file = False
     for line in diff.splitlines():
@@ -1277,6 +1279,11 @@ def detect_test_weakening(diff: str) -> list[str]:
             continue
         removed_test = re.search(r"^\-\s*def\s+(test_[A-Za-z0-9_]+)", line)
         if removed_test and removed_test.group(1) in added_test_names:
+            continue
+        if (
+            re.search(r"^\-(?!\-\-).*\bassert\b", line)
+            and removed_assert_count <= added_assert_count
+        ):
             continue
         for pattern, why in WEAKENING_PATTERNS:
             if re.search(pattern, line):

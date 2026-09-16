@@ -75,6 +75,7 @@ PRE_SPLIT_COMMANDS = frozenset(
         "gate score",
         "gate skill",
         "gate status",
+        "header",
         "heal",
         "hook",
         "install",
@@ -236,8 +237,8 @@ class TestCommandSurfaceIsUnchanged:
         )
 
     def test_command_count_is_exactly_the_registered_set(self) -> None:
-        assert len(PRE_SPLIT_COMMANDS) == 115
-        assert len(_registered(cli.app)) == 115
+        assert len(PRE_SPLIT_COMMANDS) == 116
+        assert len(_registered(cli.app)) == 116
 
     def test_public_entry_points_survive(self) -> None:
         assert isinstance(cli.app, typer.Typer)

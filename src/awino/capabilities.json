@@ -65,6 +65,7 @@
     "cmd:gate score",
     "cmd:gate skill",
     "cmd:gate status",
+    "cmd:header",
     "cmd:heal",
     "cmd:hook",
     "cmd:install",
@@ -164,5 +165,5 @@
     "pyyaml>=6.0",
     "typer>=0.12"
   ],
-  "version": "0.8.0"
+  "version": "0.8.1"
 }

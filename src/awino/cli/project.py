@@ -1,4 +1,4 @@
-"""owns: start, best, mission, onboard, context, stance, project-bootstrap, project-scaffold, work, work-init, work-close, resume, note, ask, session-log, remember, workflow, env, setup, limits, ladder, plan
+"""owns: start, best, header, mission, onboard, context, stance, project-bootstrap, project-scaffold, work, work-init, work-close, resume, note, ask, session-log, remember, workflow, env, setup, limits, ladder, plan
 
 The project under work: its mission, intent, toolchain, tracker, session memory,
 and the startup contract. Nothing here inspects A.W.I.N.O.'s own installation.
