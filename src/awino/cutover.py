@@ -333,6 +333,18 @@ def run_checks(plan: CutoverPlan) -> CutoverChecks:
     return checks
 
 
+def update_global_wrapper(canonical_root: Path, wrapper_path: Path | None = None) -> bool:
+    """If global launcher ~/.local/bin/awino.ps1 exists, update it to point to canonical_root."""
+    if wrapper_path is None:
+        home = Path.home()
+        wrapper_path = home / ".local" / "bin" / "awino.ps1"
+    if not wrapper_path.is_file():
+        return False
+    content = f"& '{canonical_root / 'bin' / 'awino.ps1'}' @args\n"
+    wrapper_path.write_text(content, encoding="utf-8")
+    return True
+
+
 def finalize(plan: CutoverPlan, checks: CutoverChecks) -> Path:
     """Archive the legacy directory after all checks pass. Pointers switch last.
 

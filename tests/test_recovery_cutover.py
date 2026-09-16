@@ -248,6 +248,14 @@ class TestFinalize:
         # original bytes, and the cutover-created .awino gone entirely.
         assert not (legacy_project / ".awino").exists()
 
+    def test_update_global_wrapper_points_to_canonical(self, tmp_path: Path) -> None:
+        wrapper = tmp_path / "awino.ps1"
+        wrapper.write_text("& 'old/path/bin/awino.ps1' @args\n", encoding="utf-8")
+        canonical = tmp_path / "canonical"
+        updated = cutover.update_global_wrapper(canonical, wrapper_path=wrapper)
+        assert updated is True
+        assert str(canonical / "bin" / "awino.ps1") in wrapper.read_text(encoding="utf-8")
+
 
 class TestRollback:
     def test_rollback_before_finalize_restores_legacy_untouched(self, legacy_project: Path) -> None:
