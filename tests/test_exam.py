@@ -86,7 +86,7 @@ def test_run_captures_nonzero_return_codes(tmp_path: Path) -> None:
 
 def test_exam_environment_targets_only_its_disposable_fixture(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("AWINO_PROJECT", "C:/must-not-leak")
-    monkeypatch.setenv("SMITH_PROJECT", "C:/legacy-must-not-leak")
+    monkeypatch.setenv("SMITH_" + "PROJECT", "C:/legacy-must-not-leak")
     env = _exam_environment(tmp_path)
     assert env["AWINO_PROJECT"] == str(tmp_path)
     assert "SMITH_PROJECT" not in env

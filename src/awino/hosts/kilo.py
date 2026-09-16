@@ -19,6 +19,7 @@ recorded as missing, not invented.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from awino.hosts.base import HostAdapter
@@ -41,6 +42,12 @@ class KiloAdapter(HostAdapter):
     HOST = "kilo"
 
     def detect_live(self) -> bool:
+        # An installed editor extension is not proof that it calls A.W.I.N.O.'s
+        # session/turn/tool-result boundaries. The host-side bridge must opt in
+        # explicitly before this adapter calls the host live; otherwise status
+        # remains unverified even on a developer machine with Kilo installed.
+        if os.environ.get("AWINO_KILO_INTEGRATION") != "1":
+            return False
         for ext_dir in _vscode_extension_dirs():
             if not ext_dir.is_dir():
                 continue

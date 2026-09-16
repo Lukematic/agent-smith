@@ -59,6 +59,13 @@ class TestMissingHostHonesty:
         status = adapter.status()
         assert status.evidence == Evidence.UNVERIFIED
 
+    def test_extension_marker_needs_explicit_boundary_opt_in(self, monkeypatch, tmp_path: Path):
+        extension_dir = tmp_path / "extensions"
+        (extension_dir / "kilo.example").mkdir(parents=True)
+        monkeypatch.setattr("awino.hosts.kilo._vscode_extension_dirs", lambda: [extension_dir])
+        monkeypatch.setenv("AWINO_KILO_INTEGRATION", "1")
+        assert get_adapter("kilo").detect_live() is True
+
 
 class TestPerHostEvidence:
     def test_evidence_file_is_namespaced_per_host(self, tmp_path: Path):

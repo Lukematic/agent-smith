@@ -40,6 +40,13 @@ class TestMissingHostHonesty:
         assert status.missing_apis
         assert "Roo" in " ".join(status.missing_apis)
 
+    def test_extension_marker_needs_explicit_boundary_opt_in(self, monkeypatch, tmp_path: Path):
+        extension_dir = tmp_path / "extensions"
+        (extension_dir / "roo.example").mkdir(parents=True)
+        monkeypatch.setattr("awino.hosts.roo._vscode_extension_dirs", lambda: [extension_dir])
+        monkeypatch.setenv("AWINO_ROO_INTEGRATION", "1")
+        assert get_adapter("roo").detect_live() is True
+
 
 class TestPerHostEvidence:
     def test_evidence_file_is_namespaced_per_host(self, tmp_path: Path):

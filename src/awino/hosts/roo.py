@@ -13,6 +13,7 @@ recorded as missing, not invented.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from awino.hosts.base import HostAdapter
@@ -35,6 +36,10 @@ class RooAdapter(HostAdapter):
     HOST = "roo"
 
     def detect_live(self) -> bool:
+        # A Roo extension marker only shows an editor installation. Treat the
+        # host as live only after its boundary bridge explicitly opts in.
+        if os.environ.get("AWINO_ROO_INTEGRATION") != "1":
+            return False
         for ext_dir in _vscode_extension_dirs():
             if not ext_dir.is_dir():
                 continue

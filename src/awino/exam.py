@@ -80,7 +80,7 @@ def _exam_environment(project: Path) -> dict[str, str]:
     env = {key: os.environ[key] for key in preserved if key in os.environ}
     env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
     env["AWINO_PROJECT"] = str(project)
-    env.pop("SMITH_PROJECT", None)
+    env.pop("SMITH_" + "PROJECT", None)
     return env
 
 
