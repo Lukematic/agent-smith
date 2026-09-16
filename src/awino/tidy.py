@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 
+from awino import install_meta as _install_meta
 from awino.paths import AwinoPaths
 
 # Files that belong at the root. Anything else is clutter until proven otherwise.
@@ -26,6 +27,12 @@ ROOT_ALLOWED = frozenset(
         "AWINO.md",
         "AGENT_SMITH.md",
         "README.md",
+        # Required recovery work log (see the recovery workplan): a named
+        # deliverable like the other root docs, not stray clutter.
+        "RECOVERY_LOG.md",
+        # The recovery specification governing the recovery branch: the
+        # workplan the branch implements, not stray clutter.
+        "HARNESS_FIX_SPEC.md",
         "bootstrap.ps1",
         "bootstrap.sh",
         "install.ps1",
@@ -152,6 +159,12 @@ class Tidier:
     def _stray_root(self) -> list[Clutter]:
         out: list[Clutter] = []
         for item in sorted(self.paths.root.iterdir()):
+            # Host-owned installation markers (e.g. `.in_use`) are preserved:
+            # they are not clutter, and flagging them trains the user to delete
+            # something the host owns. Arbitrary hidden entries are still
+            # inspected below, so a real mess cannot hide behind a dot.
+            if _install_meta.is_installation_metadata(item.name):
+                continue
             if item.is_dir():
                 if item.name not in ROOT_ALLOWED_DIRS:
                     out.append(
@@ -227,13 +240,20 @@ class Tidier:
         return out
 
     def archive(self, items: list[Clutter]) -> tuple[Path, list[Path]]:
-        """Move archivable clutter into a dated archive directory."""
+        """Move archivable clutter into a dated archive directory.
+
+        Host-owned installation markers are never archived, even if a caller
+        passes them explicitly: deleting one to make a gate green would desync
+        the host that owns it.
+        """
         stamp = datetime.now(UTC).strftime("%Y-%m-%d")
         destination = self.paths.archive / stamp
         destination.mkdir(parents=True, exist_ok=True)
         moved: list[Path] = []
         for item in items:
             if not item.archivable or not item.path.exists():
+                continue
+            if _install_meta.is_installation_metadata(item.path.name):
                 continue
             target = destination / item.path.name
             counter = 1
@@ -249,10 +269,16 @@ class Tidier:
         return destination, moved
 
     def clean(self, items: list[Clutter]) -> list[Path]:
-        """Delete only what is provably regenerable."""
+        """Delete only what is provably regenerable.
+
+        Host-owned installation markers are never deleted, even if misclassified
+        upstream: the marker belongs to the host, not to the hygiene pass.
+        """
         removed: list[Path] = []
         for item in items:
             if item.kind not in {Finding.DISPOSABLE, Finding.ORPHANED_CACHE, Finding.EMPTY_DIR}:
+                continue
+            if _install_meta.is_installation_metadata(item.path.name):
                 continue
             if not item.path.exists():
                 continue

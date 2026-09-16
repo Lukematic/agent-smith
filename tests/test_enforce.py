@@ -453,6 +453,17 @@ class TestWeakeningDetection:
 """
         assert detect_test_weakening(diff)
 
+    def test_reformatted_test_function_is_not_treated_as_removed(self) -> None:
+        diff = """--- a/tests/test_thing.py
++++ b/tests/test_thing.py
+-def test_important_behaviour(
+-    self,
+-):
++def test_important_behaviour(self):
+     assert True
+"""
+        assert detect_test_weakening(diff) == []
+
     def test_production_assert_change_is_not_flagged(self) -> None:
         # Editing an assert in production code is legitimate work.
         diff = """--- a/src/awino/knowledge.py

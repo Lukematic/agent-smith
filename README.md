@@ -173,6 +173,7 @@ The generated editor modes are: 🧭 A.W.I.N.O., 🧭 A.W.I.N.O. Consult,
 | [Operating guide](docs/operating-guide.md) | Status fields, modes versus loops, knowledge budget, gates, scenarios, and evidence-driven interaction |
 | [User guide](docs/user-guide.md) | Installation, paired work, Seeds, gates, updates, and troubleshooting |
 | [Agent and harness guide](docs/agent-guide.md) | Startup, routing, plans, checkpoints, verification, and status protocol |
+| [Recovery 0.8.1 plan](docs/recovery-0.8.1-plan.md) | Step-by-step verification, closure integrity, and cutover plan |
 | [Mission](docs/MISSION.md) | Product mission and naming rationale |
 | [Philosophy](docs/PHILOSOPHY.md) | Owner's working philosophy and how the product enforces it |
 | [Installation](docs/install.md) | Detailed installer and harness destinations |
@@ -185,6 +186,7 @@ The generated editor modes are: 🧭 A.W.I.N.O., 🧭 A.W.I.N.O. Consult,
 | [Commands](docs/commands.md) | Generated command reference (live `--help`) |
 | [API keys](docs/api-keys.md) | Provider credentials and custom gateways |
 | [Nuclear engineer walkthrough](docs/walkthrough-nuclear-engineer.md) | Domain-support example |
+| [Presentations](docs/presentations/README.md) | Presentation outlines and slide decks |
 | [Credits and sources](docs/credits-and-sources.md) | Attribution and upstream sources |
 
 ## License

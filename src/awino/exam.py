@@ -14,6 +14,7 @@ means adding a probe; a probe that goes SILENT is a regression, not an opinion.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -32,6 +33,7 @@ class Probe:
     argv: tuple[str, ...]
     expect: str
     stdin: str = ""
+    expected_codes: tuple[int, ...] = (0,)
 
 
 @dataclass(frozen=True)
@@ -39,6 +41,48 @@ class ProbeResult:
     name: str
     fired: bool
     evidence: str
+    returncode: int = 0
+
+
+def launcher_resolves(executable: str | None = None) -> bool:
+    """True when the probe launcher is a real executable that can run awino.cli.
+
+    This is the executable-command guard for the capability exam: a probe only
+    counts when its command actually ran. Prose, a missing interpreter, or an
+    unimportable CLI module can never produce a pass.
+    """
+    exe = executable or sys.executable
+    p = Path(exe)
+    if not p.is_file():
+        return False
+    if not os.access(p, os.X_OK) and sys.platform != "win32":
+        return False
+    return importlib.util.find_spec("awino.cli") is not None
+
+
+def probe_fired(probe: Probe, returncode: int, output: str) -> bool:
+    """A probe fires only when its command ran clean AND produced the evidence.
+
+    Expected text from a crashed subprocess (nonzero exit) is not a pass:
+    the text may be echoed in an error, a traceback, or a usage message.
+    """
+    return returncode in probe.expected_codes and probe.expect in output
+
+
+def _exam_environment(project: Path) -> dict[str, str]:
+    """Return a controlled subprocess environment for one disposable exam.
+
+    The process must import the source being examined, but it must not inherit
+    the caller's project/state overrides.  Otherwise a command launched from a
+    project with ``AWINO_PROJECT`` set can appear to pass by reading that
+    project's state instead of the fixture created by :func:`_fixture`.
+    """
+    preserved = ("PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "HOME", "USERPROFILE")
+    env = {key: os.environ[key] for key in preserved if key in os.environ}
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
+    env["AWINO_PROJECT"] = str(project)
+    env.pop("SMITH_" + "PROJECT", None)
+    return env
 
 
 def _fixture(root: Path) -> None:
@@ -92,7 +136,12 @@ PROBES: tuple[Probe, ...] = (
         ),
         "VERIFY  pytest",
     ),
-    Probe("floor.verifies-not-trusts", ("floor", "close"), "REVISE"),
+    Probe(
+        "floor.verifies-not-trusts",
+        ("floor", "close"),
+        "REVISE",
+        expected_codes=(1,),
+    ),
     Probe(
         "hook.routes",
         ("hook", "prompt"),
@@ -102,16 +151,16 @@ PROBES: tuple[Probe, ...] = (
     Probe("auto.reachable", ("auto", "--max-seeds", "1", "--dry-run"), "READY"),
     Probe("graph.reachable", ("gate", "graph", "--help"), "worker"),
     Probe("loop.reachable", ("gate", "loop", "--help"), "iterations"),
-    Probe("skills.installed", ("skills-status",), "CURRENT"),
+    Probe("skills.status", ("skills-status",), "DRIFTED"),
 )
 
 
-def _run(argv: tuple[str, ...], cwd: Path, stdin: str) -> str:
+def _run(argv: tuple[str, ...], cwd: Path, stdin: str) -> tuple[int, str]:
     completed = subprocess.run(
         [sys.executable, "-m", "awino.cli", *argv],
         cwd=cwd,
         input=stdin or None,
-        env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])},
+        env=_exam_environment(cwd),
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -119,7 +168,7 @@ def _run(argv: tuple[str, ...], cwd: Path, stdin: str) -> str:
         check=False,
         timeout=180,
     )
-    return (completed.stdout or "") + (completed.stderr or "")
+    return completed.returncode, (completed.stdout or "") + (completed.stderr or "")
 
 
 def run_exam(keep: bool = False) -> list[ProbeResult]:
@@ -127,14 +176,21 @@ def run_exam(keep: bool = False) -> list[ProbeResult]:
     root = Path(tempfile.mkdtemp(prefix="awino-exam-"))
     _fixture(root)
     results: list[ProbeResult] = []
+    launcher_ok = launcher_resolves()
     try:
         for probe in PROBES:
-            output = _run(probe.argv, root, probe.stdin)
-            fired = probe.expect in output
+            code, output = _run(probe.argv, root, probe.stdin)
+            fired = launcher_ok and probe_fired(probe, code, output)
             line = next((ln for ln in output.splitlines() if probe.expect in ln), "")
-            results.append(
-                ProbeResult(probe.name, fired, line.strip()[:140] or output.strip()[-140:])
-            )
+            evidence = line.strip()[:120] or output.strip()[-120:]
+            if not launcher_ok:
+                evidence = "probe launcher is not an executable awino.cli"
+            elif code not in probe.expected_codes:
+                evidence = (
+                    f"exit={code} (expected {probe.expected_codes}; expected text is not a pass "
+                    "on an unexpected failure)"
+                )
+            results.append(ProbeResult(probe.name, fired, evidence, code))
         # skill-in-prompt: inspect the floor prompt the exam wrote
         prompts = list((project_state_dir(root) / "assignments").glob("*.md"))
         text = prompts[0].read_text(encoding="utf-8") if prompts else ""

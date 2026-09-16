@@ -510,7 +510,24 @@ def clean() -> None:
 
 @app.command()
 def hook(event: str = typer.Argument("session-start", help="Hook event adapter")) -> None:
-    """Inject confirmed project memory and enforce project workflow guardrails."""
+    """Inject confirmed project memory and enforce project workflow guardrails.
+
+    The body runs inside the hook recursion guard: a hook that triggers its
+    own event — directly, or through a child process the host fires another
+    hook for — is refused instead of recursing.
+    """
+    from awino.hosts.recursion import HookRecursionRefused, describe_refusal, guarded
+
+    try:
+        with guarded(event):
+            _run_hook(event)
+    except HookRecursionRefused as exc:
+        _echo(f"[awino] refusing recursive hook: {describe_refusal(exc)}")
+        raise typer.Exit(3) from None
+
+
+def _run_hook(event: str) -> None:
+    """The hook body, run once per trigger inside the recursion guard."""
     payload: dict = {}
     try:
         if not sys.stdin.isatty():

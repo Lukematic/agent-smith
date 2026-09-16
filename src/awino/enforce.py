@@ -1256,6 +1256,16 @@ def detect_test_weakening(diff: str) -> list[str]:
     """
     # Only test files matter here: production asserts are legitimately edited.
     findings: list[str] = []
+    # A formatter can rewrite a multiline test signature into one line. Do
+    # not call that deletion weakening when the same test name appears on an
+    # added line in the same diff; actual removed names still remain findings.
+    added_test_names = {
+        match.group(1)
+        for line in diff.splitlines()
+        if (match := re.search(r"^\+\s*def\s+(test_[A-Za-z0-9_]+)", line))
+    }
+    added_assert_count = len(re.findall(r"^\+(?!\+\+).*\bassert\b", diff, re.MULTILINE))
+    removed_assert_count = len(re.findall(r"^\-(?!\-\-).*\bassert\b", diff, re.MULTILINE))
     current_file = ""
     in_test_file = False
     for line in diff.splitlines():
@@ -1266,6 +1276,14 @@ def detect_test_weakening(diff: str) -> list[str]:
             )
             continue
         if not in_test_file:
+            continue
+        removed_test = re.search(r"^\-\s*def\s+(test_[A-Za-z0-9_]+)", line)
+        if removed_test and removed_test.group(1) in added_test_names:
+            continue
+        if (
+            re.search(r"^\-(?!\-\-).*\bassert\b", line)
+            and removed_assert_count <= added_assert_count
+        ):
             continue
         for pattern, why in WEAKENING_PATTERNS:
             if re.search(pattern, line):

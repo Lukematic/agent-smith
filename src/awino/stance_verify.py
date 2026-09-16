@@ -14,6 +14,8 @@ shared no-validation-phrases check every stance carries.
 
 from __future__ import annotations
 
+import re
+
 from awino import think
 from awino.stance import Stance
 
@@ -116,6 +118,41 @@ _SHARED_CHECK_ONLY: frozenset[str] = frozenset(
 )
 
 
+# ── substance floor ─────────────────────────────────────────────────────
+# An empty response, or one that is only stance markers ("I disagree",
+# "on the other hand") with no actual content, used to pass: the shared
+# check sees no banned phrases in an empty string, and the advisor check
+# sees its disagreement marker in "I disagree". A heuristic that passes
+# nothing checked nothing, so verify() now refuses both.
+
+_ALL_MARKERS: tuple[str, ...] = (
+    BANNED_VALIDATION_PHRASES + _OPPOSING_CASE_MARKERS + _OWN_VIEW_MARKERS + _DISAGREEMENT_MARKERS
+)
+
+#: Minimum words remaining after every known marker is stripped. Low on
+#: purpose: the bar is "said something", not "said it well".
+_MIN_SUBSTANTIVE_WORDS = 5
+
+
+def _substantive_word_count(response_text: str) -> int:
+    """Words left after removing every known stance marker. Single letters
+    do not count: "I" alone is not content."""
+    lowered = response_text.casefold()
+    for marker in sorted(_ALL_MARKERS, key=len, reverse=True):
+        lowered = lowered.replace(marker, " ")
+    return sum(1 for word in re.findall(r"[a-z0-9]+", lowered) if len(word) > 1)
+
+
+def _refuse_empty_or_marker_only(response_text: str, failures: list[str]) -> list[str]:
+    """Append the substance failure only when nothing else already failed:
+    a response that fails a real rule keeps its exact named failure."""
+    if failures:
+        return failures
+    if _substantive_word_count(response_text) < _MIN_SUBSTANTIVE_WORDS:
+        return [*failures, "no substantive content beyond stance markers"]
+    return failures
+
+
 # ── thinking modes ─────────────────────────────────────────────────────
 # Structural requirements per mode, composed with the shared check. Modes
 # that map onto stances inherit the stance's shape (devil = steel-man's
@@ -165,17 +202,23 @@ def verify(stance_name: str, response_text: str) -> list[str]:
             think.by_name(stance_name)
         except ValueError:
             raise ValueError(f"unknown stance or thinking mode: {stance_name}") from None
+        if not response_text or not response_text.strip():
+            return ["response is empty"]
         return _verify_thinking_mode(stance_name, response_text)
+    if not response_text or not response_text.strip():
+        return ["response is empty"]
     if stance.name == "steel-man":
-        return _verify_steel_man(response_text)
-    if stance.name == "teach-back":
-        return _verify_teach_back(response_text)
-    if stance.name == "advisor":
-        return _verify_advisor(response_text)
-    if stance.name in _SHARED_CHECK_ONLY:
+        failures = _verify_steel_man(response_text)
+    elif stance.name == "teach-back":
+        failures = _verify_teach_back(response_text)
+    elif stance.name == "advisor":
+        failures = _verify_advisor(response_text)
+    elif stance.name in _SHARED_CHECK_ONLY:
         # Only the shared no-validation-phrases check: no keyword signature
         # exists for these stances' deeper rules.
-        return _banned_phrase_failures(response_text)
-    # Safety net: any future stance defaults to the shared check rather than
-    # silently passing everything.
-    return _banned_phrase_failures(response_text)
+        failures = _banned_phrase_failures(response_text)
+    else:
+        # Safety net: any future stance defaults to the shared check rather
+        # than silently passing everything.
+        failures = _banned_phrase_failures(response_text)
+    return _refuse_empty_or_marker_only(response_text, failures)

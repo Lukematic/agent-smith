@@ -178,6 +178,11 @@ Done when: the ownership table showed no overlap, every subagent emitted its
 signal, every claim was independently verified with pasted output, and
 `git status` reconciles against the ownership table.
 
+## Task Contract and Assignment Reference
+
+For production-ready delegation contracts, policy blocks, and prompt structures,
+consult `skills/awino-rpi/references/task-contract-examples.md`.
+
 Grounding: chapters/7-patterns/3-orchestrator-pattern.md,
 chapters/4-context/4-multi-agent-context.md, chapters/5-tool-use/3-tool-restrictions.md,
 chapters/8-practices/7-operating-agent-swarms.md

@@ -50,6 +50,7 @@ EDGES: dict[tuple[Node, str], Node] = {
     (Node.IDLE, "start"): Node.LOCATE,
     (Node.LOCATE, "healthy"): Node.ROUTE,
     (Node.LOCATE, "missing"): Node.PROVISION,
+    (Node.LOCATE, "unhealthy"): Node.STOP,  # blocking health failed: human decision, not routing
     (Node.PROVISION, "provisioned"): Node.LOCATE,
     (Node.PROVISION, "declined"): Node.LOCATE,
     (Node.ROUTE, "high"): Node.LADDER,
@@ -78,6 +79,7 @@ EDGES: dict[tuple[Node, str], Node] = {
     (Node.GATES, "exhausted"): Node.STOP,
     (Node.CLOSE, "closed"): Node.DONE,
     (Node.STOP, "continue"): Node.WORK,
+    (Node.STOP, "re-locate"): Node.LOCATE,
     (Node.STOP, "close"): Node.GATES,  # human fixed the blocker out of band; re-check gates
     (Node.STOP, "drop"): Node.DONE,
     (Node.DONE, "start"): Node.LOCATE,
@@ -97,6 +99,11 @@ class Machine:
     skill: str | None = None
     why: str = ""
     stance: str = "advisor"
+    # The shared controller is keyed by the gate run. Persist the action id
+    # too, so an `awino step` process restarted between WORK and EXECUTE does
+    # not queue the same controller action twice.
+    controller_plan_id: str | None = None
+    controller_action_id: str | None = None
     updated: str = ""
     history: list[dict[str, str]] = field(default_factory=list)
 

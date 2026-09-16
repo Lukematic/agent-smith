@@ -332,10 +332,20 @@ def check_tests(paths: AwinoPaths) -> Result:
 
 
 def check_structure(paths: AwinoPaths) -> Result:
-    """Clutter at the root is the first symptom of a project going feral."""
+    """Clutter at the root is the first symptom of a project going feral.
+
+    The scan uses the shared installation-metadata classification
+    (``awino.install_meta``): host-owned markers such as ``.in_use`` are
+    preserved and can never fail this gate, and they are filtered here as
+    well so a Tidier regression cannot turn a host-owned marker into a
+    blocking failure.
+    """
+    from awino import install_meta
     from awino.tidy import Finding, Tidier
 
-    items = Tidier(paths).scan()
+    items = [
+        i for i in Tidier(paths).scan() if not install_meta.is_installation_metadata(i.path.name)
+    ]
     structural = [i for i in items if i.kind in {Finding.STRAY_ROOT_FILE, Finding.STRAY_ROOT_DIR}]
     dupes = [i for i in items if i.kind is Finding.DUPLICATE_CONTENT]
     if structural or dupes:

@@ -196,6 +196,13 @@ def is_exempt(directory: Path, root: Path) -> str | None:
         return "outside the project"
     if directory == root / "agents" and (directory / "awino.md").is_file():
         return "native plugin agent definition is self-describing"
+    # Host-owned installation markers (e.g. `.in_use`) are not documentation
+    # debt: the host owns them, so demanding a README would be a gate the user
+    # can never legitimately satisfy.
+    from awino import install_meta
+
+    if any(install_meta.is_installation_metadata(part) for part in parts):
+        return "host-owned installation metadata"
     for part in parts:
         if part in EXEMPT:
             return EXEMPT[part]

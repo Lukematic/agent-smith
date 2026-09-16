@@ -33,6 +33,12 @@ from enum import StrEnum
 from pathlib import Path
 
 from awino.paths import project_state_dir
+from awino.task_contract import (
+    ContractRef,
+    check_contract_ref,
+    load_contract,
+    render_contract_block,
+)
 
 DEFAULT_TIMEOUT_SECONDS = 900
 SPAWN_DEPTH_ENV = "AWINO_SPAWN_DEPTH"
@@ -120,6 +126,7 @@ class Assignment:
     context_paths: list[str] = field(default_factory=list)
     verification: str = ""
     depends_on: list[str] = field(default_factory=list)
+    contract: ContractRef | None = None
 
     def problems(self) -> list[str]:
         """Contract violations, checked before anything is spawned."""
@@ -287,12 +294,27 @@ def spawn_one(
             "already inside a subagent; nesting is not allowed",
         )
 
+    contract_block = ""
+    if assignment.contract is not None:
+        # One source: the stored contract, not a copy in the prompt. A stale
+        # revision, an unapproved contract, or a plan that moved on refuses
+        # the spawn -- the worker never runs on drifted instructions.
+        state_root = project_state_dir(project)
+        problems = check_contract_ref(state_root, assignment.contract)
+        if problems:
+            return SpawnResult(assignment.agent_id, "REFUSED", 2, 0, "; ".join(problems))
+        contract = load_contract(
+            state_root, assignment.contract.plan_id, assignment.contract.contract_id
+        )
+        contract_block = "\n\n" + render_contract_block(contract)
+
     invocation_id = f"{assignment.agent_id}-{uuid.uuid4().hex[:10]}"
     scratch = project_state_dir(project) / "state" / "assignments"
     scratch.mkdir(parents=True, exist_ok=True)
     prompt_file = scratch / f"{invocation_id}.md"
     prompt_file.write_text(
-        f"<!-- invocation: {invocation_id} -->\n{assignment.render(awino_home)}", encoding="utf-8"
+        f"<!-- invocation: {invocation_id} -->\n{assignment.render(awino_home)}{contract_block}",
+        encoding="utf-8",
     )
 
     if dry_run or runner is Runner.NONE:

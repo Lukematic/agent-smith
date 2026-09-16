@@ -11,7 +11,15 @@ from pathlib import Path
 
 import pytest
 
-from awino.knowledge import BudgetExceeded, KnowledgeStore, Manifest
+from awino.knowledge import (
+    BudgetExceeded,
+    KnowledgeReceiptRequired,
+    KnowledgeStore,
+    Manifest,
+    knowledge_receipt,
+    record_knowledge_receipt,
+    require_knowledge_receipt,
+)
 from awino.paths import AwinoPaths
 
 
@@ -134,3 +142,91 @@ class TestPaths:
         second = paths.ensure_scaffold()
         assert first
         assert second == []
+
+
+# ── Phase 2: persistent budget accounting ───────────────────────────────
+# A fresh store with the same accounting key resumes the consumed budget
+# instead of resetting it to zero; without a key nothing is written.
+
+
+def _tmp_paths(tmp_path: Path) -> AwinoPaths:
+    return AwinoPaths(root=tmp_path)
+
+
+class TestAccountingPersistence:
+    def test_fresh_store_resumes_accounting(self, tmp_path: Path) -> None:
+        first = KnowledgeStore(_tmp_paths(tmp_path), budget=2, accounting_key="task-1")
+        first._charge("book:a.md")
+        second = KnowledgeStore(_tmp_paths(tmp_path), budget=2, accounting_key="task-1")
+        assert second.opened == 1
+        second._charge("book:b.md")
+        with pytest.raises(BudgetExceeded):
+            second._charge("book:c.md")
+
+    def test_different_keys_are_isolated(self, tmp_path: Path) -> None:
+        one = KnowledgeStore(_tmp_paths(tmp_path), budget=1, accounting_key="task-1")
+        one._charge("book:a.md")
+        two = KnowledgeStore(_tmp_paths(tmp_path), budget=1, accounting_key="task-2")
+        assert two.opened == 0
+        two._charge("book:a.md")  # same file, different task: charged fresh
+        assert two.opened == 1
+
+    def test_reset_budget_drops_persisted_accounting(self, tmp_path: Path) -> None:
+        store = KnowledgeStore(_tmp_paths(tmp_path), budget=1, accounting_key="task-1")
+        store._charge("book:a.md")
+        store.reset_budget()
+        fresh = KnowledgeStore(_tmp_paths(tmp_path), budget=1, accounting_key="task-1")
+        assert fresh.opened == 0
+
+    def test_no_key_writes_nothing(self, tmp_path: Path) -> None:
+        store = KnowledgeStore(_tmp_paths(tmp_path), budget=2)
+        store._charge("book:a.md")
+        assert not (tmp_path / "knowledge" / "accounting").exists()
+
+
+# ── Phase 2: knowledge receipts ─────────────────────────────────────────
+# Answers cite stored receipts; without a receipt the answer is refused.
+
+
+class TestKnowledgeReceipts:
+    def test_require_without_receipt_refuses(self, tmp_path: Path) -> None:
+        with pytest.raises(KnowledgeReceiptRequired):
+            require_knowledge_receipt(tmp_path, "what is a harness?")
+
+    def test_record_then_require_round_trip(self, tmp_path: Path) -> None:
+        recorded = record_knowledge_receipt(
+            tmp_path,
+            question="what is a harness?",
+            source_id="book",
+            path="chapters/6-harnesses/1-what-is-a-harness.md",
+            sha="abc123def456",
+            by="luke",
+        )
+        back = require_knowledge_receipt(tmp_path, "what is a harness?")
+        assert back.question_hash == recorded.question_hash
+        assert back.source_id == "book"
+        assert back.sha == "abc123def456"
+        assert back.by == "luke"
+        assert back.at
+
+    def test_question_whitespace_normalizes_to_one_receipt(self, tmp_path: Path) -> None:
+        record_knowledge_receipt(
+            tmp_path,
+            question="what  is\na harness?",
+            source_id="book",
+            path="chapters/6-harnesses/1-what-is-a-harness.md",
+            sha="abc123def456",
+            by="luke",
+        )
+        assert knowledge_receipt(tmp_path, "what is a harness?") is not None
+
+    def test_receipts_live_in_state_not_the_repo(self, tmp_path: Path) -> None:
+        record_knowledge_receipt(
+            tmp_path,
+            question="what is a harness?",
+            source_id="book",
+            path="chapters/6-harnesses/1-what-is-a-harness.md",
+            sha="abc123def456",
+            by="luke",
+        )
+        assert (tmp_path / "knowledge_receipts").is_dir()

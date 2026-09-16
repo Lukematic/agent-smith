@@ -8,4 +8,4 @@ guard from the tool-authoring gate, applied to A.W.I.N.O. itself.
 from awino.paths import AwinoPaths
 
 __all__ = ["AwinoPaths", "__version__"]
-__version__ = "0.8.0"
+__version__ = "0.8.1"

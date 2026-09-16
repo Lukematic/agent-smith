@@ -36,6 +36,39 @@ from awino.enforce import (
 )
 
 
+def _resolve_contract_option(value: str | None, project_root) -> object | None:
+    """Parse ``--contract plan/contract[@revision]`` and return the stored
+    contract, or None when the option was not given.
+
+    Refuses (exit 2) on a malformed reference, an unknown contract, or a
+    pinned revision that is not the stored one. The dispatch gate
+    re-validates approval and staleness against disk before any floor, so
+    this is the CLI boundary, not the authority.
+    """
+    if not value:
+        return None
+    from awino.paths import project_state_dir
+    from awino.task_contract import ContractError, ContractRef, load_contract
+
+    try:
+        ref = ContractRef.parse(value)
+        stored = load_contract(project_state_dir(project_root), ref.plan_id, ref.contract_id)
+    except ContractError as exc:
+        _echo(f"REFUSED  {exc}")
+        raise typer.Exit(2) from exc
+    if ref.pinned and stored.contract_revision != ref.revision:
+        _echo(
+            f"REFUSED  contract {ref.contract_id!r} is at r{stored.contract_revision}, "
+            f"not the pinned r{ref.revision}; re-review the current revision first"
+        )
+        raise typer.Exit(2)
+    _echo(
+        f"CONTRACT  {stored.plan_id}/{stored.contract_id} "
+        f"r{stored.contract_revision} ({stored.state})"
+    )
+    return stored
+
+
 @gate_app.command("loop")
 def gate_loop(
     gate: Gate = typer.Argument(..., help="Which gate this evidence satisfies"),
@@ -133,6 +166,12 @@ def dispatch_command(
         False, "--dry-run", help="Print the routing decision and preflight verdict; spawn nothing"
     ),
     run_id: str = typer.Option(None, "--run", help="Run id, defaults to current"),
+    contract: str = typer.Option(
+        None,
+        "--contract",
+        help="Task contract as plan/contract or plan/contract@revision; "
+        "validated against the stored approved revision before any floor",
+    ),
 ) -> None:
     """Match a plain-language request to a skill, dispatch it, wait, independently
     verify the result, route to remediation or completion, and record the trip.
@@ -187,6 +226,7 @@ def dispatch_command(
     # Budget is confirmed, so writing project state is now legitimate.
     ledger = _ledger()
     resolved = _resolve_run(run_id)
+    task_contract = _resolve_contract_option(contract, workspace.project.root)
     result = dispatch.run_dispatch(
         ledger,
         resolved,
@@ -200,6 +240,7 @@ def dispatch_command(
         file_scope=scope or [],
         confirmed_budget=True,
         max_floors=max_floors,
+        contract=task_contract,
     )
     for floor in result.floors:
         _echo(f"  floor={floor.number} skill={floor.skill} verified={floor.verified}")
@@ -288,6 +329,12 @@ def floor_open(
     scope: list[str] = typer.Option(..., "--scope", help="Writable file; repeatable"),
     max_floors: int = typer.Option(MAX_ATTEMPTS, "--max-floors"),
     run_id: str = typer.Option(None, "--run", help="Run id, defaults to current"),
+    contract: str = typer.Option(
+        None,
+        "--contract",
+        help="Task contract as plan/contract or plan/contract@revision; "
+        "validated against the stored approved revision before the floor opens",
+    ),
 ) -> None:
     """Route the request and write a floor prompt for whatever agent is present
     to execute - this session, Claude Code, Cline, or a human. No external agent
@@ -305,6 +352,7 @@ def floor_open(
     ledger = _ledger()
     resolved = _resolve_run(run_id)
     catalog = _skill_catalog()
+    task_contract = _resolve_contract_option(contract, workspace.project.root)
     try:
         state = dispatch.open_floor(
             ledger,
@@ -315,6 +363,8 @@ def floor_open(
             verify,
             file_scope=scope,
             max_floors=max_floors,
+            project=workspace.project.root,
+            contract=task_contract,
         )
     except ValueError as exc:
         _echo(f"REFUSED  {exc}")

@@ -1,0 +1,134 @@
+# Task contract template (schema "1") — the single documented template for
+# planning briefs and spawn/dispatch assignment.
+#
+# This file DOCUMENTS. The dataclass in src/awino/task_contract.py ENFORCES.
+# A test (tests/test_task_contract.py) keeps the two in sync: every field
+# listed here must exist on the dataclass, the material fields must match
+# MATERIAL_FIELDS, and the states/transitions must match the module
+# constants. Edit both together or not at all.
+
+schema_version: "1"
+brief_type: "task-brief/v1"
+
+description: >
+  One approved unit of planned work, bound to a plan revision. A spawned
+  worker carries only a ContractRef (plan_id, contract_id, revision); the
+  spawn path resolves it against the stored contract and refuses anything
+  stale or unapproved. Human edits to the prefilled brief are preserved
+  verbatim with provenance; only material edits reset approval.
+
+fields:
+  # Required: a contract without these is invalid and can never be approved.
+  - name: contract_id
+    required: true
+    description: Stable identifier, unique within the plan.
+  - name: plan_id
+    required: true
+    description: The Phase 2 plan this contract belongs to.
+  - name: role
+    required: true
+    description: "One of scout, reviewer, builder. Determines write permission."
+    allowed: [scout, reviewer, builder]
+  - name: objective
+    required: true
+    description: What the worker must accomplish, in the human's own wording.
+  - name: verification
+    required: true
+    when: "role == builder"
+    description: The executable check the orchestrator re-runs; a builder without one is invalid.
+  - name: verifier
+    required: true
+    when: "role == builder"
+    description: Who or what judges the verification outcome.
+  # Optional: sensible defaults, still normalized and validated.
+  - name: file_scope
+    required: false
+    description: Paths the worker may write. Must be empty for read-only roles; required for builder.
+  - name: context_paths
+    required: false
+    description: Paths the worker should read first for context.
+  - name: budgets
+    required: false
+    description: Named ceilings, for example spawns with a ceiling of 3. All ceilings positive.
+  - name: depends_on
+    required: false
+    description: Other contract ids that must complete first.
+  # System-managed: never set by hand; the lifecycle functions own these.
+  - name: contract_revision
+    required: true
+    system_managed: true
+    description: Bumps on every edit. Approvals and worker refs name this.
+  - name: plan_revision_seen
+    required: true
+    system_managed: true
+    description: Plan revision the contract was built/approved against; staleness detection.
+  - name: state
+    required: true
+    system_managed: true
+  - name: approval
+    required: false
+    system_managed: true
+    description: The grant bound to (contract_revision, revision_hash).
+  - name: human_edits
+    required: false
+    system_managed: true
+    description: "Provenance log of every edit: field, before, after, by, at, material."
+
+states:
+  draft: "Editable. The prefilled brief is under human review."
+  approved: "Executable. Spawn paths accept workers referencing this revision."
+  invalidated: "A material edit or plan rebase voided the grant. Re-approval required."
+  superseded: "Retired without deletion; history preserved. Terminal."
+  closed: "Done. Terminal."
+
+transitions:
+  # Approval is granted from draft or invalidated; a material change moves
+  # approved back to invalidated (never silently to draft -- the voided grant
+  # stays in the history). Superseded/closed are terminal.
+  draft: [approved, superseded, closed]
+  approved: [invalidated, superseded, closed]
+  invalidated: [approved, superseded, closed]
+  superseded: []
+  closed: []
+
+material_fields:
+  # An edit to one of these changes what the worker may do, must produce,
+  # or may spend: it invalidates a standing approval. Cosmetic wording fixes
+  # keep approval only when the caller marks material=false explicitly.
+  - role
+  - objective
+  - file_scope
+  - context_paths
+  - verification
+  - budgets
+  - verifier
+  - depends_on
+
+approval_binding:
+  description: >
+    A grant records (by, at, contract_revision, revision_hash, brief_type).
+    The spawn path accepts the worker only when the stored contract's
+    revision and content hash still match the grant. Any content edit after
+    approval -- even one byte of the objective -- fails the check.
+
+staleness:
+  description: >
+    The contract records the plan revision it was approved against. When the
+    plan moves on (any controller event bumps the plan revision), the
+    contract is stale: spawn refuses it, and rebase_contract adopts the new
+    plan revision (voiding approval, preserving history) before re-approval.
+
+brief:
+  type: task-brief/v1
+  description: >
+    The one planning brief type. render_prefilled_draft prefills every
+    section from the contract; the human edits the draft and returns it;
+    apply_brief_edits parses the returned text into provenance-recorded
+    edits. Missing or unknown sections fail closed.
+  sections:
+    - Objective
+    - "Files you may write"
+    - "Context to read first"
+    - Verification
+    - Budgets
+    - Verifier

@@ -239,3 +239,132 @@ def test_cli_existing_set_and_for_behavior_is_untouched(
     result = cli_runner.invoke(cli_app, ["stance", "--for", "I think we should rewrite it"])
     assert result.exit_code == 0, result.output
     assert "STANCE  -> steel-man" in result.output
+
+
+# ── verify(): substance floor (Phase 2 hardening) ─────────────────────────
+# An empty response, or one that is only stance markers with no actual
+# content, used to pass the heuristic. A critic that passes nothing
+# checked nothing, so both are refused.
+
+
+@pytest.mark.parametrize(
+    "stance",
+    [
+        "advisor",
+        "steel-man",
+        "teach-back",
+        "first-principles",
+        "assumption-audit",
+        "research-intake",
+        "expert",
+    ],
+)
+def test_empty_response_is_refused_for_every_stance(stance: str) -> None:
+    assert stance_verify.verify(stance, "") == ["response is empty"]
+    assert stance_verify.verify(stance, "   \n  ") == ["response is empty"]
+
+
+def test_empty_thinking_output_is_refused() -> None:
+    assert stance_verify.verify("premortem", "") == ["response is empty"]
+
+
+@pytest.mark.parametrize(
+    ("stance", "marker_only"),
+    [
+        ("advisor", "I disagree"),
+        ("steel-man", "On the other hand"),
+        ("teach-back", "Can you explain?"),
+        ("first-principles", "First principles"),
+        ("expert", "Honestly"),
+    ],
+)
+def test_marker_only_response_is_refused(stance: str, marker_only: str) -> None:
+    assert stance_verify.verify(stance, marker_only) == [
+        "no substantive content beyond stance markers"
+    ]
+
+
+def test_marker_with_real_content_still_passes() -> None:
+    assert stance_verify.verify("advisor", "I disagree: the data shows churn rose.") == []
+
+
+def test_sycophancy_keeps_its_exact_failure() -> None:
+    # The substance check only fires when nothing else failed, so existing
+    # named failures are unchanged.
+    assert stance_verify.verify(
+        "first-principles", "Great question! You're absolutely right, excellent point."
+    ) == ["no validation phrases"]
+
+
+def test_stepper_execute_with_valid_response_records_checked_stance_hash(tmp_path: Path) -> None:
+    from awino import controller, machine, stepper
+    from awino.enforce import Ledger
+    from awino.paths import AwinoPaths
+    from awino.skill_catalog import SkillCatalog
+
+    state = tmp_path / ".awino"
+    state.mkdir()
+    home = tmp_path / "home"
+    (home / "plugin.json").parent.mkdir(parents=True, exist_ok=True)
+    (home / "plugin.json").write_text("{}", encoding="utf-8")
+    ctx = stepper.StepContext(
+        state_root=state,
+        project=tmp_path,
+        home=home,
+        paths=AwinoPaths(root=home),
+        ledger=Ledger(state),
+        catalog=SkillCatalog(tmp_path / "p", tmp_path / "g", Path("skills")),
+        answer="done",
+        response="I disagree: the data shows churn rose significantly across all tiers.",
+    )
+    adapter = controller.for_machine(state, "run-1")
+    m = machine.Machine(
+        node=machine.Node.EXECUTE,
+        run_id="run-1",
+        stance="advisor",
+        controller_plan_id=adapter.controller.plan_id,
+        controller_action_id="a1",
+    )
+    controller.queue_action(adapter.controller, "a1")
+    res = stepper._execute(m, ctx)
+    assert res == "executed"
+    fresh = controller.for_machine(state, "run-1")
+    snap = fresh.controller.status_snapshot()
+    assert snap["stance_status"]["status"] == "checked"
+    assert snap["stance_status"]["response_hash"] != ""
+
+
+def test_stepper_execute_without_response_records_unverified_stance(tmp_path: Path) -> None:
+    from awino import controller, machine, stepper
+    from awino.enforce import Ledger
+    from awino.paths import AwinoPaths
+    from awino.skill_catalog import SkillCatalog
+
+    state = tmp_path / ".awino"
+    state.mkdir()
+    home = tmp_path / "home"
+    (home / "plugin.json").parent.mkdir(parents=True, exist_ok=True)
+    (home / "plugin.json").write_text("{}", encoding="utf-8")
+    ctx = stepper.StepContext(
+        state_root=state,
+        project=tmp_path,
+        home=home,
+        paths=AwinoPaths(root=home),
+        ledger=Ledger(state),
+        catalog=SkillCatalog(tmp_path / "p", tmp_path / "g", Path("skills")),
+        answer="done",
+    )
+    adapter = controller.for_machine(state, "run-1")
+    m = machine.Machine(
+        node=machine.Node.EXECUTE,
+        run_id="run-1",
+        stance="advisor",
+        controller_plan_id=adapter.controller.plan_id,
+        controller_action_id="a1",
+    )
+    controller.queue_action(adapter.controller, "a1")
+    res = stepper._execute(m, ctx)
+    assert res == "executed"
+    fresh = controller.for_machine(state, "run-1")
+    snap = fresh.controller.status_snapshot()
+    assert snap["stance_status"]["status"] == "unverified"

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -39,6 +40,14 @@ class BudgetExceeded(RuntimeError):
 
     This is the structural form of the context-bloat guard. A prompt asking the
     model to "be mindful of context" is a wish; this is an error.
+    """
+
+
+class KnowledgeReceiptRequired(RuntimeError):
+    """A knowledge answer was requested without a recorded receipt.
+
+    Answers cite stored receipts, never conversational memory: no receipt,
+    no answer.
     """
 
 
@@ -115,7 +124,15 @@ class Manifest:
 
 
 class KnowledgeStore:
-    """Fetches and caches knowledge files, enforcing the per-task budget."""
+    """Fetches and caches knowledge files, enforcing the per-task budget.
+
+    The budget accounting (which files were opened) is the budget: without
+    persistence, a fresh store silently resets it and the ceiling stops
+    meaning anything. Pass ``accounting_key`` (e.g. the plan id) to persist
+    the accounting under ``accounting_dir`` (default
+    ``<knowledge>/accounting``); a fresh store with the same key resumes
+    where the previous one left off instead of starting at zero.
+    """
 
     def __init__(
         self,
@@ -123,6 +140,8 @@ class KnowledgeStore:
         budget: int = DEFAULT_BUDGET,
         stale_days: int = DEFAULT_STALE_DAYS,
         client: httpx.Client | None = None,
+        accounting_key: str | None = None,
+        accounting_dir: Path | None = None,
     ) -> None:
         self.paths = paths
         self.budget = budget
@@ -130,6 +149,34 @@ class KnowledgeStore:
         self.manifest = Manifest(paths.manifest)
         self._opened: set[str] = set()
         self._client = client
+        self.accounting_key = accounting_key
+        if accounting_key is not None:
+            safe = re.sub(r"[^A-Za-z0-9_.-]", "_", accounting_key)
+            base = accounting_dir if accounting_dir is not None else paths.knowledge / "accounting"
+            self._accounting_path: Path | None = base / f"{safe}.json"
+            self._load_accounting()
+        else:
+            self._accounting_path = None
+
+    def _load_accounting(self) -> None:
+        assert self._accounting_path is not None
+        try:
+            raw = json.loads(self._accounting_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        opened = raw.get("opened") if isinstance(raw, dict) else None
+        if isinstance(opened, list):
+            self._opened = {str(key) for key in opened}
+
+    def _save_accounting(self) -> None:
+        if self._accounting_path is None:
+            return
+        self._accounting_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self._accounting_path.with_suffix(".json.tmp")
+        tmp.write_text(
+            json.dumps({"opened": sorted(self._opened)}, indent=2) + "\n", encoding="utf-8"
+        )
+        tmp.replace(self._accounting_path)
 
     # ── budget ───────────────────────────────────────────────────────────────
     @property
@@ -138,6 +185,11 @@ class KnowledgeStore:
 
     def reset_budget(self) -> None:
         self._opened.clear()
+        # An explicit reset starts a new task: the persisted accounting for
+        # the old key is dropped with it, so the next task cannot inherit
+        # (or be charged for) the previous task's consumption.
+        if self._accounting_path is not None:
+            self._accounting_path.unlink(missing_ok=True)
 
     def _charge(self, key: str) -> None:
         if key in self._opened:
@@ -148,6 +200,7 @@ class KnowledgeStore:
                 "The task is under-decomposed. Split it."
             )
         self._opened.add(key)
+        self._save_accounting()
 
     # ── fetching ─────────────────────────────────────────────────────────────
     def cache_file(self, source_id: str, path: str) -> Path:
@@ -331,3 +384,97 @@ class KnowledgeStore:
             for f in self.paths.cache.glob("*")
             if f.is_file() and f.name != ".gitignore" and f not in tracked
         )
+
+
+# ── knowledge receipts ──────────────────────────────────────────────────
+# A receipt attests "this question was answered from this source at this
+# sha". Status and answers derive from these stored facts, never from
+# conversational memory: `require_knowledge_receipt` refuses when no receipt
+# is recorded. One file per question hash under
+# <state_root>/knowledge_receipts/ -- the project state dir, never the repo.
+
+
+KNOWLEDGE_RECEIPTS_DIRNAME = "knowledge_receipts"
+
+
+def question_hash(question: str) -> str:
+    """Canonical id for a question: normalized whitespace, sha256."""
+    normalized = " ".join(question.split())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+
+
+@dataclass(frozen=True)
+class KnowledgeReceipt:
+    question_hash: str
+    source_id: str
+    path: str
+    sha: str
+    at: str
+    by: str
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> KnowledgeReceipt:
+        return cls(**data)
+
+
+def _receipt_path(state_root: Path, qhash: str) -> Path:
+    return state_root / KNOWLEDGE_RECEIPTS_DIRNAME / f"{qhash}.json"
+
+
+def record_knowledge_receipt(
+    state_root: Path,
+    *,
+    question: str,
+    source_id: str,
+    path: str,
+    sha: str,
+    by: str,
+) -> KnowledgeReceipt:
+    """Record that a question was answered from a source. The receipt is the
+    provenance the answer must cite; recording it is what makes the answer
+    checkable later."""
+    receipt = KnowledgeReceipt(
+        question_hash=question_hash(question),
+        source_id=source_id,
+        path=path,
+        sha=sha,
+        at=datetime.now(UTC).isoformat(timespec="seconds"),
+        by=by,
+    )
+    target = _receipt_path(state_root, receipt.question_hash)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(receipt.to_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.replace(target)
+    return receipt
+
+
+def knowledge_receipt(state_root: Path, question: str) -> KnowledgeReceipt | None:
+    """The recorded receipt for a question, or None when unanswered."""
+    target = _receipt_path(state_root, question_hash(question))
+    if not target.is_file():
+        return None
+    try:
+        data = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    try:
+        return KnowledgeReceipt.from_dict(data)
+    except TypeError:
+        return None
+
+
+def require_knowledge_receipt(state_root: Path, question: str) -> KnowledgeReceipt:
+    """Return the receipt, or refuse: no receipt, no knowledge answer."""
+    receipt = knowledge_receipt(state_root, question)
+    if receipt is None:
+        raise KnowledgeReceiptRequired(
+            "no recorded knowledge receipt for this question: consult the "
+            "knowledge service first so the answer has provenance to cite"
+        )
+    return receipt
