@@ -269,6 +269,8 @@ def _apply(state: dict[str, Any], event: ControllerEvent) -> tuple[dict[str, Any
         pass
     elif kind == "scope_set":
         state["scope"] = list(payload["scope"])
+        if state.get("approval_state") == "approved":
+            state["approval_state"] = "invalidated"
         outcome["scope"] = state["scope"]
     elif kind == "approval_requested":
         pending = [dict(a) for a in state["pending_approvals"]]
@@ -624,6 +626,13 @@ class PlanController:
             self._state = PlanState(**state)
             _atomic_write_json(self._dir / _PLAN_NAME, asdict(self._state))
             return outcome
+
+    def set_scope(self, scope: list[str]) -> dict[str, Any]:
+        return self.submit_event(
+            event_id=f"scope-set-r{self.state.plan_revision + 1}",
+            kind="scope_set",
+            payload={"scope": scope},
+        )
 
     # ── reads (stored facts only) ──
 
