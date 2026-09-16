@@ -140,7 +140,7 @@ approvals, budget ceilings, and status derived from stored facts.
   are refused (`no substantive content beyond stance markers`). The check
   fires only when no other rule failed, so every existing named failure is
   byte-identical.
-- Tests: `tests/test_controller_closure.py` (new, 30 tests), 
+- Tests: `tests/test_controller_closure.py` (new, 30 tests),
 ...[truncated 1797 chars]
 
 ## Phase 3 — shared planning and assignment contract (2026-09-15)
@@ -386,3 +386,40 @@ host name (`clippy`) raises `UnknownHost` with the supported list.
   rewired through the shared knowledge service yet.
 - Publishing the wheel still needs the human's separate authorization; the
   gate is built and tested, the act is not done.
+
+## Windows review and presentation addition (2026-09-16)
+
+User authorized verification before push, excluded live host testing, and added
+four presentation procedures. Review is in an isolated bundle checkout; no
+installation cutover, merge, release or push has been performed.
+
+- Locked environment required `uv sync --frozen --all-groups --link-mode copy`
+  to avoid Windows/cloud hardlink error 396.
+- Recovery-focused tests: 198 passed. Follow-up review/cutover/contract tests:
+  119 passed (repeated with the same result in the research ledger).
+- `doctor --fast`: fail=0. `release verify` enumerated 137 manifest entries;
+  this is structural inventory verification, not end-to-end capability proof.
+- Ruff lint passes; format check reports six files needing formatting.
+- Broad Windows suite showed failures before its 600-second timeout; neither
+  a full-suite pass nor baseline equivalence of those failures is established.
+  A subsequent first-failure run and the real exam each timed out at 240 seconds.
+- Adversarial probe: grant a plan approval, record review `blocked`, call
+  `close_plan`; observed `review=blocked`, `closure=closed`. This is a push blocker.
+- Source review: `for_machine` / `for_loop` are not connected to existing
+  machine/loop callers; the exam still inherits project overrides and forces a
+  source PYTHONPATH; the artifact matrix checks wheel contents but does not run
+  an installed-wheel journey. Those gaps remain even with live hosts excluded.
+- Added the user's four presentation procedures under
+  `skills/awino-visualize/references/README.md`, with a scoped
+  trigger in the existing skill. Attribution is user-supplied, not asserted as
+  verified Winston/MIT doctrine. Reference loading and output rules do not
+  themselves prove rhetoric quality or audience retention.
+- Presentation validation: authored-skill validator PASS=14 FAIL=0; existing
+  dispatch/catalog suite 15 passed. Explicit `awino-visualize` requests route
+  all four procedures correctly. Three short unqualified requests remain
+  ambiguous in the current lexical router; automatic natural-language routing
+  is not claimed fixed by the reference addition.
+
+Prevention: do not equate a controller API's existence, a structural manifest
+check, or passing focused tests with integrated production behavior; run negative
+closure and real entry-point checks before declaring the recovery ready to push.

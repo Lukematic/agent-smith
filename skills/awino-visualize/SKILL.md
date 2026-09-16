@@ -1,6 +1,6 @@
 ---
 name: awino-visualize
-description: Create concrete visual explanations from architecture, processes, timelines, comparisons, and quantitative data. Use whenever the user asks for a diagram, chart, visualization, image, schematic, map, dashboard, workflow, sequence, or visual comparison. Prefer Mermaid in chat, then SVG or self-contained HTML when richer output materially improves understanding.
+description: Create visual explanations and presentation content. Use for presentation openings, slide audits, memorable idea cards, persuasive talk outlines, diagrams, charts, visualizations, images, schematics, maps, dashboards, workflows, sequences, or visual comparisons. Prefer Mermaid in chat, then SVG or self-contained HTML when richer output materially improves understanding.
 ---
 
 # A.W.I.N.O. Visualize
@@ -8,6 +8,17 @@ description: Create concrete visual explanations from architecture, processes, t
 Turn inspectable facts into the clearest visual the active Claude Code surface can
 present. A visual is an information model, not decoration: every node, edge, axis,
 label, and color must communicate something supported by the available evidence.
+
+## Presentation work
+
+For a presentation, talk, slide deck, opening script, slide audit, memorable idea
+cards, or persuasive outline, first read
+`references/README.md` relative to this skill directory.
+Select only the requested procedure; do not run all four for an ordinary chart.
+Reuse supplied topic, audience and core ideas before asking for missing inputs.
+The presentation procedure's output contract replaces the generic visual output
+list below when the requested artifact is a script, audit or talk outline.
+Keep factual sourcing and accessible visual checks in force.
 
 ## Route by information shape
 
