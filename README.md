@@ -186,6 +186,7 @@ The generated editor modes are: 🧭 A.W.I.N.O., 🧭 A.W.I.N.O. Consult,
 | [Commands](docs/commands.md) | Generated command reference (live `--help`) |
 | [API keys](docs/api-keys.md) | Provider credentials and custom gateways |
 | [Nuclear engineer walkthrough](docs/walkthrough-nuclear-engineer.md) | Domain-support example |
+| [Presentations](docs/presentations/README.md) | Presentation outlines and slide decks |
 | [Credits and sources](docs/credits-and-sources.md) | Attribution and upstream sources |
 
 ## License

@@ -30,6 +30,7 @@ Long-form, task-oriented documentation for A.W.I.N.O.
 | [Commands](commands.md) | Generated command reference (live `--help`) |
 | [API keys](api-keys.md) | Provider credentials and custom gateways |
 | [Nuclear engineer walkthrough](walkthrough-nuclear-engineer.md) | Domain-support example |
+| [Presentations](presentations/README.md) | Presentation outlines and slide decks |
 | [Credits and sources](credits-and-sources.md) | Attribution and upstream sources |
 
 The root [README](../README.md) is the landing page. Add long-form material here and

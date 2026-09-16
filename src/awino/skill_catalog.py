@@ -238,6 +238,20 @@ def _intent_skill(words: set[str]) -> str | None:
     # Compared against stemmed tokens, so listed in stemmed form.
     concrete_failure = {"bug", "error", "exception", "fail", "failure", "pytest"}
     vague_agent = {"agent", "misbehav", "behav", "badly", "keep", "ignor", "wrong"}
+    presentation = {
+        "present",
+        "presentation",
+        "slide",
+        "deck",
+        "talk",
+        "pitch",
+        "persuad",
+        "persuas",
+        "slogan",
+        "spis",
+    }
+    if words & presentation:
+        return "awino-visualize"
     if words & concrete_failure:
         return "awino-debug"
     if "agent" in words and len(words & vague_agent) >= 2:

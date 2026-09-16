@@ -153,3 +153,23 @@ class TestStemmedRouting:
         assert _stem("failing") == "fail"
         assert _stem("bus") == "bus"  # no s-stripping under 4 chars
         assert _stem("class") == "class"  # ss is not a plural
+
+
+class TestPresentationRouting:
+    @pytest.mark.parametrize(
+        "request_text",
+        [
+            "presentation opening script for the team",
+            "audit presentation slides for slide crimes",
+            "make a slide deck for the release",
+            "persuasive talk outline following SPIS",
+            "create memorable idea cards with 8-word slogans",
+        ],
+    )
+    def test_presentation_requests_route_to_visualize(
+        self, catalog: SkillCatalog, request_text: str
+    ) -> None:
+        decision = decide(request_text, catalog)
+        assert decision.confidence == "high"
+        assert decision.skill is not None
+        assert decision.skill.name == "awino-visualize"
