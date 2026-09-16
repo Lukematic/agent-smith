@@ -79,6 +79,7 @@ EDGES: dict[tuple[Node, str], Node] = {
     (Node.GATES, "exhausted"): Node.STOP,
     (Node.CLOSE, "closed"): Node.DONE,
     (Node.STOP, "continue"): Node.WORK,
+    (Node.STOP, "re-locate"): Node.LOCATE,
     (Node.STOP, "close"): Node.GATES,  # human fixed the blocker out of band; re-check gates
     (Node.STOP, "drop"): Node.DONE,
     (Node.DONE, "start"): Node.LOCATE,

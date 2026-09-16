@@ -182,11 +182,53 @@ class TestBackAndForth:
         m, _ = stepper.step(ctx)
         assert m.node is Node.DONE
 
+    def test_stop_continue_without_run_id_relocates(self, ctx: stepper.StepContext) -> None:
+        machine.save(ctx.state_root, Machine(node=Node.STOP, loop="direct"))
+        ctx.answer = "continue"
+        m, _ = stepper.step(ctx)
+        assert m.node is Node.LOCATE
+
     def test_stop_without_an_answer_waits(self, ctx: stepper.StepContext) -> None:
         machine.save(ctx.state_root, Machine(node=Node.STOP, loop="ralph", floor=3))
         m, lines = stepper.step(ctx)
         assert m.node is Node.STOP
         assert any("human decision" in ln for ln in lines)
+
+
+class TestWorkChargesControllerBudget:
+    def test_work_charges_budget_and_inherits_scope_verifier(
+        self, ctx: stepper.StepContext
+    ) -> None:
+        from awino import controller
+
+        stepper.run(ctx, "pytest is failing with a ValueError in the loader")
+        ctx.confirmed_budget = True
+        m, _ = stepper.run(ctx)
+        assert m.node is Node.EXECUTE
+        adapter = controller.for_machine(ctx.state_root, m.run_id or "")
+        assert adapter.controller.state.budget_used.get("work_iterations") == 1
+        assert adapter.controller.state.scope == ["tests/test_a.py"]
+
+    def test_work_refuses_when_controller_budget_is_exhausted(
+        self, ctx: stepper.StepContext
+    ) -> None:
+        from awino import controller
+
+        run = ctx.ledger.open(TaskClass.QUESTION, "budget check", loop="floor")
+        adapter = controller.for_machine(ctx.state_root, run.run_id, budgets={"work_iterations": 1})
+        aid = adapter.request_approval("approve plan")
+        controller.grant_approval(adapter.controller, aid, by="human", plan_level=True)
+        controller.charge_budget(adapter.controller, "work_iterations", 1)
+
+        m = Machine(
+            node=Node.WORK,
+            run_id=run.run_id,
+            loop="floor",
+            floor=1,
+            controller_plan_id=adapter.controller.plan_id,
+        )
+        assert stepper._work(m, ctx) == "waiting"
+        assert any("budget exhausted" in line for line in ctx.lines)
 
 
 class TestRunWalksUntilAHumanIsNeeded:

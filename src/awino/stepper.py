@@ -194,14 +194,6 @@ def _open(m: Machine, ctx: StepContext) -> str:
 
 
 def _work(m: Machine, ctx: StepContext) -> str:
-    verify = ctx.verify
-    if not verify:
-        found = provision.discover_verification(ctx.project)
-        if found is None:
-            ctx.say('REFUSED  no verification command found; awino best --verify "<check>"')
-            return "waiting"
-        verify, source = found
-        ctx.say(f"VERIFY  {verify} (from {source})")
     adapter = _machine_controller(m, ctx)
     if adapter is None:
         ctx.say("REFUSED  controller binding is missing; restart the trip from OPEN")
@@ -210,9 +202,23 @@ def _work(m: Machine, ctx: StepContext) -> str:
     if problems:
         ctx.say(f"REFUSED  controller preflight: {'; '.join(problems)}")
         return "waiting"
+    try:
+        controller.charge_budget(adapter.controller, "work_iterations", 1)
+    except controller.PlanBudgetExhausted:
+        ctx.say("REFUSED  controller budget exhausted: work_iterations")
+        return "waiting"
     action_id = f"work-{m.floor or 1}"
     controller.queue_action(adapter.controller, action_id)
     m.controller_action_id = action_id
+    verify = ctx.verify or adapter.controller.state.verifier
+    if not verify:
+        found = provision.discover_verification(ctx.project)
+        if found is None:
+            ctx.say('REFUSED  no verification command found; awino best --verify "<check>"')
+            return "waiting"
+        verify, source = found
+        ctx.say(f"VERIFY  {verify} (from {source})")
+    scope = adapter.controller.state.scope or ctx.scope or ["(unscoped)"]
     state = dispatch.open_floor(
         ctx.ledger,
         m.run_id or "",
@@ -220,7 +226,7 @@ def _work(m: Machine, ctx: StepContext) -> str:
         ctx.catalog,
         ctx.home,
         verify,
-        file_scope=ctx.scope or ["(unscoped)"],
+        file_scope=scope,
         max_floors=1 if m.loop == "floor" else MAX_ATTEMPTS,
     )
     ctx.say(f"FLOOR_OPEN  floor={state.floor}/{state.max_floors}  skill={state.skill}")
@@ -304,7 +310,8 @@ def _review(m: Machine, ctx: StepContext) -> str:
             )
         return "blocked"
 
-    verify = ctx.verify
+    adapter = _machine_controller(m, ctx)
+    verify = ctx.verify or (adapter.controller.state.verifier if adapter else None)
     if not verify:
         found = provision.discover_verification(ctx.project)
         if found is None:
@@ -313,6 +320,11 @@ def _review(m: Machine, ctx: StepContext) -> str:
             )
             return "waiting"
         verify = found[0]
+    scope = (
+        adapter.controller.state.scope
+        if adapter and adapter.controller.state.scope
+        else (ctx.scope or [])
+    )
     state = dispatch.open_floor(
         ctx.ledger,
         m.run_id or "",
@@ -320,7 +332,7 @@ def _review(m: Machine, ctx: StepContext) -> str:
         ctx.catalog,
         ctx.home,
         verify,
-        file_scope=ctx.scope or [],
+        file_scope=scope,
         max_floors=MAX_ATTEMPTS,
         role="reviewer",
         project=ctx.project,
@@ -449,9 +461,11 @@ def _machine_controller(m: Machine, ctx: StepContext) -> controller.PlanAdapter 
     return adapter if adapter.controller.plan_id == m.controller_plan_id else None
 
 
-def _stop(_m: Machine, ctx: StepContext) -> str:
+def _stop(m: Machine, ctx: StepContext) -> str:
     ctx.say("STOP  human decision: awino best --answer continue | close | drop")
     if ctx.answer in ("continue", "close", "drop"):
+        if ctx.answer == "continue" and m.run_id is None:
+            return "re-locate"
         return ctx.answer
     return "waiting"
 
