@@ -423,3 +423,79 @@ installation cutover, merge, release or push has been performed.
 Prevention: do not equate a controller API's existence, a structural manifest
 check, or passing focused tests with integrated production behavior; run negative
 closure and real entry-point checks before declaring the recovery ready to push.
+
+## Original-spec audit and 0.8.1 acceptance boundary (2026-09-16 17:30)
+
+This section supersedes earlier readiness summaries, not historical test output.
+Remote recovery HEAD is `76604e2`; GitHub's default `main` is still `08af22b`.
+The global PowerShell wrapper still points at the original `.smith` checkout at
+`08af22b`. No source/state cutover or installation update has occurred.
+The previously reported 1766 passes and 18/18 exam results are real but do not
+constitute acceptance of the original recovery specification.
+
+User direction: make modes/stances/procedures actually follow the task and the
+mission, address the gaps, test, then prepare/push 0.8.1. No immediate merge,
+installation mutation or release is performed during this audit.
+
+### Confirmed remaining gaps
+
+- `controller.preflight` permits pending approval; a real temporary-plan probe
+  returned `pending_approval=pending` and `pending_preflight=[]`.
+- An approved plan with no review closes: the probe returned
+  `review_before_close=None` and `closed_without_review=closed`. The earlier fix
+  blocks an explicit blocked/revise verdict, not missing review or missing
+  verification evidence.
+- `stepper._locate` selects a stance, but stepper does not verify a response
+  against it. The existing explicit `stance --verify` command is not automatic
+  response enforcement. Header text is not proof of adherence.
+- `_open` turns a budget confirmation into plan approval; its controller binding
+  does not populate the approved scope, and `_work` still reads invocation-local
+  scope/verifier. The integration does not charge its work-iteration budget.
+- `STOP -> WORK` does not distinguish failed health from approved work resumption.
+  Plan-required tasks stop without an integrated approved-plan binding path.
+- Host boundary events record activity; they do not themselves drive selection,
+  execution or stance validation. Kilo/Roo still have no live event bridge here.
+- The editable task brief contains six sections, not the required eight policy
+  blocks. Original planning/author-agent/delegate skills were not updated and
+  the requested research/support/delegation example reference is absent.
+- `cutover.finalize` journals `pointers-switched` but does not rewrite the global
+  launcher; its resolution check is not an actual launcher smoke test.
+- README and release CI files are unchanged from main. README does not identify
+  recovery candidate status, omits the new reference, and describes automatic
+  startup more strongly than host evidence supports.
+- The exam keeps HOME/USERPROFILE and expects ambient installed-skill drift;
+  18/18 therefore depends on this machine's global state. The wheel execution
+  added is a version smoke test, not the specified complete behavioral matrix.
+- Final status/skill/stance receipts are not rendered as the unified evidence
+  snapshot required by the original spec.
+
+Audit verification: focused controller/loop/exam baseline passed 56 tests; direct
+temporary-state probes independently demonstrated the two approval/closure gaps.
+GitHub landing-page content was fetched successfully. `gh` is unavailable here,
+so authenticated GitHub checks/PR management were not verified. No UI rendering
+or live multi-host testing was performed.
+
+### Required candidate acceptance (not implemented by this audit)
+
+1. Enforce current approval, permitted phase/scope, charged budgets and executed
+   evidence at actual action/closure boundaries; do not substitute budget consent
+   for approval of a particular plan or fabricate a reviewer verdict from a test.
+2. Connect request routing, relevant skill content and communication stance to
+   actual work. Record selected/provided/checked separately; bind checks to exact
+   response and contract hashes. Pause/blocked/cancel states cannot bypass checks.
+3. Deliver the eight human-editable policy blocks plus requested example
+   references through the real planning and assignment paths, preserving edits
+   and decision rationale across restart.
+4. Test real CLI journeys (coding, research, plan revision, presentation, negative
+   review, exhausted budget, restart) and both missing/current/drifted install
+   fixtures. Require expected failure statuses and artifact evidence. Unit mocks
+   and command names are not substitutes. Keep live hosts explicitly unverified
+   under the user's earlier testing exclusion.
+5. Correct branch README and release CI, prove actual launcher switching/rollback
+   in fixtures, run the source/wheel/plugin behavior matrix, then prepare the
+   0.8.1 version/branch update. Main-page publication and local activation remain
+   distinct operations from pushing a candidate branch.
+
+Do not describe this candidate as fulfilling the vision until those end-to-end
+acceptance cases pass. Do not use a larger test count as a proxy for coverage of
+the missing requirements; each requirement needs its own traceable evidence.
