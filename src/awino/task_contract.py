@@ -249,9 +249,7 @@ class TaskContract:
         if self.role not in ROLES:
             issues.append(f"role {self.role!r} is not one of {', '.join(ROLES)}")
         if self.schema_version != CONTRACT_SCHEMA_VERSION:
-            issues.append(
-                f"schema_version {self.schema_version!r} != {CONTRACT_SCHEMA_VERSION!r}"
-            )
+            issues.append(f"schema_version {self.schema_version!r} != {CONTRACT_SCHEMA_VERSION!r}")
         if self.state not in STATES:
             issues.append(f"state {self.state!r} is not one of {', '.join(STATES)}")
         if self.contract_revision < 1:
@@ -297,9 +295,7 @@ class TaskContract:
             "depends_on": self.depends_on,
             "brief_type": self.brief_type,
         }
-        return hashlib.sha256(
-            json.dumps(payload, sort_keys=True).encode("utf-8")
-        ).hexdigest()[:16]
+        return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
     # ── spawn/dispatch reference ──
 
@@ -327,24 +323,23 @@ class TaskContract:
             return False
         if grant.get("brief_type", BRIEF_TYPE) != self.brief_type:
             return False
-        if grant_rev == self.contract_revision and grant.get("revision_hash") == self.revision_hash():
+        if (
+            grant_rev == self.contract_revision
+            and grant.get("revision_hash") == self.revision_hash()
+        ):
             return True
         # The revision moved or the hash moved: the only acceptable
         # explanation is recorded cosmetic edits. Reverse-apply every
         # post-grant edit; if all were non-material and the reverted
         # content matches the granted hash, the grant still covers the
         # contract. Anything unrecorded, or any material edit, fails.
-        post_grant = [
-            e for e in self.human_edits if e["contract_revision"] > grant_rev
-        ]
+        post_grant = [e for e in self.human_edits if e["contract_revision"] > grant_rev]
         if not post_grant or any(e.get("material") for e in post_grant):
             return False
         reverted_fields = {}
         for edit in reversed(post_grant):
             reverted_fields[edit["field"]] = copy.deepcopy(edit["before"])
-        candidate = replace(
-            self, contract_revision=grant_rev, **reverted_fields
-        )
+        candidate = replace(self, contract_revision=grant_rev, **reverted_fields)
         return grant["revision_hash"] == candidate.revision_hash()
 
     # ── staleness ──
@@ -402,6 +397,7 @@ def create_contract(
     contract.normalize()
     contract.assert_valid()
     return contract
+
 
 # ── human edits: provenance, wording preserved, materiality ──────────────
 
@@ -464,7 +460,9 @@ def apply_human_edit(
 
     before = getattr(contract, field_name)
     if field_name in {"file_scope", "context_paths", "depends_on"}:
-        new_norm: Any = _norm_paths(new_value if isinstance(new_value, (list, tuple)) else [new_value])
+        new_norm: Any = _norm_paths(
+            new_value if isinstance(new_value, (list, tuple)) else [new_value]
+        )
     elif field_name == "budgets":
         new_norm = {str(k).strip(): int(v) for k, v in dict(new_value or {}).items()}
     elif field_name in {"role"}:
@@ -686,7 +684,9 @@ def grant_contract_approval(controller: Any, contract: TaskContract, *, by: str)
     return outcome
 
 
-def invalidate_contract_approval(controller: Any, contract: TaskContract, *, reason: str) -> dict[str, Any]:
+def invalidate_contract_approval(
+    controller: Any, contract: TaskContract, *, reason: str
+) -> dict[str, Any]:
     """Journal that a material change voided the standing grant. The
     contract must already be in ``invalidated`` (``apply_human_edit`` /
     ``rebase_contract`` move it there); this records the reason in the
@@ -799,8 +799,11 @@ def contract_history(state_root: Path, plan_id: str, contract_id: str) -> list[i
     current = directory / "current.json"
     if current.is_file():
         with suppress(OSError, ValueError, AttributeError):
-            revs.add(int(json.loads(current.read_text(encoding="utf-8")).get("contract_revision", 0)))
+            revs.add(
+                int(json.loads(current.read_text(encoding="utf-8")).get("contract_revision", 0))
+            )
     return sorted(revs)
+
 
 # ── the one planning brief type ─────────────────────────────────────────
 # task-brief/v1: a prefilled, human-editable draft. The human edits the
@@ -917,21 +920,15 @@ def _parse_budgets(body: str) -> dict[str, int]:
     for line in body.splitlines():
         stripped = line.strip()
         if not stripped.startswith("- "):
-            raise BriefParseError(
-                f"brief budget line is not a '- ' bullet: {stripped!r}"
-            )
+            raise BriefParseError(f"brief budget line is not a '- ' bullet: {stripped!r}")
         item = stripped[2:].strip()
         if ":" not in item:
-            raise BriefParseError(
-                f"brief budget line needs 'name: ceiling': {item!r}"
-            )
+            raise BriefParseError(f"brief budget line needs 'name: ceiling': {item!r}")
         name, ceiling = item.split(":", 1)
         try:
             budgets[name.strip()] = int(ceiling.strip())
         except ValueError:
-            raise BriefParseError(
-                f"brief budget ceiling is not an integer: {item!r}"
-            ) from None
+            raise BriefParseError(f"brief budget ceiling is not an integer: {item!r}") from None
     return budgets
 
 
@@ -977,11 +974,7 @@ def apply_brief_edits(
         else:
             norm_new = _norm_text(str(new_value))
         if norm_new != current:
-            records.append(
-                record_contract_edit(
-                    controller, contract, field_name, new_value, by=by
-                )
-            )
+            records.append(record_contract_edit(controller, contract, field_name, new_value, by=by))
     return records
 
 
@@ -1018,9 +1011,7 @@ class ContractRef:
                     "an integer, as in plan/contract@3"
                 ) from None
             if revision < 1:
-                raise ContractError(
-                    f"bad contract reference {value!r}: the revision must be >= 1"
-                )
+                raise ContractError(f"bad contract reference {value!r}: the revision must be >= 1")
         plan_id, sep, contract_id = text.partition("/")
         if not sep or not plan_id.strip() or not contract_id.strip():
             raise ContractError(

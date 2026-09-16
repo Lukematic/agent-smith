@@ -278,4 +278,17 @@ app.add_typer(loopctl.loop_app, name="loop")
 app.add_typer(proof.proof_app, name="proof")
 app.add_typer(release.release_app, name="release")
 
-del brief, buddy, dispatch, gate, install, knowledge, loopctl, maintain, project, proof, release, think
+del (
+    brief,
+    buddy,
+    dispatch,
+    gate,
+    install,
+    knowledge,
+    loopctl,
+    maintain,
+    project,
+    proof,
+    release,
+    think,
+)

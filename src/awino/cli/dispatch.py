@@ -52,9 +52,7 @@ def _resolve_contract_option(value: str | None, project_root) -> object | None:
 
     try:
         ref = ContractRef.parse(value)
-        stored = load_contract(
-            project_state_dir(project_root), ref.plan_id, ref.contract_id
-        )
+        stored = load_contract(project_state_dir(project_root), ref.plan_id, ref.contract_id)
     except ContractError as exc:
         _echo(f"REFUSED  {exc}")
         raise typer.Exit(2) from exc

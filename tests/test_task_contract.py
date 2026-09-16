@@ -67,9 +67,7 @@ def state_root(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def controller(state_root: Path) -> PlanController:
-    return PlanController.create(
-        state_root, "plan-1", budgets={"spawns": 3}, verifier="human"
-    )
+    return PlanController.create(state_root, "plan-1", budgets={"spawns": 3}, verifier="human")
 
 
 def make_contract(plan_revision_seen: int = 0, **overrides) -> TaskContract:
@@ -206,17 +204,13 @@ class TestHumanEdits:
         assert record["material"] is True
         assert c.contract_revision == 2
 
-    def test_edit_on_draft_does_not_invalidate(
-        self, controller: PlanController
-    ) -> None:
+    def test_edit_on_draft_does_not_invalidate(self, controller: PlanController) -> None:
         c = make_contract()
         record = record_contract_edit(controller, c, "objective", "New wording", by="luke")
         assert c.state == DRAFT
         assert "invalidated_approval" not in record
 
-    def test_material_edit_on_approved_invalidates(
-        self, controller: PlanController
-    ) -> None:
+    def test_material_edit_on_approved_invalidates(self, controller: PlanController) -> None:
         c = approve(controller, make_contract())
         record = record_contract_edit(
             controller, c, "file_scope", ["src/awino/loops.py", "src/awino/stepper.py"], by="luke"
@@ -251,9 +245,7 @@ class TestHumanEdits:
         with pytest.raises(ContractError, match="no field"):
             record_contract_edit(controller, c, "frobnicate", "x", by="luke")
 
-    def test_edit_that_breaks_validation_rolls_back(
-        self, controller: PlanController
-    ) -> None:
+    def test_edit_that_breaks_validation_rolls_back(self, controller: PlanController) -> None:
         c = make_contract()
         with pytest.raises(InvalidContract):
             record_contract_edit(controller, c, "file_scope", [], by="luke")
@@ -361,9 +353,7 @@ class TestStaleness:
         # History is unbroken: the rebase is in the edit log.
         assert c.human_edits[-1]["rebase"] is True
 
-    def test_rebase_with_no_plan_movement_is_refused(
-        self, controller: PlanController
-    ) -> None:
+    def test_rebase_with_no_plan_movement_is_refused(self, controller: PlanController) -> None:
         c = approve(controller, make_contract())
         with pytest.raises(ContractError, match="nothing to rebase"):
             rebase_contract(controller, c, by="luke")
@@ -403,9 +393,7 @@ class TestPersistence:
         with pytest.raises(ContractNotFound, match="no contract"):
             load_contract(state_root, "plan-1", "nope")
 
-    def test_plan_snapshot_carries_contract_state(
-        self, controller: PlanController
-    ) -> None:
+    def test_plan_snapshot_carries_contract_state(self, controller: PlanController) -> None:
         c = approve(controller, make_contract())
         snapshot = controller.status_snapshot()
         assert snapshot["contracts"]["c-1"]["state"] == "approved"
@@ -420,13 +408,12 @@ class TestPersistence:
         assert not reloaded.is_stale(fresh.state.plan_revision)
         assert reloaded.approval_covers()
 
+
 # ── the prefilled brief round-trip ──────────────────────────────────────
 
 
 class TestPlanningBrief:
-    def test_draft_is_prefilled_from_the_contract(
-        self, controller: PlanController
-    ) -> None:
+    def test_draft_is_prefilled_from_the_contract(self, controller: PlanController) -> None:
         c = make_contract()
         brief = render_prefilled_draft(c)
         assert brief.brief_type == BRIEF_TYPE
@@ -435,9 +422,7 @@ class TestPlanningBrief:
         assert "src/awino/loops.py" in brief.draft
         assert "uv run --frozen pytest tests/test_loops.py -q" in brief.draft
 
-    def test_returned_brief_applies_edits_with_provenance(
-        self, controller: PlanController
-    ) -> None:
+    def test_returned_brief_applies_edits_with_provenance(self, controller: PlanController) -> None:
         c = make_contract()
         save_contract(controller, c)
         brief = render_prefilled_draft(c)
@@ -458,9 +443,7 @@ class TestPlanningBrief:
         assert apply_brief_edits(controller, c, brief.draft, by="luke") == []
         assert c.contract_revision == 1
 
-    def test_budgets_round_trip_through_the_brief(
-        self, controller: PlanController
-    ) -> None:
+    def test_budgets_round_trip_through_the_brief(self, controller: PlanController) -> None:
         c = make_contract()
         save_contract(controller, c)
         brief = render_prefilled_draft(c)
@@ -498,9 +481,7 @@ class TestPlanningBrief:
     ) -> None:
         c = approve(controller, make_contract())
         brief = render_prefilled_draft(c)
-        edited = brief.draft.replace(
-            "Fix the flaky retry test", "Rewrite the whole loop engine"
-        )
+        edited = brief.draft.replace("Fix the flaky retry test", "Rewrite the whole loop engine")
         apply_brief_edits(controller, c, edited, by="luke")
         assert c.state == INVALIDATED
         assert not c.approval_covers()
@@ -540,20 +521,14 @@ def _assignment(ref: ContractRef | None) -> Assignment:
 class TestSpawnContractBinding:
     def test_no_contract_behaves_as_before(self, tmp_path: Path) -> None:
         project = _project(tmp_path)
-        result = spawn_one(
-            _assignment(None), Path("/tmp"), project, Runner.NONE, dry_run=True
-        )
+        result = spawn_one(_assignment(None), Path("/tmp"), project, Runner.NONE, dry_run=True)
         assert result.outcome == "PLANNED"
 
-    def test_approved_current_contract_spawns_and_carries_the_block(
-        self, tmp_path: Path
-    ) -> None:
+    def test_approved_current_contract_spawns_and_carries_the_block(self, tmp_path: Path) -> None:
         project = _project(tmp_path)
         _, contract = _approved_contract_in_project(project)
         ref = ContractRef(plan_id="plan-1", contract_id="c-1", revision=contract.contract_revision)
-        result = spawn_one(
-            _assignment(ref), Path("/tmp"), project, Runner.NONE, dry_run=True
-        )
+        result = spawn_one(_assignment(ref), Path("/tmp"), project, Runner.NONE, dry_run=True)
         assert result.outcome == "PLANNED", result.output_tail
         prompt_path = Path(result.output_tail.split(": ", 1)[1])
         prompt = prompt_path.read_text(encoding="utf-8")
@@ -568,9 +543,7 @@ class TestSpawnContractBinding:
         record_contract_edit(ctl, contract, "objective", "New objective", by="luke")
         grant_contract_approval(ctl, contract, by="luke")
         stale = ContractRef(plan_id="plan-1", contract_id="c-1", revision=1)
-        result = spawn_one(
-            _assignment(stale), Path("/tmp"), project, Runner.NONE, dry_run=True
-        )
+        result = spawn_one(_assignment(stale), Path("/tmp"), project, Runner.NONE, dry_run=True)
         assert result.outcome == "REFUSED"
         assert "stale contract revision" in result.output_tail
 
@@ -581,9 +554,7 @@ class TestSpawnContractBinding:
         contract = make_contract()
         save_contract(ctl, contract)
         ref = ContractRef(plan_id="plan-1", contract_id="c-1", revision=1)
-        result = spawn_one(
-            _assignment(ref), Path("/tmp"), project, Runner.NONE, dry_run=True
-        )
+        result = spawn_one(_assignment(ref), Path("/tmp"), project, Runner.NONE, dry_run=True)
         assert result.outcome == "REFUSED"
         assert "not approved" in result.output_tail
 
@@ -592,9 +563,7 @@ class TestSpawnContractBinding:
         state_root = project_state_dir(project)
         PlanController.create(state_root, "plan-1", verifier="human")
         ref = ContractRef(plan_id="plan-1", contract_id="ghost", revision=1)
-        result = spawn_one(
-            _assignment(ref), Path("/tmp"), project, Runner.NONE, dry_run=True
-        )
+        result = spawn_one(_assignment(ref), Path("/tmp"), project, Runner.NONE, dry_run=True)
         assert result.outcome == "REFUSED"
         assert "no contract" in result.output_tail
 
@@ -604,12 +573,8 @@ class TestSpawnContractBinding:
         from awino.controller import queue_action
 
         queue_action(ctl, "unrelated-action")  # any event bumps the plan revision
-        ref = ContractRef(
-            plan_id="plan-1", contract_id="c-1", revision=contract.contract_revision
-        )
-        refused = spawn_one(
-            _assignment(ref), Path("/tmp"), project, Runner.NONE, dry_run=True
-        )
+        ref = ContractRef(plan_id="plan-1", contract_id="c-1", revision=contract.contract_revision)
+        refused = spawn_one(_assignment(ref), Path("/tmp"), project, Runner.NONE, dry_run=True)
         assert refused.outcome == "REFUSED"
         assert "stale" in refused.output_tail.lower()
         # Rebase + re-approve recovers.
@@ -618,9 +583,7 @@ class TestSpawnContractBinding:
         fresh = ContractRef(
             plan_id="plan-1", contract_id="c-1", revision=contract.contract_revision
         )
-        ok = spawn_one(
-            _assignment(fresh), Path("/tmp"), project, Runner.NONE, dry_run=True
-        )
+        ok = spawn_one(_assignment(fresh), Path("/tmp"), project, Runner.NONE, dry_run=True)
         assert ok.outcome == "PLANNED", ok.output_tail
 
     def test_cosmetic_edit_still_spawns(self, tmp_path: Path) -> None:
@@ -630,12 +593,8 @@ class TestSpawnContractBinding:
             ctl, contract, "objective", contract.objective + ".", by="luke", material=False
         )
         assert contract.approval_covers()
-        ref = ContractRef(
-            plan_id="plan-1", contract_id="c-1", revision=contract.contract_revision
-        )
-        result = spawn_one(
-            _assignment(ref), Path("/tmp"), project, Runner.NONE, dry_run=True
-        )
+        ref = ContractRef(plan_id="plan-1", contract_id="c-1", revision=contract.contract_revision)
+        result = spawn_one(_assignment(ref), Path("/tmp"), project, Runner.NONE, dry_run=True)
         assert result.outcome == "PLANNED", result.output_tail
 
     def test_edited_after_approval_is_refused(self, tmp_path: Path) -> None:
@@ -647,12 +606,8 @@ class TestSpawnContractBinding:
 
         contract.objective = "Do something else"
         _write_contract_files(project_state_dir(project), contract)
-        ref = ContractRef(
-            plan_id="plan-1", contract_id="c-1", revision=contract.contract_revision
-        )
-        result = spawn_one(
-            _assignment(ref), Path("/tmp"), project, Runner.NONE, dry_run=True
-        )
+        ref = ContractRef(plan_id="plan-1", contract_id="c-1", revision=contract.contract_revision)
+        result = spawn_one(_assignment(ref), Path("/tmp"), project, Runner.NONE, dry_run=True)
         assert result.outcome == "REFUSED"
         assert "edited after its approval" in result.output_tail
 
@@ -741,9 +696,7 @@ class TestContractOption:
         assert got.contract_id == "c-1"
         assert got.contract_revision == contract.contract_revision
 
-    def test_pinned_reference_must_match_the_stored_revision(
-        self, tmp_path: Path
-    ) -> None:
+    def test_pinned_reference_must_match_the_stored_revision(self, tmp_path: Path) -> None:
         import typer
 
         from awino.cli.dispatch import _resolve_contract_option
@@ -810,18 +763,14 @@ class TestDispatchContractGate:
         assert "prefilled brief" in result.reason
         assert calls == []
 
-    def test_approved_contract_flows_and_workers_carry_the_ref(
-        self, tmp_path: Path
-    ) -> None:
+    def test_approved_contract_flows_and_workers_carry_the_ref(self, tmp_path: Path) -> None:
         project = _project(tmp_path)
         _, contract = _approved_contract_in_project(project)
         calls: list[Assignment] = []
 
         def execute(assignment: Assignment, awino_home: Path, proj: Path, runner: Runner):
             calls.append(assignment)
-            return SpawnResult(
-                assignment.agent_id, "CLAIMED", 0, 1, "", claimed_complete=True
-            )
+            return SpawnResult(assignment.agent_id, "CLAIMED", 0, 1, "", claimed_complete=True)
 
         def verify_fn(spawned: SpawnResult, assignment: Assignment, proj: Path):
             spawned.verified = True
@@ -909,9 +858,7 @@ class TestDispatchContractGate:
                 contract=contract,
             )
 
-    def test_open_floor_validates_stored_state_not_the_passed_object(
-        self, tmp_path: Path
-    ) -> None:
+    def test_open_floor_validates_stored_state_not_the_passed_object(self, tmp_path: Path) -> None:
         # The plan moved on after the contract was approved. The passed
         # object is a pre-move copy that looks fine; the stored state is
         # what refuses.
@@ -936,9 +883,7 @@ class TestDispatchContractGate:
                 contract=approved_copy,
             )
 
-    def test_open_floor_approved_contract_writes_prompt_with_ref(
-        self, tmp_path: Path
-    ) -> None:
+    def test_open_floor_approved_contract_writes_prompt_with_ref(self, tmp_path: Path) -> None:
         project = _project(tmp_path)
         _, contract = _approved_contract_in_project(project)
         ledger = _ledger(tmp_path)
@@ -971,9 +916,7 @@ class TestDispatchContractGate:
 
         def execute(assignment: Assignment, awino_home: Path, proj: Path, runner: Runner):
             calls.append(assignment)
-            return SpawnResult(
-                assignment.agent_id, "CLAIMED", 0, 1, "", claimed_complete=True
-            )
+            return SpawnResult(assignment.agent_id, "CLAIMED", 0, 1, "", claimed_complete=True)
 
         def verify_fn(spawned: SpawnResult, assignment: Assignment, proj: Path):
             spawned.verified = True

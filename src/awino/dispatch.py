@@ -279,7 +279,9 @@ def _build_assignment(
         # the stored contract and refuses anything stale or unapproved.
         objective = contract.objective
         if feedback:
-            objective += f"\n\nThe previous floor's independent verification failed with:\n{feedback}"
+            objective += (
+                f"\n\nThe previous floor's independent verification failed with:\n{feedback}"
+            )
         return Assignment(
             agent_id=f"dispatch-f{floor_number}-{skill}",
             role=Role(contract.role),

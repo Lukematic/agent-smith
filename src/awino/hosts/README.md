@@ -23,7 +23,7 @@ never as parity.
 from awino.hosts import get_adapter
 
 adapter = get_adapter("claude_code")  # or "kilo", "roo"
-status = adapter.probe()              # HostStatus: evidence label + missing surface
+status = adapter.probe()  # HostStatus: evidence label + missing surface
 adapter.session_started(controller, plan_id)
 adapter.user_turn(controller, plan_id, text)
 adapter.tool_result(controller, plan_id, result)
