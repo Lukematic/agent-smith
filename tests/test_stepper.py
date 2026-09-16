@@ -131,6 +131,28 @@ class TestCloseActuallyCloses:
         assert ctx.ledger.load(run.run_id).terminal_state != "complete"
         assert any("CLOSE  refused" in ln for ln in ctx.lines)
 
+    def test_close_refuses_a_machine_run_with_blocked_controller_review(
+        self, ctx: stepper.StepContext
+    ) -> None:
+        from awino import controller
+
+        run = ctx.ledger.open(TaskClass.QUESTION, "blocked machine close", loop="floor")
+        adapter = controller.for_machine(ctx.state_root, run.run_id)
+        approval = controller.request_approval(adapter.controller, "machine-budget-confirmed")
+        controller.grant_approval(adapter.controller, approval, by="human", plan_level=True)
+        controller.record_review(
+            adapter.controller, verdict="blocked", detail="review failed", by="reviewer"
+        )
+        m = Machine(
+            node=Node.CLOSE,
+            run_id=run.run_id,
+            loop="floor",
+            controller_plan_id=adapter.controller.plan_id,
+        )
+        assert stepper._close(m, ctx) == "waiting"
+        assert ctx.ledger.load(run.run_id).terminal_state != "complete"
+        assert any("controller" in line and "blocked" in line for line in ctx.lines)
+
 
 class TestBackAndForth:
     def test_question_answered_reenters_route(self, ctx: stepper.StepContext) -> None:

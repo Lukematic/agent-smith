@@ -98,6 +98,11 @@ class Machine:
     skill: str | None = None
     why: str = ""
     stance: str = "advisor"
+    # The shared controller is keyed by the gate run. Persist the action id
+    # too, so an `awino step` process restarted between WORK and EXECUTE does
+    # not queue the same controller action twice.
+    controller_plan_id: str | None = None
+    controller_action_id: str | None = None
     updated: str = ""
     history: list[dict[str, str]] = field(default_factory=list)
 

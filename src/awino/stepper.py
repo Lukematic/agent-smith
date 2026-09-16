@@ -14,7 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from awino import dispatch, health, machine, playbook, provision, recall
+from awino import controller, dispatch, health, machine, playbook, provision, recall
 from awino.enforce import CONTRACTS, MAX_ATTEMPTS, Gate, Ledger, TaskClass
 from awino.machine import Machine, Node
 from awino.paths import AwinoPaths
@@ -164,7 +164,25 @@ def _open(m: Machine, ctx: StepContext) -> str:
         return "plan-required"
     run = ctx.ledger.open(task_class, m.request, file_scope=ctx.scope or [], loop=m.loop)
     m.run_id = run.run_id
+    # `--confirm-budget` is the explicit human confirmation that brought the
+    # machine to OPEN. Bind it to the durable controller before work starts so
+    # later `awino step` processes cannot execute against a conversationally
+    # remembered approval.
+    budget = 1 if m.loop == "floor" else MAX_ATTEMPTS
+    adapter = controller.for_machine(
+        ctx.state_root,
+        run.run_id,
+        budgets={"work_iterations": budget},
+        verifier=ctx.verify or "verification discovered at work",
+    )
+    approval_id = "machine-budget-confirmed"
+    try:
+        adapter.require_approval(approval_id)
+    except controller.ApprovalRequired:
+        controller.grant_approval(adapter.controller, approval_id, by="human", plan_level=True)
+    m.controller_plan_id = adapter.controller.plan_id
     ctx.say(f"RUN {run.run_id}  class={task_class}  loop={m.loop}")
+    ctx.say(f"CONTROLLER  plan={adapter.controller.plan_id} approval=recorded")
     return "opened"
 
 
@@ -177,6 +195,17 @@ def _work(m: Machine, ctx: StepContext) -> str:
             return "waiting"
         verify, source = found
         ctx.say(f"VERIFY  {verify} (from {source})")
+    adapter = _machine_controller(m, ctx)
+    if adapter is None:
+        ctx.say("REFUSED  controller binding is missing; restart the trip from OPEN")
+        return "waiting"
+    problems = adapter.preflight()
+    if problems:
+        ctx.say(f"REFUSED  controller preflight: {'; '.join(problems)}")
+        return "waiting"
+    action_id = f"work-{m.floor or 1}"
+    controller.queue_action(adapter.controller, action_id)
+    m.controller_action_id = action_id
     state = dispatch.open_floor(
         ctx.ledger,
         m.run_id or "",
@@ -197,6 +226,11 @@ def _execute(_m: Machine, ctx: StepContext) -> str:
     waits; the human (or the agent playing worker) says `--answer done` when
     the prompt has been executed, and the machine moves on to verify it."""
     if ctx.answer == "done":
+        adapter = _machine_controller(_m, ctx)
+        if adapter is None or _m.controller_action_id is None:
+            ctx.say("REFUSED  controller action is missing; do not claim execution completed")
+            return "waiting"
+        controller.apply_action(adapter.controller, _m.controller_action_id, "worker reported done")
         return "executed"
     ctx.say(
         "EXECUTE  run the prompt in this or any agent environment, then: awino best --answer done"
@@ -206,13 +240,29 @@ def _execute(_m: Machine, ctx: StepContext) -> str:
 
 def _verify(m: Machine, ctx: StepContext) -> str:
     result = dispatch.close_floor(ctx.ledger, m.run_id or "", ctx.project)
+    adapter = _machine_controller(m, ctx)
     ctx.say(f"{result.outcome.value.upper()}  {result.detail[:120]}")
     if result.outcome is dispatch.DispatchOutcome.COMPLETE:
+        if adapter is not None:
+            controller.record_review(
+                adapter.controller,
+                verdict="ship",
+                detail="worker verification passed",
+                by="machine",
+            )
         return "verified-graph" if m.loop == "graph" else "verified"
     if result.outcome is dispatch.DispatchOutcome.REVISE:
+        if adapter is not None:
+            controller.record_review(
+                adapter.controller, verdict="revise", detail=result.detail, by="machine"
+            )
         if result.next_state:
             ctx.say(f"PROMPT  {result.next_state.prompt_path}")
         return "revise"
+    if adapter is not None:
+        controller.record_review(
+            adapter.controller, verdict="blocked", detail=result.detail, by="machine"
+        )
     return "max-iterations"
 
 
@@ -225,13 +275,26 @@ def _review(m: Machine, ctx: StepContext) -> str:
     pending = ctx.ledger.latest_artifact(m.run_id or "", "dispatch-pending")
     if pending is not None and pending.payload.get("role") == "reviewer":
         result = dispatch.close_floor(ctx.ledger, m.run_id or "", ctx.project)
+        adapter = _machine_controller(m, ctx)
         ctx.say(f"{result.outcome.value.upper()}  {result.detail[:160]}")
         if result.outcome is dispatch.DispatchOutcome.COMPLETE:
+            if adapter is not None:
+                controller.record_review(
+                    adapter.controller, verdict="ship", detail=result.detail, by="reviewer"
+                )
             return "ship"
         if result.outcome is dispatch.DispatchOutcome.REVISE:
+            if adapter is not None:
+                controller.record_review(
+                    adapter.controller, verdict="revise", detail=result.detail, by="reviewer"
+                )
             if result.next_state:
                 ctx.say(f"PROMPT  {result.next_state.prompt_path}")
             return "revise"
+        if adapter is not None:
+            controller.record_review(
+                adapter.controller, verdict="blocked", detail=result.detail, by="reviewer"
+            )
         return "blocked"
 
     verify = ctx.verify
@@ -345,6 +408,18 @@ def _close(m: Machine, ctx: StepContext) -> str:
     if run.issue_id:
         ctx.say(f"CLOSE  linked seed {run.issue_id}: run 'awino work-close {run.issue_id}' first")
         return "waiting"
+    # Pre-controller runs remain closeable through their existing ledger path.
+    # New runs set controller_plan_id at OPEN and must satisfy its guards.
+    if m.controller_plan_id is not None:
+        adapter = _machine_controller(m, ctx)
+        if adapter is None:
+            ctx.say("CLOSE  refused: controller binding is missing")
+            return "waiting"
+        try:
+            adapter.close(by="machine")
+        except controller.PlanNotClosable as exc:
+            ctx.say(f"CLOSE  refused: controller {exc}")
+            return "waiting"
     ctx.ledger.mark_complete(run.run_id)
     ctx.say(f"COMPLETE  {len(verdict.satisfied)} gate(s) satisfied  run={run.run_id}")
     for line in playbook.run_event(
@@ -352,6 +427,19 @@ def _close(m: Machine, ctx: StepContext) -> str:
     ):
         ctx.say(line)
     return "closed"
+
+
+def _machine_controller(m: Machine, ctx: StepContext) -> controller.PlanAdapter | None:
+    """Load the durable controller paired to the current machine run.
+
+    This deliberately derives the controller id from the persisted gate run,
+    rather than from an in-memory request, so a new `awino step` process sees
+    the same approvals and pending action state.
+    """
+    if m.run_id is None or m.controller_plan_id is None:
+        return None
+    adapter = controller.for_machine(ctx.state_root, m.run_id)
+    return adapter if adapter.controller.plan_id == m.controller_plan_id else None
 
 
 def _stop(_m: Machine, ctx: StepContext) -> str:
