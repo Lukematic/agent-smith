@@ -63,6 +63,12 @@ def test_failing_subprocess_cannot_pass_on_expected_text() -> None:
     assert probe_fired(probe, -9, "CARRYING") is False
 
 
+def test_probe_can_require_a_nonzero_verification_refusal() -> None:
+    probe = Probe("x.y", ("floor", "close"), "REVISE", expected_codes=(1,))
+    assert probe_fired(probe, 1, "REVISE  pytest failed") is True
+    assert probe_fired(probe, 0, "REVISE  pytest failed") is False
+
+
 def test_clean_exit_without_evidence_is_not_a_pass() -> None:
     probe = Probe("x.y", ("best",), "CARRYING")
     assert probe_fired(probe, 0, "nothing relevant here") is False

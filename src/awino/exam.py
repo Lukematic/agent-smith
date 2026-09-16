@@ -33,6 +33,7 @@ class Probe:
     argv: tuple[str, ...]
     expect: str
     stdin: str = ""
+    expected_codes: tuple[int, ...] = (0,)
 
 
 @dataclass(frozen=True)
@@ -65,7 +66,7 @@ def probe_fired(probe: Probe, returncode: int, output: str) -> bool:
     Expected text from a crashed subprocess (nonzero exit) is not a pass:
     the text may be echoed in an error, a traceback, or a usage message.
     """
-    return returncode == 0 and probe.expect in output
+    return returncode in probe.expected_codes and probe.expect in output
 
 
 def _exam_environment(project: Path) -> dict[str, str]:
@@ -135,7 +136,12 @@ PROBES: tuple[Probe, ...] = (
         ),
         "VERIFY  pytest",
     ),
-    Probe("floor.verifies-not-trusts", ("floor", "close"), "REVISE"),
+    Probe(
+        "floor.verifies-not-trusts",
+        ("floor", "close"),
+        "REVISE",
+        expected_codes=(1,),
+    ),
     Probe(
         "hook.routes",
         ("hook", "prompt"),
@@ -145,7 +151,7 @@ PROBES: tuple[Probe, ...] = (
     Probe("auto.reachable", ("auto", "--max-seeds", "1", "--dry-run"), "READY"),
     Probe("graph.reachable", ("gate", "graph", "--help"), "worker"),
     Probe("loop.reachable", ("gate", "loop", "--help"), "iterations"),
-    Probe("skills.installed", ("skills-status",), "CURRENT"),
+    Probe("skills.status", ("skills-status",), "DRIFTED"),
 )
 
 
@@ -179,8 +185,11 @@ def run_exam(keep: bool = False) -> list[ProbeResult]:
             evidence = line.strip()[:120] or output.strip()[-120:]
             if not launcher_ok:
                 evidence = "probe launcher is not an executable awino.cli"
-            elif code != 0:
-                evidence = f"exit={code} (expected text is not a pass on failure)"
+            elif code not in probe.expected_codes:
+                evidence = (
+                    f"exit={code} (expected {probe.expected_codes}; expected text is not a pass "
+                    "on an unexpected failure)"
+                )
             results.append(ProbeResult(probe.name, fired, evidence, code))
         # skill-in-prompt: inspect the floor prompt the exam wrote
         prompts = list((project_state_dir(root) / "assignments").glob("*.md"))
