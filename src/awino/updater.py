@@ -67,14 +67,85 @@ def snapshot(source: Path, project: Path, harness_paths: list[Path]) -> Path:
     return destination
 
 
-def update_preflight(source: Path, project: Path, harness_paths: list[Path]) -> Path:
-    backup = snapshot(source, project, harness_paths)
+def local_changes(source: Path) -> list[str]:
+    """`git status --porcelain` lines for the clone, minus our own backups."""
     status = _git(source, "status", "--porcelain")
     if status.returncode != 0:
-        raise PreflightError(f"git status failed: {status.stderr.strip()}", backup)
-    dirty = [line for line in status.stdout.splitlines() if not line.endswith(" backups/")]
+        raise RuntimeError(f"git status failed: {status.stderr.strip()}")
+    return [line for line in status.stdout.splitlines() if not line.endswith(" backups/")]
+
+
+def _describe(changes: list[str], limit: int = 6) -> str:
+    names = [line[3:] for line in changes[:limit]]
+    more = f", and {len(changes) - limit} more" if len(changes) > limit else ""
+    return ", ".join(names) + more
+
+
+def update_preflight(
+    source: Path,
+    project: Path,
+    harness_paths: list[Path],
+    *,
+    keep_local: bool = False,
+    report: list[str] | None = None,
+) -> Path:
+    """Back up, then fast-forward the clone.
+
+    A clone with local changes is refused by default, naming the files. With
+    ``keep_local`` the changes are set aside with ``git stash`` (untracked
+    files included), the clone is fast-forwarded, and the changes are put
+    back. When putting them back conflicts with the new version, the clone
+    stays on the new version and the changes stay in the stash, never lost.
+    Messages for the human are appended to ``report``.
+    """
+    notes = report if report is not None else []
+    backup = snapshot(source, project, harness_paths)
+    try:
+        dirty = local_changes(source)
+    except RuntimeError as exc:
+        raise PreflightError(str(exc), backup) from None
+    stashed = False
     if dirty:
-        raise PreflightError("source clone is dirty; refusing fetch/pull", backup)
+        if not keep_local:
+            raise PreflightError(
+                f"source clone is dirty: {len(dirty)} local change(s) ({_describe(dirty)}); refusing "
+                "fetch/pull. They are safe. To set them aside, update, and put them back: "
+                "awino update --keep-local",
+                backup,
+            )
+        label = f"awino update {datetime.now(UTC).strftime('%Y-%m-%dT%H%M%SZ')}"
+        stash = _git(source, "stash", "push", "--include-untracked", "-m", label)
+        if stash.returncode != 0:
+            raise PreflightError(
+                f"could not set local changes aside: {stash.stderr.strip()}", backup
+            )
+        stashed = True
+        notes.append(f"SET_ASIDE  {len(dirty)} local change(s) in git stash '{label}'")
+    try:
+        _fast_forward(source, backup)
+    except PreflightError:
+        if stashed:
+            _git(source, "stash", "pop")
+            notes.append("RESTORED  local changes put back; nothing was updated")
+        raise
+    if stashed:
+        popped = _git(source, "stash", "pop")
+        if popped.returncode == 0:
+            notes.append("RESTORED  local changes put back on top of the new version")
+        else:
+            conflicted = _git(source, "diff", "--name-only", "--diff-filter=U").stdout.split()
+            _git(source, "reset", "--quiet", "--hard", "HEAD")
+            notes.append(
+                "KEPT_ASIDE  some local changes conflict with the new version"
+                + (f" ({', '.join(conflicted[:6])})" if conflicted else "")
+                + ". The clone is on the new version; your changes are still in "
+                "'git stash list' (newest first). Recover with: "
+                f'git -C "{source}" stash show -p   then   git -C "{source}" stash pop'
+            )
+    return backup
+
+
+def _fast_forward(source: Path, backup: Path) -> None:
     fetch = _git(source, "fetch", "--quiet", "origin")
     if fetch.returncode != 0:
         raise PreflightError(f"git fetch failed: {fetch.stderr.strip()}", backup)
@@ -91,7 +162,11 @@ def update_preflight(source: Path, project: Path, harness_paths: list[Path]) -> 
         pull = _git(source, "pull", "--quiet", "--ff-only")
         if pull.returncode != 0:
             raise PreflightError(f"fast-forward pull failed: {pull.stderr.strip()}", backup)
-    return backup
+
+
+def is_clone(source: Path) -> bool:
+    inside = _git(source, "rev-parse", "--is-inside-work-tree")
+    return inside.returncode == 0 and inside.stdout.strip() == "true"
 
 
 def cached_freshness(source: Path) -> str:

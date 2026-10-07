@@ -107,3 +107,59 @@ def test_restore_recovers_project_and_harness_state(tmp_path: Path) -> None:
     assert restored == [lesson, harness]
     assert lesson.read_text(encoding="utf-8") == "before\n"
     assert harness.read_text(encoding="utf-8") == "before\n"
+
+
+# ── a clone with local changes is never a dead end ──────────────────────────
+
+
+def _push_upstream_change(tmp_path: Path, remote: Path, name: str, text: str) -> None:
+    other = tmp_path / "other"
+    git(tmp_path, "clone", str(remote), str(other))
+    git(other, "config", "user.email", "o@example.test")
+    git(other, "config", "user.name", "Other")
+    (other / name).write_text(text, encoding="utf-8")
+    git(other, "add", ".")
+    git(other, "commit", "-m", "upstream change")
+    git(other, "push")
+
+
+def test_dirty_refusal_names_the_files_and_the_way_out(tmp_path: Path) -> None:
+    source, _ = repo(tmp_path)
+    (source / "plugin.json").write_text('{"edited": true}', encoding="utf-8")
+    (source / "notes.txt").write_text("mine", encoding="utf-8")
+    with pytest.raises(PreflightError) as raised:
+        update_preflight(source, tmp_path / "project", harness_paths=[])
+    message = str(raised.value)
+    assert "dirty" in message and "plugin.json" in message and "notes.txt" in message
+    assert "awino update --keep-local" in message
+
+
+def test_keep_local_updates_and_puts_changes_back(tmp_path: Path) -> None:
+    source, remote = repo(tmp_path)
+    _push_upstream_change(tmp_path, remote, "NEW.md", "from upstream\n")
+    (source / "plugin.json").write_text('{"edited": true}', encoding="utf-8")
+    (source / "notes.txt").write_text("mine", encoding="utf-8")
+    notes: list[str] = []
+    update_preflight(source, tmp_path / "project", [], keep_local=True, report=notes)
+    assert (source / "NEW.md").read_text(encoding="utf-8") == "from upstream\n"
+    assert (source / "plugin.json").read_text(encoding="utf-8") == '{"edited": true}'
+    assert (source / "notes.txt").read_text(encoding="utf-8") == "mine"
+    assert any(n.startswith("RESTORED") for n in notes)
+
+
+def test_keep_local_conflict_updates_and_keeps_changes_in_the_stash(tmp_path: Path) -> None:
+    source, remote = repo(tmp_path)
+    _push_upstream_change(tmp_path, remote, "plugin.json", '{"upstream": true}')
+    (source / "plugin.json").write_text('{"mine": true}', encoding="utf-8")
+    notes: list[str] = []
+    update_preflight(source, tmp_path / "project", [], keep_local=True, report=notes)
+    assert (source / "plugin.json").read_text(encoding="utf-8") == '{"upstream": true}'
+    assert any(n.startswith("KEPT_ASIDE") and "plugin.json" in n for n in notes)
+    stashed = subprocess.run(
+        ["git", "stash", "show", "-p"], cwd=source, capture_output=True, text=True, check=True
+    ).stdout
+    assert '{"mine": true}' in stashed
+    status = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=source, capture_output=True, text=True, check=True
+    ).stdout
+    assert status.strip() == ""  # clean, on the new version
