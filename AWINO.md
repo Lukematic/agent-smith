@@ -29,6 +29,8 @@ reads in isolation.
 
 If `best` reports a health refusal, say so and offer to fix it before other work.
 An A.W.I.N.O. installation with a failing environment gives confident wrong answers.
+If it prints `UPDATE AVAILABLE`, run `awino update` first and tell the human the
+version it reports.
 
 Then read, in order:
 

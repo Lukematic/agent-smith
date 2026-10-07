@@ -173,8 +173,32 @@ Reload the editor window after installing modes.
 ## Safe updates and rollback
 
 `awino start` reports cached freshness against the upstream branch
-(`ahead=N behind=M`) using only local Git metadata; it never fetches or pulls on
-its own, so starting a session cannot change the code underneath an active run.
+(`ahead=N behind=M`) using only local Git metadata; it never pulls on its own,
+so starting a session cannot change the code underneath an active run.
+
+### Staying current automatically
+
+**Claude Code plugin:** in Claude Code run `/plugin`, open **Marketplaces**,
+select **awino**, and choose **Enable auto-update**. Claude Code then refreshes
+it in the background after your first message and loads the new version in your
+next session (or after `/reload-plugins`). Third-party marketplaces start with
+auto-update off, so this one switch is needed once.
+
+**Standalone clone (Kilo, Roo, the CLI):** turn on the daily check once:
+
+```bash
+awino update --auto on
+```
+
+Each new session then looks upstream at most once a day (a few seconds,
+skipped quietly when offline) and prints `UPDATE AVAILABLE` when there is one.
+The agent runs `awino update` before other work and tells you the new version.
+`awino update --check` looks right now without changing anything, and
+`awino update --auto off` returns startup to fully offline.
+
+An update also adds any new A.W.I.N.O. editor modes (such as 🧠 A.W.I.N.O.
+Brain) to the Kilo or Roo mode files that already hold A.W.I.N.O. modes. Your
+own modes, and any A.W.I.N.O. mode you edited, are left as they are.
 
 To update A.W.I.N.O. itself, say "update A.W.I.N.O." or run:
 

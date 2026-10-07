@@ -37,6 +37,9 @@ fails.
 
 Update with `claude plugin update awino@awino`, uninstall with
 `claude plugin uninstall awino@awino`, and run `/reload-plugins` after updates.
+To update automatically, run `/plugin`, open **Marketplaces**, select **awino**,
+and choose **Enable auto-update** (off by default for marketplaces outside
+Anthropic's). A standalone clone gets a daily check with `awino update --auto on`.
 Claude Code 2.1.186 or later is required for this release's plugin `settings.json`
 default-agent behavior; on older versions, select `awino` manually.
 

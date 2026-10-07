@@ -511,6 +511,31 @@ def build_modes(awino_home: Path) -> list[Mode]:
     ]
 
 
+def add_missing(awino_home: Path, project: Path) -> list[tuple[ModeTarget, str]]:
+    """Install A.W.I.N.O. modes a target lacks, so an update brings new modes along.
+
+    Only touches mode files that already hold at least one A.W.I.N.O. mode: the
+    user opted in there. Existing modes, including edited A.W.I.N.O. ones, are
+    never overwritten. Returns (target, slug) for each mode added.
+    """
+    added: list[tuple[ModeTarget, str]] = []
+    wanted = build_modes(awino_home)
+    for target in detected(project):
+        try:
+            existing = {m.get("slug") for m in _load(target.path)}
+        except ValueError:
+            continue  # a corrupt file is the user's to fix, never ours to rewrite
+        if not any(str(slug).startswith("awino") for slug in existing):
+            continue
+        for mode in wanted:
+            if mode.slug in existing:
+                continue
+            outcome, _detail = install(mode, target)
+            if outcome not in {"SKIPPED", "FAILED"}:
+                added.append((target, mode.slug))
+    return added
+
+
 def as_json(awino_home: Path) -> str:
     """Emit the modes as JSON, for a tool that wants to import them directly."""
     return json.dumps([m.to_dict() for m in build_modes(awino_home)], indent=2)

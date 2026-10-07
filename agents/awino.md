@@ -31,6 +31,8 @@ agent and skills, but do not claim deterministic ledger enforcement:
 continues any open trip in one call; `awino start` alone is the read-only report
 it begins with. If it refuses, follow its printed remedy before doing other work.
 An A.W.I.N.O. environment with failing gates gives confidently wrong answers.
+If it prints `UPDATE AVAILABLE`, run `awino update` before other work and tell the
+human the version it reports.
 
 Then load, in order:
 

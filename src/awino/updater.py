@@ -7,8 +7,14 @@ import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
+import yaml
+
 from awino.ownership import MANIFEST_NAME
-from awino.paths import project_state_dir
+from awino.paths import project_state_dir, user_config_dir
+
+AUTO_FILE = "update.yaml"
+AUTO_EVERY_HOURS = 20
+FETCH_TIMEOUT_SECONDS = 8
 
 
 class PreflightError(RuntimeError):
@@ -17,8 +23,12 @@ class PreflightError(RuntimeError):
         self.backup = backup
 
 
-def _git(source: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["git", *args], cwd=source, capture_output=True, text=True, check=False)
+def _git(
+    source: Path, *args: str, timeout: float | None = None
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args], cwd=source, capture_output=True, text=True, check=False, timeout=timeout
+    )
 
 
 def _copy(source: Path, destination: Path) -> None:
@@ -123,3 +133,97 @@ def restore(backup: Path, project: Path, harness_paths: list[Path]) -> list[Path
             _copy(source, destination)
             restored.append(destination)
     return restored
+
+
+# ── the update check: explicit, or opt-in once a day ────────────────────────
+
+
+def check_remote(source: Path, timeout: float = FETCH_TIMEOUT_SECONDS) -> tuple[int | None, str]:
+    """Fetch the upstream and count commits this clone is behind.
+
+    Returns (behind, detail); behind is None when the check could not run
+    (not a clone, no upstream, offline). Only remote-tracking refs change: the
+    running code is never touched, which stays ``awino update``'s job.
+    """
+    inside = _git(source, "rev-parse", "--is-inside-work-tree")
+    if inside.returncode != 0 or inside.stdout.strip() != "true":
+        return None, "not a Git checkout"
+    upstream = _git(source, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+    if upstream.returncode != 0:
+        return None, "no upstream configured"
+    try:
+        fetched = _git(source, "fetch", "--quiet", timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return None, f"no answer from the remote within {timeout:g}s"
+    if fetched.returncode != 0:
+        return None, "could not reach the remote"
+    counts = _git(source, "rev-list", "--count", "HEAD..@{u}")
+    if counts.returncode != 0:
+        return None, "upstream comparison failed"
+    behind = int(counts.stdout.strip() or 0)
+    return behind, f"{upstream.stdout.strip()}: behind={behind}"
+
+
+def _auto_path() -> Path:
+    return user_config_dir() / AUTO_FILE
+
+
+def auto_settings() -> dict:
+    path = _auto_path()
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) if path.is_file() else {}
+    except (OSError, yaml.YAMLError):
+        data = {}
+    return data if isinstance(data, dict) else {}
+
+
+def _save_auto(data: dict) -> Path:
+    path = _auto_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(data, sort_keys=True), encoding="utf-8")
+    return path
+
+
+def set_auto(on: bool) -> Path:
+    data = auto_settings()
+    data["auto_check"] = bool(on)
+    return _save_auto(data)
+
+
+def auto_check(source: Path, now: datetime | None = None) -> str | None:
+    """The opt-in daily check that ``awino start`` runs.
+
+    With ``awino update --auto on``, at most once every AUTO_EVERY_HOURS this
+    fetches the upstream (time-boxed) and returns a line to show when new
+    commits exist. Off by default: startup then stays network-free.
+    """
+    data = auto_settings()
+    if not data.get("auto_check"):
+        return None
+    now = now or datetime.now(UTC)
+    last = data.get("last_check")
+    try:
+        last_at = datetime.fromisoformat(str(last)) if last else None
+    except ValueError:
+        last_at = None
+    if last_at is not None and (now - last_at).total_seconds() < AUTO_EVERY_HOURS * 3600:
+        pending = int(data.get("behind") or 0)
+        return _update_line(pending) if pending else None
+    behind, _detail = check_remote(source)
+    data["last_check"] = now.isoformat(timespec="seconds")
+    if behind is not None:
+        data["behind"] = behind
+    _save_auto(data)
+    return _update_line(behind) if behind else None
+
+
+def _update_line(behind: int) -> str:
+    return f"UPDATE AVAILABLE  {behind} new commit(s) upstream; run: awino update"
+
+
+def clear_pending() -> None:
+    """After a successful update nothing is pending until the next check."""
+    data = auto_settings()
+    if data.get("behind"):
+        data["behind"] = 0
+        _save_auto(data)

@@ -17,7 +17,9 @@ Run `awino --version` (or check if `~/.local/bin/awino.ps1` exists on Windows).
   ```powershell
   awino start          # reports 'A.W.I.N.O. freshness: ahead=N behind=M'
   ```
-  If `behind > 0`, run `awino update`. **Safe rebase contract:** `awino update` snapshots and preserves your target project's `.awino/project.yaml`, `.awino/memory/`, `.seeds`, and ledger history—it updates the engine and knowledge base without overwriting project intent.
+  If `behind > 0`, run `awino update`. `awino update --check` looks upstream right now, and
+  `awino update --auto on` makes every new session check once a day and print
+  `UPDATE AVAILABLE` when there is one. **Safe rebase contract:** `awino update` snapshots and preserves your target project's `.awino/project.yaml`, `.awino/memory/`, `.seeds`, and ledger history—it updates the engine and knowledge base without overwriting project intent.
 - **If NOT installed on this machine:** Clone it once into a central directory (e.g. `~/.local/share/awino` or user tools directory, **never** inside the human's target project directory), and run the installer:
 
   Windows (PowerShell):
