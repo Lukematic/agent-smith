@@ -29,7 +29,14 @@ from pathlib import Path
 from awino.enforce import MAX_ATTEMPTS, Ledger
 from awino.health import Health, Result, run_all
 from awino.paths import AwinoPaths
-from awino.skill_catalog import Recommendation, Skill, SkillCatalog, _tokens
+from awino.skill_catalog import (
+    Recommendation,
+    Skill,
+    SkillCatalog,
+    _tokens,
+    clear_intent,
+    intent_scores,
+)
 from awino.spawn import (
     Assignment,
     Role,
@@ -85,11 +92,12 @@ def _rank_all(request: str, catalog: SkillCatalog) -> list[Recommendation]:
     instead of only the winner, since ambiguity detection needs to see the
     runner-up."""
     words = _tokens(request)
+    phrases = intent_scores(request)
     ranked: list[Recommendation] = []
     for skill in catalog.skills:
         name_matches = tuple(sorted(words & _tokens(skill.name)))
         description_matches = tuple(sorted(words & _tokens(skill.description)))
-        score = 3 * len(name_matches) + len(description_matches)
+        score = 3 * len(name_matches) + len(description_matches) + phrases.get(skill.name, 0)
         if score:
             ranked.append(Recommendation(skill, score, name_matches, description_matches))
     ranked.sort(key=lambda item: (-item.score, item.skill.precedence, item.skill.name))
@@ -110,7 +118,11 @@ def decide(request: str, catalog: SkillCatalog) -> DispatchDecision:
             alternatives=(),
             confidence="high",
             question=None,
-            rationale=f"concrete failure vocabulary matched {intent.skill.name}",
+            rationale=(
+                f"intent phrase matched {intent.skill.name}"
+                if clear_intent(request, {intent.skill.name})
+                else f"concrete failure vocabulary matched {intent.skill.name}"
+            ),
         )
 
     ranked = _rank_all(request, catalog)

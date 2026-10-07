@@ -21,6 +21,7 @@ snapshot/restore deliberately does not own.
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 from collections.abc import Callable
@@ -93,6 +94,17 @@ def discover_verification(project: Path) -> tuple[str, str] | None:
     pyproject = project / "pyproject.toml"
     if pyproject.is_file() and "[tool.pytest" in pyproject.read_text(encoding="utf-8"):
         return "pytest -q", "pyproject.toml [tool.pytest]"
+    package = project / "package.json"
+    if package.is_file():
+        try:
+            scripts = json.loads(package.read_text(encoding="utf-8")).get("scripts") or {}
+        except (OSError, ValueError):
+            scripts = {}
+        test = str(scripts.get("test") or "")
+        if test and "no test specified" not in test:
+            return "npm test", "package.json scripts.test"
+    if (project / "tests").is_dir() or any(project.glob("test_*.py")):
+        return "python -m pytest -q", "Python test files"
     return None
 
 

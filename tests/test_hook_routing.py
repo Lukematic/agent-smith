@@ -105,6 +105,11 @@ class TestSessionStartRequiresConfirmedProjectIntent:
         assert "What outcome should this project create" in out
         assert "awino onboard --set mission" in out
         assert "Do not invent or silently confirm project goals" in out
+        # Small direct requests are not held hostage to setup questions.
+        assert "go ahead now" in out
+        # SessionStart stdout is plain-text context; a JSON envelope here once
+        # named the wrong event and reached the model as raw JSON.
+        assert "hookEventName" not in out
 
     def test_confirmed_project_yaml_injects_memory_not_setup_request(self, tmp_path: Path) -> None:
         project = _project(tmp_path)
