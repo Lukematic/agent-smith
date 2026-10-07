@@ -131,3 +131,42 @@ class TestUpdateCheckStandaloneClone:
         assert result.exit_code == 0, result.output
         assert "UPDATED" in result.output
         assert (origin / "README.md").read_text(encoding="utf-8") == "v2 from elsewhere\n"
+
+    def test_plugin_install_still_updates_the_clone_kilo_runs_from(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """The field bug: Claude Code's plugin was updated to the new version,
+        but the Kilo CLI kept running the old clone because update stopped
+        after the plugin."""
+        remote, origin = self._make_remote_and_clone(tmp_path)
+        other_clone = tmp_path / "other-clone"
+        _git(tmp_path, "clone", str(remote), str(other_clone))
+        _git(other_clone, "config", "user.email", "test@example.com")
+        _git(other_clone, "config", "user.name", "test")
+        (other_clone / "README.md").write_text("v2\n", encoding="utf-8")
+        _git(other_clone, "commit", "-am", "v2")
+        _git(other_clone, "push", "origin", "main")
+
+        home = tmp_path / "home"
+        (home / ".claude").mkdir(parents=True)
+        (home / ".claude" / "settings.json").write_text(
+            json.dumps({"enabledPlugins": {"awino@awino": True}}), encoding="utf-8"
+        )
+        monkeypatch.setattr(Path, "home", lambda: home)
+        calls: list[list[str]] = []
+
+        def fake_run(args, **kwargs):
+            if args and args[0] == "claude":
+                calls.append(list(args))
+                return subprocess.CompletedProcess(args, 0, "ok", "")
+            return real_run(args, **kwargs)
+
+        real_run = subprocess.run
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.chdir(origin)
+        result = CliRunner().invoke(cli.app, ["update"])
+        assert result.exit_code == 0, result.output
+        assert "DETECTED  Claude Code plugin install" in result.output
+        assert "DETECTED  standalone clone" in result.output
+        assert ["claude", "plugin", "update", "awino@awino"] in calls
+        assert (origin / "README.md").read_text(encoding="utf-8") == "v2\n"

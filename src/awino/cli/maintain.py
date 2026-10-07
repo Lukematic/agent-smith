@@ -84,6 +84,9 @@ def knowledge_update() -> None:
 @app.command("update-preflight")
 def update_preflight_command(
     pull: bool = typer.Option(True, "--pull/--no-pull", help="Fetch and fast-forward after checks"),
+    keep_local: bool = typer.Option(
+        False, "--keep-local", help="Set local changes aside, update, and put them back."
+    ),
 ) -> None:
     """Snapshot user state and safely fast-forward a clean source clone."""
     workspace = _workspace()
@@ -95,16 +98,27 @@ def update_preflight_command(
         backup = updater.snapshot(workspace.home.root, workspace.project.root, harness_paths)
         _echo(f"BACKUP  {backup}")
         return
+    notes: list[str] = []
     try:
         backup = updater.update_preflight(
-            workspace.home.root, workspace.project.root, harness_paths
+            workspace.home.root,
+            workspace.project.root,
+            harness_paths,
+            keep_local=keep_local,
+            report=notes,
         )
     except updater.PreflightError as exc:
+        for note in notes:
+            _echo(note)
         _echo(f"BACKUP  {exc.backup}")
         _echo(f"REFUSED  {exc}")
         raise typer.Exit(1) from exc
+    for note in notes:
+        _echo(note)
     _echo(f"BACKUP  {backup}")
-    _echo("UPDATED  source is clean and fast-forwarded")
+    _echo(
+        "UPDATED  source fast-forwarded" if notes else "UPDATED  source is clean and fast-forwarded"
+    )
 
 
 @app.command("update")
@@ -117,6 +131,11 @@ def update_command(
         "--auto",
         help="on: every new session checks upstream once a day and says when an "
         "update is waiting. off: startup stays offline. status: show the setting.",
+    ),
+    keep_local: bool = typer.Option(
+        False,
+        "--keep-local",
+        help="The clone has local changes: back up, set them aside, update, put them back.",
     ),
 ) -> None:
     """Update A.W.I.N.O. itself the right way for how it is installed here.
@@ -157,6 +176,7 @@ def update_command(
             else "UP TO DATE"
         )
         return
+    plugin_failed = False
     if _detect_claude_plugin():
         _echo("DETECTED  Claude Code plugin install")
         marketplace = subprocess.run(
@@ -170,8 +190,9 @@ def update_command(
             _echo(
                 f"FAILED  marketplace update: {marketplace.stderr.strip() or marketplace.stdout.strip()}"
             )
-            raise typer.Exit(1)
-        _echo(marketplace.stdout.strip())
+            plugin_failed = True
+        else:
+            _echo(marketplace.stdout.strip())
         plugin_update = subprocess.run(
             ["claude", "plugin", "update", "awino@awino"],
             capture_output=True,
@@ -183,11 +204,17 @@ def update_command(
             _echo(
                 f"FAILED  plugin update: {plugin_update.stderr.strip() or plugin_update.stdout.strip()}"
             )
-            raise typer.Exit(1)
-        _echo(plugin_update.stdout.strip())
-        _echo("Restart Claude Code (or /reload-plugins) for the update to take effect.")
-        _echo(f"VERSION  {_version()}")
-        return
+            plugin_failed = True
+        else:
+            _echo(plugin_update.stdout.strip())
+            _echo("Restart Claude Code (or /reload-plugins) for the update to take effect.")
+        # Kilo, Roo, and the terminal run from a standalone clone, which the
+        # plugin update never touches. Update it too when this CLI runs from one.
+        if not updater.is_clone(_workspace().home.root):
+            _echo(f"VERSION  {_version()}")
+            if plugin_failed:
+                raise typer.Exit(1)
+            return
 
     _echo("DETECTED  standalone clone")
     workspace = _workspace()
@@ -195,17 +222,28 @@ def update_command(
     harness_paths = mode_paths + [
         target.persona_path for target in harness.discover(workspace.project.root)
     ]
+    notes: list[str] = []
     try:
         backup = updater.update_preflight(
-            workspace.home.root, workspace.project.root, harness_paths
+            workspace.home.root,
+            workspace.project.root,
+            harness_paths,
+            keep_local=keep_local,
+            report=notes,
         )
     except updater.PreflightError as exc:
+        for note in notes:
+            _echo(note)
         _echo(f"BACKUP  {exc.backup}")
         _echo(f"REFUSED  {exc}")
         _echo(f"VERSION  {_version()}  (unchanged)")
         raise typer.Exit(1) from exc
+    for note in notes:
+        _echo(note)
     _echo(f"BACKUP  {backup}")
-    _echo("UPDATED  source is clean and fast-forwarded")
+    _echo(
+        "UPDATED  source fast-forwarded" if notes else "UPDATED  source is clean and fast-forwarded"
+    )
 
     workspace.ensure_state()
     # Rebase-style second half: project state was snapshotted and restored above;

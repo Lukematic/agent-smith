@@ -196,6 +196,12 @@ The agent runs `awino update` before other work and tells you the new version.
 `awino update --check` looks right now without changing anything, and
 `awino update --auto off` returns startup to fully offline.
 
+If your clone has local changes, `awino update` refuses and names the files.
+They are safe. `awino update --keep-local` backs up, sets them aside, updates,
+and puts them back; if one conflicts with the new version, the clone stays on
+the new version and your change stays in `git stash list`, never lost. When both
+the Claude Code plugin and a clone are installed, `awino update` updates both.
+
 An update also adds any new A.W.I.N.O. editor modes (such as 🧠 A.W.I.N.O.
 Brain) to the Kilo or Roo mode files that already hold A.W.I.N.O. modes. Your
 own modes, and any A.W.I.N.O. mode you edited, are left as they are.
