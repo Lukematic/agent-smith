@@ -33,10 +33,43 @@ the editor itself to enforce a narrower boundary:
 | A.W.I.N.O. Plan | Read, MCP, and Markdown-only edits; no commands |
 | A.W.I.N.O. Discover | Read and MCP only |
 | A.W.I.N.O. Research | Read and MCP only |
+| A.W.I.N.O. Brain | Read, MCP, `awino brain` commands, and Markdown-only edits |
 
 A.W.I.N.O. cannot silently change the mode selected in your editor. The primary
 controller can recommend a specialist mode, but it can continue by routing to the
 matching skill unless you choose to switch.
+
+### Brain mode
+
+Brain mode is a thinking partner for a messy problem: a sponsor's ask in a
+domain you don't know yet, or a new project space. Give it everything you have
+and it walks seven stages, each a Markdown file with a structural check:
+
+| Stage | What you get |
+| --- | --- |
+| problem | The problem in one plain sentence, facts vs assumptions, in and out of scope. **Pauses for your yes.** |
+| you | What you bring, what's new to you, your blindspots, where your interests fit |
+| options | What others have done, glaring holes, two or three options, a recommendation. **Pauses for your pick.** |
+| plan | A chain of three to six steps ("if we do A, we can do B"), each with a check someone else can verify |
+| report | `report.md`: two to four pages for a non-technical reader, with analogies and a clear ask |
+| notes | `speaker-notes.md`: your 30-second version, slides with what to say, where they'll get lost |
+| grow | What you learned and one blindspot to work on, added to your profile |
+
+Call it with the 🧠 A.W.I.N.O. Brain mode in Kilo, the `/awino-brain` skill in
+Claude Code, or directly:
+
+```bash
+awino brain start "Acme intake triage" --brief notes.md
+awino brain              # where the session stands and the next stage's prompt
+awino brain record problem
+awino brain confirm problem --note "yes, but add the vendor question"
+awino brain export ~/Documents/acme
+```
+
+The first time, Brain interviews you for a short profile (background,
+strengths, interests, what you want to get better at). It lives only at
+`~/.awino/brain/me.md` on your machine. Sessions live in `.awino/brain/`, which
+ignores itself in git.
 
 ## Install and verify
 
@@ -140,8 +173,32 @@ Reload the editor window after installing modes.
 ## Safe updates and rollback
 
 `awino start` reports cached freshness against the upstream branch
-(`ahead=N behind=M`) using only local Git metadata; it never fetches or pulls on
-its own, so starting a session cannot change the code underneath an active run.
+(`ahead=N behind=M`) using only local Git metadata; it never pulls on its own,
+so starting a session cannot change the code underneath an active run.
+
+### Staying current automatically
+
+**Claude Code plugin:** in Claude Code run `/plugin`, open **Marketplaces**,
+select **awino**, and choose **Enable auto-update**. Claude Code then refreshes
+it in the background after your first message and loads the new version in your
+next session (or after `/reload-plugins`). Third-party marketplaces start with
+auto-update off, so this one switch is needed once.
+
+**Standalone clone (Kilo, Roo, the CLI):** turn on the daily check once:
+
+```bash
+awino update --auto on
+```
+
+Each new session then looks upstream at most once a day (a few seconds,
+skipped quietly when offline) and prints `UPDATE AVAILABLE` when there is one.
+The agent runs `awino update` before other work and tells you the new version.
+`awino update --check` looks right now without changing anything, and
+`awino update --auto off` returns startup to fully offline.
+
+An update also adds any new A.W.I.N.O. editor modes (such as 🧠 A.W.I.N.O.
+Brain) to the Kilo or Roo mode files that already hold A.W.I.N.O. modes. Your
+own modes, and any A.W.I.N.O. mode you edited, are left as they are.
 
 To update A.W.I.N.O. itself, say "update A.W.I.N.O." or run:
 

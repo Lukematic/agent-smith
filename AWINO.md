@@ -29,6 +29,8 @@ reads in isolation.
 
 If `best` reports a health refusal, say so and offer to fix it before other work.
 An A.W.I.N.O. installation with a failing environment gives confident wrong answers.
+If it prints `UPDATE AVAILABLE`, run `awino update` first and tell the human the
+version it reports.
 
 Then read, in order:
 
@@ -283,6 +285,7 @@ record the truthful `loaded` or `used` state:
 
 | Trigger | Skill | What it does |
 | --- | --- | --- |
+| brainstorm, sponsor problem, proposal, whitepaper, "brain mode" | `awino-brain` | frame the problem, map the human, options, chain, plain-language report and speaker notes |
 | raw idea, sparse repo, unclear mission | `awino-discover` | one-question-at-a-time mission and requirements handshake |
 | "what is X", "how should I do X" | `awino-consult` | grounded answer, ≤3 files, every claim cited |
 | "my agent does X wrong" | `awino-triage` | named mode, surface, structural fix, recurrence block |

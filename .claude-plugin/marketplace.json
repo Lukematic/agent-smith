@@ -11,7 +11,7 @@
       "name": "awino",
       "source": "./",
       "description": "Agentic workflow orchestration with explicit plans, evidence, and completion gates.",
-      "version": "0.8.1",
+      "version": "0.9.0",
       "author": {
         "name": "Luke Awino"
       },
@@ -22,6 +22,7 @@
         "./skills/awino-author-agent",
         "./skills/awino-author-tool",
         "./skills/awino-bootstrap",
+        "./skills/awino-brain",
         "./skills/awino-config-review",
         "./skills/awino-consult",
         "./skills/awino-delegate",

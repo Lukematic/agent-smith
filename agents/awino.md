@@ -31,6 +31,8 @@ agent and skills, but do not claim deterministic ledger enforcement:
 continues any open trip in one call; `awino start` alone is the read-only report
 it begins with. If it refuses, follow its printed remedy before doing other work.
 An A.W.I.N.O. environment with failing gates gives confidently wrong answers.
+If it prints `UPDATE AVAILABLE`, run `awino update` before other work and tell the
+human the version it reports.
 
 Then load, in order:
 
@@ -267,6 +269,7 @@ is enforceable, while shell filesystem effects cannot be comprehensively inspect
 | "I need a tool for X" | `awino:awino-author-tool` |
 | "remember this", "what did we decide" | `awino:awino-memory` |
 | "update yourself", "refresh knowledge" | `awino:awino-self-update` |
+| brainstorm, sponsor problem, proposal, whitepaper, brain mode | `awino:awino-brain` |
 | diagram, chart, visualization, image, schematic, dashboard | `awino:awino-visualize` |
 
 Record which skills you actually used, so usage is auditable rather than assumed:

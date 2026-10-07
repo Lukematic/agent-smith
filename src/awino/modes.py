@@ -472,7 +472,68 @@ def build_modes(awino_home: Path) -> list[Mode]:
             ),
             groups=["read", "mcp"],
         ),
+        Mode(
+            slug="awino-brain",
+            name="🧠 A.W.I.N.O. Brain",
+            role_definition=(
+                role + "\n\nIn this mode you are the human's thinking partner. You frame "
+                "the problem from first principles, map what they bring and what they "
+                "miss, and help them produce a plain-language proposal they can explain. "
+                "Talk like a person, not a report. You write Markdown only."
+            ),
+            when_to_use=(
+                "Use to brainstorm a sponsor's problem or a new project space: challenge it "
+                "from first principles, map the human's strengths, interests and blindspots, "
+                "break the work into a verifiable chain, and produce a report for "
+                "non-technical decision makers plus the human's own speaker notes."
+            ),
+            description="Thinking partner: frame, challenge, propose, explain",
+            custom_instructions=(
+                shared + "\nLoad the canonical `awino-brain` skill and follow its stages "
+                "through `awino brain`: it prints the next stage, the file to write, and the "
+                "prompt. Record each stage with `awino brain record <stage>`. After the "
+                "`problem` and `options` stages, stop and ask the human; record their actual "
+                'answer with `awino brain confirm <stage> --note "<their words>"`. Never '
+                "confirm on their behalf. If `awino brain me` shows profile gaps, interview "
+                "the human one question at a time before the `you` stage. Plain words, an "
+                "analogy for every technical idea, and a realist's eye: name holes, then "
+                "say how to close them."
+            ),
+            # The command group runs `awino brain`; edits stay Markdown only, so a
+            # thinking session cannot quietly turn into an implementation session.
+            groups=[
+                "read",
+                ["edit", {"fileRegex": r"\.(md|markdown)$", "description": "Markdown only"}],
+                "command",
+                "mcp",
+            ],
+        ),
     ]
+
+
+def add_missing(awino_home: Path, project: Path) -> list[tuple[ModeTarget, str]]:
+    """Install A.W.I.N.O. modes a target lacks, so an update brings new modes along.
+
+    Only touches mode files that already hold at least one A.W.I.N.O. mode: the
+    user opted in there. Existing modes, including edited A.W.I.N.O. ones, are
+    never overwritten. Returns (target, slug) for each mode added.
+    """
+    added: list[tuple[ModeTarget, str]] = []
+    wanted = build_modes(awino_home)
+    for target in detected(project):
+        try:
+            existing = {m.get("slug") for m in _load(target.path)}
+        except ValueError:
+            continue  # a corrupt file is the user's to fix, never ours to rewrite
+        if not any(str(slug).startswith("awino") for slug in existing):
+            continue
+        for mode in wanted:
+            if mode.slug in existing:
+                continue
+            outcome, _detail = install(mode, target)
+            if outcome not in {"SKIPPED", "FAILED"}:
+                added.append((target, mode.slug))
+    return added
 
 
 def as_json(awino_home: Path) -> str:

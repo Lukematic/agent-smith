@@ -17,7 +17,9 @@ Run `awino --version` (or check if `~/.local/bin/awino.ps1` exists on Windows).
   ```powershell
   awino start          # reports 'A.W.I.N.O. freshness: ahead=N behind=M'
   ```
-  If `behind > 0`, run `awino update`. **Safe rebase contract:** `awino update` snapshots and preserves your target project's `.awino/project.yaml`, `.awino/memory/`, `.seeds`, and ledger history—it updates the engine and knowledge base without overwriting project intent.
+  If `behind > 0`, run `awino update`. `awino update --check` looks upstream right now, and
+  `awino update --auto on` makes every new session check once a day and print
+  `UPDATE AVAILABLE` when there is one. **Safe rebase contract:** `awino update` snapshots and preserves your target project's `.awino/project.yaml`, `.awino/memory/`, `.seeds`, and ledger history—it updates the engine and knowledge base without overwriting project intent.
 - **If NOT installed on this machine:** Clone it once into a central directory (e.g. `~/.local/share/awino` or user tools directory, **never** inside the human's target project directory), and run the installer:
 
   Windows (PowerShell):
@@ -98,7 +100,7 @@ claude plugin marketplace add Lukematic/agent-smith
 claude plugin install awino@awino
 ```
 
-The native install provides the `awino` agent and all 16 canonical `awino-*` skills
+The native install provides the `awino` agent and all 17 canonical `awino-*` skills
 automatically. It does not initialize `.seeds` or `.awino`, install Python, or run a
 global shell installer. The deterministic gate ledger is an optional CLI layer and
 requires `uv`. Its launcher automatically creates or refreshes a locked `.venv`
@@ -164,7 +166,18 @@ working: the first command that touches state transparently migrates it to
 ## Optional modes
 
 The generated editor modes are: 🧭 A.W.I.N.O., 🧭 A.W.I.N.O. Consult,
-🧭 A.W.I.N.O. Plan, 🧭 A.W.I.N.O. Discover, and 🧭 A.W.I.N.O. Research.
+🧭 A.W.I.N.O. Plan, 🧭 A.W.I.N.O. Discover, 🧭 A.W.I.N.O. Research, and
+🧠 A.W.I.N.O. Brain.
+
+**Brain mode** is a thinking partner for a messy problem, such as a sponsor's ask
+in a domain you don't know yet. It walks seven stages: get the problem right,
+map what you bring (and your blindspots), look at what others have done and
+choose, break the work into a chain of verifiable steps, write a plain-language
+report for non-technical decision makers, and prepare your own speaker notes.
+It pauses for your answer twice: once to confirm the problem, once to pick
+the approach. Call it with the Kilo mode, the `/awino-brain` skill in Claude
+Code, or `awino brain` from any terminal. Sessions stay out of git, and your
+profile (`~/.awino/brain/me.md`) never leaves your machine.
 
 ## Reference documentation
 

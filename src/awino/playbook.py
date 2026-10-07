@@ -69,6 +69,7 @@ _CLASS_FOR_SKILL: dict[str, str] = {
     "awino-discover": "research",
     "awino-config-review": "research",
     "awino-visualize": "question",
+    "awino-brain": "question",
     "awino-memory": "question",
     "awino-self-update": "question",
     "awino-reproducibility": "code-change",

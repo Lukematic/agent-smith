@@ -1469,6 +1469,9 @@ def start_command(
     _echo(f"Next recommended action: {next_action}")
     _echo(f"Route skill: {route_skill}")
     _echo(f"A.W.I.N.O. freshness: {updater.cached_freshness(workspace.home.root)}")
+    waiting = updater.auto_check(workspace.home.root)
+    if waiting:
+        _echo(waiting)
     objective_for_recall = (
         inspected.run.objective
         if inspected.status == "active" and inspected.run is not None

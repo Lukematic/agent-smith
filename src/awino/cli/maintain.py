@@ -108,7 +108,17 @@ def update_preflight_command(
 
 
 @app.command("update")
-def update_command() -> None:
+def update_command(
+    check: bool = typer.Option(
+        False, "--check", help="Only look upstream and report; change nothing."
+    ),
+    auto: str = typer.Option(
+        None,
+        "--auto",
+        help="on: every new session checks upstream once a day and says when an "
+        "update is waiting. off: startup stays offline. status: show the setting.",
+    ),
+) -> None:
     """Update A.W.I.N.O. itself the right way for how it is installed here.
 
     Detects whether this machine uses the Claude Code plugin or a standalone
@@ -116,6 +126,37 @@ def update_command() -> None:
     does not need to remember two different procedures. Always ends by
     printing the version that is actually active afterward.
     """
+    if auto is not None:
+        choice = auto.strip().lower()
+        if choice not in {"on", "off", "status"}:
+            _echo("REFUSED  --auto takes on, off, or status")
+            raise typer.Exit(2)
+        if choice != "status":
+            path = updater.set_auto(choice == "on")
+            _echo(f"AUTO_CHECK  {choice}  ({path})")
+        settings = updater.auto_settings()
+        state = "on" if settings.get("auto_check") else "off"
+        _echo(f"AUTO_CHECK  {state}  last check: {settings.get('last_check') or 'never'}")
+        if choice == "on":
+            _echo(
+                "Each new session now checks upstream at most once a day and prints "
+                "UPDATE AVAILABLE when there is one. Claude Code plugin installs update "
+                "through /plugin > Marketplaces > awino > Enable auto-update instead."
+            )
+        return
+    if check:
+        workspace = _workspace()
+        behind, detail = updater.check_remote(workspace.home.root)
+        if behind is None:
+            _echo(f"CHECK  skipped: {detail}")
+            raise typer.Exit(1)
+        _echo(f"CHECK  {detail}")
+        _echo(
+            f"UPDATE AVAILABLE  {behind} new commit(s); run: awino update"
+            if behind
+            else "UP TO DATE"
+        )
+        return
     if _detect_claude_plugin():
         _echo("DETECTED  Claude Code plugin install")
         marketplace = subprocess.run(
@@ -190,6 +231,9 @@ def update_command() -> None:
         )
     for action in harness.repair_kilo_project(workspace.home.root, workspace.project.root):
         _echo(f"KILO  {action.outcome:<10} {action.path}  {action.detail}")
+    for target, slug in modes.add_missing(workspace.home.root, workspace.project.root):
+        _echo(f"MODE  ADDED      {slug}  ->  {target.path}")
+    updater.clear_pending()
 
     health_results = health.run_all(_paths(), fast=True)
     failing_health = [r for r in health_results if r.blocking]
