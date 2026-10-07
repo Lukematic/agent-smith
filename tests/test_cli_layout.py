@@ -29,7 +29,8 @@ CLI_PACKAGE = SRC / "cli"
 # loop explain / loop probe-answer / loop suggest / loop suggest-answer
 # (critical thinking modes, Phase 2), loop confirm-problem (the lawyer move:
 # applicability check, Phase 2), release verify / publish / push / tag
-# (release gate, Phase 5). 115 names.
+# (release gate, Phase 5), brain start / stage / record / confirm / me /
+# list / use / export (Brain mode). 124 names.
 PRE_SPLIT_COMMANDS = frozenset(
     {
         "ask",
@@ -86,6 +87,14 @@ PRE_SPLIT_COMMANDS = frozenset(
         "ladder",
         "limits",
         "link",
+        "brain confirm",
+        "brain export",
+        "brain list",
+        "brain me",
+        "brain record",
+        "brain stage",
+        "brain start",
+        "brain use",
         "buddy check",
         "buddy health",
         "loop approve",
@@ -237,8 +246,8 @@ class TestCommandSurfaceIsUnchanged:
         )
 
     def test_command_count_is_exactly_the_registered_set(self) -> None:
-        assert len(PRE_SPLIT_COMMANDS) == 116
-        assert len(_registered(cli.app)) == 116
+        assert len(PRE_SPLIT_COMMANDS) == 124
+        assert len(_registered(cli.app)) == 124
 
     def test_public_entry_points_survive(self) -> None:
         assert isinstance(cli.app, typer.Typer)

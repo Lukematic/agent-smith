@@ -259,6 +259,7 @@ def _require_valid_plan(ledger: Ledger, run_id: str) -> None:
 # Command modules register themselves against the apps above on import. This
 # must stay at the bottom: each module imports the helpers defined here.
 from awino.cli import (  # noqa: E402
+    brain,
     brief,
     buddy,
     dispatch,
@@ -273,12 +274,14 @@ from awino.cli import (  # noqa: E402
     think,
 )
 
+app.add_typer(brain.brain_app, name="brain")
 app.add_typer(buddy.buddy_app, name="buddy")
 app.add_typer(loopctl.loop_app, name="loop")
 app.add_typer(proof.proof_app, name="proof")
 app.add_typer(release.release_app, name="release")
 
 del (
+    brain,
     brief,
     buddy,
     dispatch,

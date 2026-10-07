@@ -13,6 +13,7 @@ CANONICAL_SKILLS = {
     "awino-author-agent",
     "awino-author-tool",
     "awino-bootstrap",
+    "awino-brain",
     "awino-config-review",
     "awino-consult",
     "awino-delegate",

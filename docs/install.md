@@ -25,7 +25,7 @@ Merely pasting the repository URL into chat cannot safely trigger installation.
 Plugin installation crosses a user trust boundary, so one explicit user action is
 required. The agent must not simulate consent by running a global Bash installer.
 
-The plugin supplies the `awino` agent and exactly 16 canonical `awino-*` skills. It
+The plugin supplies the `awino` agent and exactly 17 canonical `awino-*` skills. It
 does not initialize `.seeds` or `.awino`. A.W.I.N.O. asks before project setup and
 uses `awino work-init` after approval.
 

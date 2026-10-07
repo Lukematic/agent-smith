@@ -267,6 +267,7 @@ is enforceable, while shell filesystem effects cannot be comprehensively inspect
 | "I need a tool for X" | `awino:awino-author-tool` |
 | "remember this", "what did we decide" | `awino:awino-memory` |
 | "update yourself", "refresh knowledge" | `awino:awino-self-update` |
+| brainstorm, sponsor problem, proposal, whitepaper, brain mode | `awino:awino-brain` |
 | diagram, chart, visualization, image, schematic, dashboard | `awino:awino-visualize` |
 
 Record which skills you actually used, so usage is auditable rather than assumed:

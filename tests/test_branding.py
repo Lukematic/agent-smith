@@ -105,7 +105,7 @@ def test_active_surfaces_have_no_unclassified_smith_branding() -> None:
     assert not violations, "Unclassified legacy branding:\n" + "\n".join(violations)
 
 
-def test_canonical_skill_set_contains_only_sixteen_awino_skills() -> None:
+def test_canonical_skill_set_contains_only_seventeen_awino_skills() -> None:
     canonical = sorted(path.parent.name for path in ROOT.glob("skills/awino-*/SKILL.md"))
-    assert len(canonical) == 16
+    assert len(canonical) == 17
     assert all(name.startswith("awino-") for name in canonical)

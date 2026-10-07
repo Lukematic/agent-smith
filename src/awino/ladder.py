@@ -35,6 +35,8 @@ class LoopChoice:
 def choose(request: str, skill: str, verify: str | None, scope: list[str]) -> LoopChoice:
     verdict = detect_rung(request)
     rung = verdict.actual.name.lower()
+    if skill == "awino-brain":
+        return LoopChoice("direct", "brain mode runs its own staged session: awino brain", rung)
     if verdict.actual is Rung.PROMPT and skill in {
         "awino-consult",
         "awino-visualize",

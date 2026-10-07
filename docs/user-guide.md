@@ -33,10 +33,43 @@ the editor itself to enforce a narrower boundary:
 | A.W.I.N.O. Plan | Read, MCP, and Markdown-only edits; no commands |
 | A.W.I.N.O. Discover | Read and MCP only |
 | A.W.I.N.O. Research | Read and MCP only |
+| A.W.I.N.O. Brain | Read, MCP, `awino brain` commands, and Markdown-only edits |
 
 A.W.I.N.O. cannot silently change the mode selected in your editor. The primary
 controller can recommend a specialist mode, but it can continue by routing to the
 matching skill unless you choose to switch.
+
+### Brain mode
+
+Brain mode is a thinking partner for a messy problem: a sponsor's ask in a
+domain you don't know yet, or a new project space. Give it everything you have
+and it walks seven stages, each a Markdown file with a structural check:
+
+| Stage | What you get |
+| --- | --- |
+| problem | The problem in one plain sentence, facts vs assumptions, in and out of scope. **Pauses for your yes.** |
+| you | What you bring, what's new to you, your blindspots, where your interests fit |
+| options | What others have done, glaring holes, two or three options, a recommendation. **Pauses for your pick.** |
+| plan | A chain of three to six steps ("if we do A, we can do B"), each with a check someone else can verify |
+| report | `report.md`: two to four pages for a non-technical reader, with analogies and a clear ask |
+| notes | `speaker-notes.md`: your 30-second version, slides with what to say, where they'll get lost |
+| grow | What you learned and one blindspot to work on, added to your profile |
+
+Call it with the 🧠 A.W.I.N.O. Brain mode in Kilo, the `/awino-brain` skill in
+Claude Code, or directly:
+
+```bash
+awino brain start "Acme intake triage" --brief notes.md
+awino brain              # where the session stands and the next stage's prompt
+awino brain record problem
+awino brain confirm problem --note "yes, but add the vendor question"
+awino brain export ~/Documents/acme
+```
+
+The first time, Brain interviews you for a short profile (background,
+strengths, interests, what you want to get better at). It lives only at
+`~/.awino/brain/me.md` on your machine. Sessions live in `.awino/brain/`, which
+ignores itself in git.
 
 ## Install and verify
 

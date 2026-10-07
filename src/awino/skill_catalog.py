@@ -250,6 +250,11 @@ def _intent_skill(words: set[str]) -> str | None:
         "slogan",
         "spis",
     }
+    # Brain mode first: "prepare a sponsor presentation" is a thinking job
+    # that ends in slides, not a request for a slide.
+    brain = {"brain", "brainstorm", "sponsor", "whitepaper", "proposal"}
+    if words & brain:
+        return "awino-brain"
     if words & presentation:
         return "awino-visualize"
     if words & concrete_failure:
