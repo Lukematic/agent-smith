@@ -124,7 +124,14 @@ def _question(m: Machine, ctx: StepContext) -> str:
 def _ladder(m: Machine, ctx: StepContext) -> str:
     from awino import heilmeier, ladder, recall
 
-    choice = ladder.choose(m.request, m.skill or "", ctx.verify, ctx.scope or [])
+    # The loop depends on whether a red-capable check exists. Look for the
+    # project's own test command here too, not only later at WORK; otherwise
+    # every request without --verify was sent to the heavy retry loop.
+    verify = ctx.verify
+    if not verify:
+        found = provision.discover_verification(ctx.project)
+        verify = found[0] if found else None
+    choice = ladder.choose(m.request, m.skill or "", verify, ctx.scope or [])
     m.loop, m.why = choice.loop, choice.why
     ctx.say(f"LOOP  {choice.loop}  ({choice.why}; stance={m.stance or 'advisor'})")
 
@@ -570,10 +577,17 @@ def run(
     m = machine.load(ctx.state_root)
     if request is None and m.node is Node.IDLE:
         return m, ['no open trip - say what you want: awino best "<request>"']
+
+    def keep(new: list[str]) -> list[str]:
+        # LOCATE re-runs after PROVISION; its report lines say the same thing twice.
+        return [
+            ln for ln in new if not (ln.startswith(("MISSION ", "RECALL ")) and ln in all_lines)
+        ]
+
     for _ in range(max_ticks):
         m, lines = step(ctx, request)
         request = None
-        all_lines += lines
+        all_lines += keep(lines)
         last = lines[-1] if lines else ""
         if last.endswith("(waiting)") or last.endswith("(done)") or m.node is Node.DONE:
             return m, all_lines

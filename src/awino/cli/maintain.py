@@ -631,8 +631,10 @@ def _run_hook(event: str) -> None:
             lines = [
                 "PROJECT_SETUP_REQUIRED",
                 "This project has no human-confirmed .awino/project.yaml.",
-                "Before substantive work, run 'awino onboard', ask the human its next question,",
-                "and persist each answer with the exact 'awino onboard --set key=value' command.",
+                "Small direct requests (a fix, a question, a brainstorm) go ahead now; do not",
+                "make the human answer setup questions first. Before planned or multi-step",
+                "work, run 'awino onboard', ask the human its next question, and persist each",
+                "answer with the exact 'awino onboard --set key=value' command.",
                 "Do not invent or silently confirm project goals.",
             ]
             if questions:
@@ -646,11 +648,14 @@ def _run_hook(event: str) -> None:
                 )
             else:
                 lines.append("READY TO CONFIRM: awino onboard --confirm")
-            _echo(project_guard.emit(project_guard.prompt_context("\n".join(lines))))
+            # SessionStart stdout is added to the model's context as plain text.
+            # A JSON envelope here named the wrong event (UserPromptSubmit) and was
+            # mixed with plain lines, so the model saw raw JSON.
+            _echo("\n".join(lines))
         _hook_freshness()
         block = _resume_block(workspace, session_id)
         if block:
-            _echo(project_guard.emit(project_guard.prompt_context("RESUME\n" + block)))
+            _echo("RESUME\n" + block)
         return
     if event == "pre-compact":
         block = _resume_block(workspace, session_id) or "(nothing unresolved)"
