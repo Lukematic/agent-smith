@@ -137,6 +137,12 @@ def update_command(
         "--keep-local",
         help="The clone has local changes: back up, set them aside, update, put them back.",
     ),
+    sync_only: bool = typer.Option(
+        False,
+        "--sync-only",
+        hidden=True,
+        help="Internal: the steps after the pull, run by the newly pulled code.",
+    ),
 ) -> None:
     """Update A.W.I.N.O. itself the right way for how it is installed here.
 
@@ -145,23 +151,30 @@ def update_command(
     does not need to remember two different procedures. Always ends by
     printing the version that is actually active afterward.
     """
+    if sync_only:
+        _sync_after_update(_workspace())
+        return
     if auto is not None:
         choice = auto.strip().lower()
-        if choice not in {"on", "off", "status"}:
-            _echo("REFUSED  --auto takes on, off, or status")
+        if choice not in {"on", "notify", "off", "status"}:
+            _echo("REFUSED  --auto takes on, notify, off, or status")
             raise typer.Exit(2)
         if choice != "status":
-            path = updater.set_auto(choice == "on")
+            path = updater.set_auto(choice != "off", apply=choice == "on")
             _echo(f"AUTO_CHECK  {choice}  ({path})")
         settings = updater.auto_settings()
-        state = "on" if settings.get("auto_check") else "off"
+        if not settings.get("auto_check"):
+            state = "off"
+        else:
+            state = "on" if settings.get("auto_apply", True) else "notify"
         _echo(f"AUTO_CHECK  {state}  last check: {settings.get('last_check') or 'never'}")
         if choice == "on":
             _echo(
-                "Each new session now checks upstream at most once a day and prints "
-                "UPDATE AVAILABLE when there is one. Claude Code plugin installs update "
-                "through /plugin > Marketplaces > awino > Enable auto-update instead."
+                "Each new session now checks upstream at most once a day and installs a "
+                "waiting update (the Claude Code plugin too), unless a run is open."
             )
+        elif choice == "notify":
+            _echo("Each new session checks once a day and prints UPDATE AVAILABLE; you run it.")
         return
     if check:
         workspace = _workspace()
@@ -218,6 +231,7 @@ def update_command(
 
     _echo("DETECTED  standalone clone")
     workspace = _workspace()
+    before = _git_head(workspace.home.root)
     mode_paths = [target.path for target in modes.discover(workspace.project.root)]
     harness_paths = mode_paths + [
         target.persona_path for target in harness.discover(workspace.project.root)
@@ -245,6 +259,40 @@ def update_command(
         "UPDATED  source fast-forwarded" if notes else "UPDATED  source is clean and fast-forwarded"
     )
 
+    # The pull brought new code, but this process is still the old one. Hand
+    # the rest of the update to the code now on disk, so changes to these
+    # steps take effect in the same `awino update`.
+    if before != _git_head(workspace.home.root):
+        handed = updater.relaunch(
+            workspace.home.root, workspace.project.root, "update", "--sync-only"
+        )
+        if handed is not None:
+            _echo(handed.stdout.rstrip())
+            if handed.returncode == 0:
+                _auto_default_on()
+                return
+            _echo("NOTE  the new version could not finish the update; finishing here")
+    _sync_after_update(workspace)
+    _auto_default_on()
+
+
+def _git_head(source: Path) -> str:
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=source, capture_output=True, text=True, check=False
+    )
+    return head.stdout.strip()
+
+
+def _auto_default_on() -> None:
+    """The first update turns on daily automatic updates; an explicit choice stays."""
+    if "auto_check" in updater.auto_settings():
+        return
+    updater.set_auto(True)
+    _echo("AUTO_UPDATE  on: new sessions install updates once a day (off: awino update --auto off)")
+
+
+def _sync_after_update(workspace) -> None:
+    """Everything after the pull, run by the newest code on disk."""
     workspace.ensure_state()
     # Rebase-style second half: project state was snapshotted and restored above;
     # now re-provision the environment it lives in. Auto-steps only - a question
@@ -269,8 +317,10 @@ def update_command(
         )
     for action in harness.repair_kilo_project(workspace.home.root, workspace.project.root):
         _echo(f"KILO  {action.outcome:<10} {action.path}  {action.detail}")
-    for target, slug in modes.add_missing(workspace.home.root, workspace.project.root):
-        _echo(f"MODE  ADDED      {slug}  ->  {target.path}")
+    for target, slug, outcome in modes.sync_awino_modes(
+        workspace.home.root, workspace.project.root
+    ):
+        _echo(f"MODE  {outcome:<10} {slug}  ->  {target.path}")
     updater.clear_pending()
 
     health_results = health.run_all(_paths(), fast=True)

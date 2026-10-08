@@ -1445,6 +1445,9 @@ def start_command(
     else:
         for step in provision_steps:
             _echo(f"MISSING  {step.kind.value}: {step.reason} (run 'awino start --fix')")
+        refreshed = harness.refresh_kilo_persona(workspace.home.root, workspace.project.root)
+        if refreshed is not None and refreshed.outcome == "INSTALLED":
+            _echo(f"KILO  refreshed {refreshed.path} to this version (new chats load it)")
         for problem in harness.kilo_project_drift(workspace.home.root, workspace.project.root):
             _echo(f"KILO_DRIFT  {problem} (run 'awino start --fix')")
 
@@ -1469,9 +1472,12 @@ def start_command(
     _echo(f"Next recommended action: {next_action}")
     _echo(f"Route skill: {route_skill}")
     _echo(f"A.W.I.N.O. freshness: {updater.cached_freshness(workspace.home.root)}")
-    waiting = updater.auto_check(workspace.home.root)
-    if waiting:
-        _echo(waiting)
+    for line in updater.auto_step(
+        workspace.home.root,
+        workspace.project.root,
+        active_run=inspected.status in {"active", "broken"},  # never under work in progress
+    ):
+        _echo(line)
     objective_for_recall = (
         inspected.run.objective
         if inspected.status == "active" and inspected.run is not None

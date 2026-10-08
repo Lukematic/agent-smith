@@ -178,23 +178,35 @@ so starting a session cannot change the code underneath an active run.
 
 ### Staying current automatically
 
-**Claude Code plugin:** in Claude Code run `/plugin`, open **Marketplaces**,
-select **awino**, and choose **Enable auto-update**. Claude Code then refreshes
-it in the background after your first message and loads the new version in your
-next session (or after `/reload-plugins`). Third-party marketplaces start with
-auto-update off, so this one switch is needed once.
+`awino update` is the one command. It updates everything this machine has:
+the Claude Code plugin (if installed), the clone that Kilo, Roo and the terminal
+run from, the skill copies in every harness, this project's Kilo agent, and
+A.W.I.N.O.'s own Kilo/Roo modes. After pulling, it hands the rest of the update to
+the code it just pulled, so a release that changes how updating works takes
+effect in that same run.
 
-**Standalone clone (Kilo, Roo, the CLI):** turn on the daily check once:
+The first `awino update` also turns on **automatic updates**: each new session
+checks GitHub at most once a day and, when a new version is waiting, installs it
+(the same as running `awino update`) and says `AUTO_UPDATED`. It never updates
+while a run is open in the project, and local changes in the clone are set aside
+and put back. Choose how much you want:
 
 ```bash
-awino update --auto on
+awino update --auto on       # check daily and install (the default after the first update)
+awino update --auto notify   # check daily and only say UPDATE AVAILABLE
+awino update --auto off      # never contact GitHub on startup
+awino update --check         # look right now, change nothing
 ```
 
-Each new session then looks upstream at most once a day (a few seconds,
-skipped quietly when offline) and prints `UPDATE AVAILABLE` when there is one.
-The agent runs `awino update` before other work and tells you the new version.
-`awino update --check` looks right now without changing anything, and
-`awino update --auto off` returns startup to fully offline.
+Each new chat also refreshes its project's `.kilo/agent/awino.md` when it is out
+of date and still exactly as A.W.I.N.O. wrote it, so every project catches up as
+you use it. A.W.I.N.O.'s own modes are rewritten to the new version (the modes
+file is backed up first); your own modes are never touched.
+
+**Claude Code plugin:** Claude Code can also update the plugin on its own: run
+`/plugin`, open **Marketplaces**, select **awino**, and choose **Enable
+auto-update**. Claude Code loads the new version in your next session (or after
+`/reload-plugins`).
 
 If your clone has local changes, `awino update` refuses and names the files.
 They are safe. `awino update --keep-local` backs up, sets them aside, updates,
@@ -202,9 +214,6 @@ and puts them back; if one conflicts with the new version, the clone stays on
 the new version and your change stays in `git stash list`, never lost. When both
 the Claude Code plugin and a clone are installed, `awino update` updates both.
 
-An update also adds any new A.W.I.N.O. editor modes (such as 🧠 A.W.I.N.O.
-Brain) to the Kilo or Roo mode files that already hold A.W.I.N.O. modes. Your
-own modes, and any A.W.I.N.O. mode you edited, are left as they are.
 
 To update A.W.I.N.O. itself, say "update A.W.I.N.O." or run:
 

@@ -123,17 +123,22 @@ def _slugs(path: Path) -> list[str]:
     return [m["slug"] for m in yaml.safe_load(path.read_text())["customModes"]]
 
 
-def test_update_adds_missing_awino_modes(home: Path, tmp_path: Path) -> None:
+def test_update_adds_and_refreshes_awino_modes_and_keeps_the_users_own(
+    home: Path, tmp_path: Path
+) -> None:
     project = tmp_path / "proj"
     project.mkdir()
     path = _modes_file(project, ["mine", "awino", "awino-consult"])
-    added = modes.add_missing(Path("/tmp/awino"), project)
-    assert "awino-brain" in {slug for _t, slug in added}
-    slugs = _slugs(path)
-    assert slugs[:3] == ["mine", "awino", "awino-consult"]
-    assert "awino-brain" in slugs
-    edited = yaml.safe_load(path.read_text())["customModes"][1]
-    assert edited["roleDefinition"] == "mine"  # an existing awino mode is never overwritten
+    changes = modes.sync_awino_modes(Path("/tmp/awino"), project)
+    outcome = {slug: o for _t, slug, o in changes}
+    assert outcome["awino-brain"] == "ADDED"
+    assert outcome["awino"] == "UPDATED" and outcome["awino-consult"] == "UPDATED"
+    entries = yaml.safe_load(path.read_text())["customModes"]
+    assert [m["slug"] for m in entries][:3] == ["mine", "awino", "awino-consult"]
+    assert entries[0]["roleDefinition"] == "mine"  # the user's own mode is untouched
+    assert entries[1]["roleDefinition"] != "mine"  # A.W.I.N.O.'s mode is current again
+    assert list((project / ".awino-backups").rglob(".kilocodemodes"))  # backed up first
+    assert modes.sync_awino_modes(Path("/tmp/awino"), project) == []  # nothing left to do
 
 
 def test_update_leaves_mode_files_without_awino_alone(home: Path, tmp_path: Path) -> None:
@@ -141,5 +146,85 @@ def test_update_leaves_mode_files_without_awino_alone(home: Path, tmp_path: Path
     project.mkdir()
     path = _modes_file(project, ["mine"])
     before = path.read_text()
-    assert modes.add_missing(Path("/tmp/awino"), project) == []
+    assert modes.sync_awino_modes(Path("/tmp/awino"), project) == []
     assert path.read_text() == before
+
+
+# ── a new session installs a waiting update by itself ───────────────────────
+
+
+class _Ran:
+    def __init__(self, code: int = 0, out: str = "MODE  ADDED  awino-brain\nVERSION  9.9.9\n"):
+        self.calls: list[tuple] = []
+        self.code, self.out = code, out
+
+    def __call__(self, source, project, *args):
+        self.calls.append(args)
+        return subprocess.CompletedProcess(args, self.code, self.out, "")
+
+
+def test_auto_step_installs_a_waiting_update(home: Path, clone, tmp_path: Path) -> None:
+    installed, seed = clone
+    updater.set_auto(True)
+    _push_new_commit(seed)
+    ran = _Ran()
+    lines = updater.auto_step(installed, tmp_path, active_run=False, runner=ran)
+    assert ran.calls == [("update", "--keep-local")]
+    assert lines[0].startswith("AUTO_UPDATED  A.W.I.N.O. 9.9.9 installed")
+    assert "MODE  ADDED  awino-brain" in lines
+
+
+def test_auto_step_never_updates_under_an_open_run(home: Path, clone, tmp_path: Path) -> None:
+    installed, seed = clone
+    updater.set_auto(True)
+    _push_new_commit(seed)
+    ran = _Ran()
+    lines = updater.auto_step(installed, tmp_path, active_run=True, runner=ran)
+    assert ran.calls == []
+    assert lines and "a run is open" in lines[0]
+
+
+def test_auto_notify_only_announces(home: Path, clone, tmp_path: Path) -> None:
+    installed, seed = clone
+    updater.set_auto(True, apply=False)
+    _push_new_commit(seed)
+    ran = _Ran()
+    lines = updater.auto_step(installed, tmp_path, active_run=False, runner=ran)
+    assert ran.calls == []
+    assert lines[0].startswith("UPDATE AVAILABLE")
+
+
+def test_a_failed_auto_update_says_so_and_how_to_finish(home: Path, clone, tmp_path: Path) -> None:
+    installed, seed = clone
+    updater.set_auto(True)
+    _push_new_commit(seed)
+    ran = _Ran(code=1, out="REFUSED  something\n")
+    lines = updater.auto_step(installed, tmp_path, active_run=False, runner=ran)
+    assert lines[0].startswith("AUTO_UPDATE_FAILED") and "REFUSED  something" in lines
+
+
+# ── each project's Kilo agent catches up by itself ──────────────────────────
+
+
+def test_start_refreshes_an_unedited_stale_kilo_agent(home: Path, tmp_path: Path) -> None:
+    from awino import harness
+
+    awino_home = Path(__file__).parents[1]
+    project = tmp_path / "proj"
+    project.mkdir()
+    harness.repair_kilo_project(awino_home, project)
+    persona = project / ".kilo" / "agent" / "awino.md"
+    current = persona.read_text(encoding="utf-8")
+    # Simulate an agent file written by an older version (installer-owned).
+    from awino import ownership
+
+    root = project / ".kilo"
+    ownership.safe_write(root, persona, "old agent\n", "persona", overwrite=True)
+    refreshed = harness.refresh_kilo_persona(awino_home, project)
+    assert refreshed is not None and refreshed.outcome == "INSTALLED"
+    assert persona.read_text(encoding="utf-8") == current
+
+    # A file the human edited is never rewritten.
+    persona.write_text("my own agent\n", encoding="utf-8")
+    assert harness.refresh_kilo_persona(awino_home, project) is None
+    assert persona.read_text(encoding="utf-8") == "my own agent\n"

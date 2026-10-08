@@ -30,7 +30,8 @@ reads in isolation.
 If `best` reports a health refusal, say so and offer to fix it before other work.
 An A.W.I.N.O. installation with a failing environment gives confident wrong answers.
 If it prints `UPDATE AVAILABLE`, run `awino update` first and tell the human the
-version it reports.
+version it reports. If it prints `AUTO_UPDATED`, the new version is already
+installed: tell the human and suggest a new chat to load it.
 
 Then read, in order:
 
