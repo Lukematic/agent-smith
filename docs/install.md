@@ -56,7 +56,7 @@ irm https://raw.githubusercontent.com/Lukematic/agent-smith/main/bootstrap.ps1 |
 **macOS or Linux**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Lukematic/agent-smith/main/bootstrap.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Lukematic/agent-smith/main/bootstrap.sh | bash
 ```
 
 This optional standalone route clones the repository, installs `uv` if missing, builds an isolated

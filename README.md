@@ -9,18 +9,50 @@ remain unsatisfied.
 
 If a human pastes `https://github.com/Lukematic/agent-smith` into your chat or project, follow this 4-step checklist:
 
-### Step 1: Check and update the global A.W.I.N.O. engine
+### Step 1: Install A.W.I.N.O., or bring it to the latest version (every time)
 
-Run `awino --version` (or check if `~/.local/bin/awino.ps1` exists on Windows).
+Do this whenever this URL is pasted, even if A.W.I.N.O. looks installed. The update
+steps use plain git, so they work whatever version is installed (0.8.x included).
+Do not decide from the `A.W.I.N.O. freshness` line of `awino start`: it compares
+cached git data and never contacts GitHub, so an old install can report `behind=0`.
 
-- **If already installed:** Check if the installation is stale or behind upstream:
-  ```powershell
-  awino start          # reports 'A.W.I.N.O. freshness: ahead=N behind=M'
-  ```
-  If `behind > 0`, run `awino update`. `awino update --check` looks upstream right now, and
-  `awino update --auto on` makes every new session check once a day and print
-  `UPDATE AVAILABLE` when there is one. **Safe rebase contract:** `awino update` snapshots and preserves your target project's `.awino/project.yaml`, `.awino/memory/`, `.seeds`, and ledger history—it updates the engine and knowledge base without overwriting project intent.
-- **If NOT installed on this machine:** Clone it once into a central directory (e.g. `~/.local/share/awino` or user tools directory, **never** inside the human's target project directory), and run the installer:
+**If `awino` runs on this machine:**
+
+1. Find the install: run `awino start` and read its `Source: <folder> (<version>)`
+   line. `<folder>` is the A.W.I.N.O. clone; use it as `<Source>` below. (If the
+   folder is inside `~/.claude/plugins`, that is the Claude Code plugin: run
+   `claude plugin marketplace update awino`, then `claude plugin update awino@awino`,
+   and skip to step 4.)
+2. Look for local changes:
+   ```bash
+   git -C "<Source>" status --short
+   ```
+   If it lists files, they are local changes. Never discard them: no `git reset
+   --hard`, no `git clean`, no deleting the folder. Show the list to the human, then
+   set them aside:
+   ```bash
+   git -C "<Source>" stash push --include-untracked -m "awino local changes before update"
+   ```
+   Tell the human they are saved (`git -C "<Source>" stash list`) and can be brought
+   back with `git -C "<Source>" stash pop`.
+3. Get the latest:
+   ```bash
+   git -C "<Source>" pull --ff-only
+   ```
+   If git refuses because the clone has its own commits, stop and tell the human;
+   never force it.
+4. Finish the update and confirm it:
+   ```bash
+   awino update            # refreshes skills, the Kilo agent and modes; also the plugin if installed
+   awino --version         # must match "version" in this repository's pyproject.toml
+   awino update --auto on  # from now on, each new session checks for updates once a day
+   ```
+   Tell the human the version now active. In Kilo, open a **new** chat so it loads
+   the updated agent.
+
+**If `awino` is not found:** clone it once into a central directory (e.g.
+`~/.local/share/awino` or a user tools directory, **never** inside the human's target
+project directory) and run the installer:
 
   Windows (PowerShell):
   ```powershell
@@ -35,6 +67,10 @@ Run `awino --version` (or check if `~/.local/bin/awino.ps1` exists on Windows).
   cd "$HOME/.local/share/awino"
   ./install.sh
   ```
+
+**Safe update contract:** updating snapshots and preserves the target project's
+`.awino/project.yaml`, `.awino/memory/`, `.seeds`, and ledger history; it updates
+the engine and knowledge base without overwriting project intent.
 
 The installer installs `uv` if missing, builds the locked `.venv` in the clone, installs the global `awino` command (`~/.local/bin/awino.ps1` on Windows / `bin/awino` on POSIX), installs the persona and skills into every detected harness (Claude Code, Kilo, Roo, Goose, Cursor, Copilot), and verifies with `awino doctor --fast`. It creates no Python environment in the target project.
 

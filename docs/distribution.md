@@ -13,7 +13,7 @@ irm https://raw.githubusercontent.com/Lukematic/agent-smith/main/bootstrap.ps1 |
 ```
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Lukematic/agent-smith/main/bootstrap.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Lukematic/agent-smith/main/bootstrap.sh | bash
 ```
 
 That clones the repo, installs `uv` if missing, creates an isolated environment,

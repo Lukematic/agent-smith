@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-line bootstrap for A.W.I.N.O. on a machine with nothing installed.
 #
-#   curl -fsSL https://raw.githubusercontent.com/Lukematic/agent-smith/main/bootstrap.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/Lukematic/agent-smith/main/bootstrap.sh | bash
 #
 # Clones the repository, installs uv if missing, creates an isolated environment,
 # links A.W.I.N.O. into the agent harness, and verifies the result.
@@ -52,7 +52,14 @@ ok "git present"
 # ── clone or update ──────────────────────────────────────────────────────────
 step "Fetching the repository"
 if [ -d "$DIR/.git" ]; then
-    [ -z "$(git -C "$DIR" status --porcelain)" ] || { bad "existing clone is dirty; refusing pull"; exit 1; }
+    if [ -n "$(git -C "$DIR" status --porcelain)" ]; then
+        # Local changes are set aside, never discarded: git stash keeps them
+        # (untracked files included) and the human can bring them back.
+        LABEL="awino local changes before update $(date -u +%Y-%m-%dT%H%M%SZ)"
+        git -C "$DIR" stash push --quiet --include-untracked -m "$LABEL" \
+            || { bad "could not set local changes aside; nothing was changed"; exit 1; }
+        ok "set local changes aside in git stash '$LABEL' (see: git -C \"$DIR\" stash list)"
+    fi
     git -C "$DIR" fetch --quiet origin
     COUNTS="$(git -C "$DIR" rev-list --left-right --count 'HEAD...@{u}')"
     AHEAD="${COUNTS%%[[:space:]]*}"
@@ -94,7 +101,7 @@ fi
 printf "${GREEN}BOOTSTRAP COMPLETE${NC}\n"
 echo
 echo "A.W.I.N.O. lives at: $DIR"
-echo "Update it with: cd $DIR && git pull"
+echo "Update it with: awino update"
 echo
 echo "First commands, in any project:"
 echo "  awino onboard     mission, user, goals, tenets, expectations"
