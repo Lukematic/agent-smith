@@ -105,7 +105,14 @@ if (Test-Path (Join-Path $Dir ".git")) {
     Push-Location $Dir
     $dirty = & git status --porcelain
     if ($LASTEXITCODE -ne 0) { Pop-Location; Bad "git status failed"; exit 1 }
-    if ($dirty) { Pop-Location; Bad "existing clone is dirty; run 'awino update-preflight' after installing uv"; exit 1 }
+    if ($dirty) {
+        # Local changes are set aside, never discarded: git stash keeps them
+        # (untracked files included) and the human can bring them back.
+        $label = "awino local changes before update " + (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHHmmssZ")
+        & git stash push --quiet --include-untracked -m $label
+        if ($LASTEXITCODE -ne 0) { Pop-Location; Bad "could not set local changes aside; nothing was changed"; exit 1 }
+        Ok "set local changes aside in git stash '$label' (see: git -C `"$Dir`" stash list)"
+    }
     & git fetch --quiet origin
     if ($LASTEXITCODE -ne 0) { Pop-Location; Bad "git fetch failed"; exit 1 }
     $counts = & git rev-list --left-right --count "HEAD...@{u}"
@@ -171,7 +178,7 @@ if ($installFailed) {
 Write-Host "BOOTSTRAP COMPLETE" -ForegroundColor Green
 Write-Host ""
 Write-Host "A.W.I.N.O. lives at: $Dir" -ForegroundColor White
-Write-Host "Update it with: cd $Dir; git pull" -ForegroundColor DarkGray
+Write-Host "Update it with: awino update" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "First commands, in any project:" -ForegroundColor White
 Write-Host "  awino onboard     mission, user, goals, tenets, expectations"
