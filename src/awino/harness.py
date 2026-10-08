@@ -269,6 +269,25 @@ def kilo_project_drift(awino_home: Path, project: Path) -> list[str]:
     return problems
 
 
+def refresh_kilo_persona(awino_home: Path, project: Path) -> Action | None:
+    """Keep a project's Kilo agent current without being asked.
+
+    When .kilo/agent/awino.md is out of date and still exactly what the
+    installer wrote (owned, unedited), rewrite it from this version. Anything
+    the human edited, or a project that never set Kilo up, is left alone.
+    """
+    root = Harness.KILO.project_root(project)
+    persona = root / "agent" / "awino.md"
+    source = awino_home / "agents" / "awino.md"
+    if not (persona.is_file() and source.is_file()):
+        return None
+    expected = _persona_for(Harness.KILO, source)
+    if persona.read_text(encoding="utf-8") == expected or not ownership.unchanged(root, persona):
+        return None
+    outcome, detail = ownership.safe_write(root, persona, expected, "persona")
+    return Action("kilo/project", persona, outcome, detail)
+
+
 def repair_kilo_project(awino_home: Path, project: Path) -> list[Action]:
     """Repair only A.W.I.N.O.'s Kilo defaults, preserving unrelated settings."""
     root = Harness.KILO.project_root(project)

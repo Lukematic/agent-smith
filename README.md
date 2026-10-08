@@ -45,7 +45,7 @@ cached git data and never contacts GitHub, so an old install can report `behind=
    ```bash
    awino update            # refreshes skills, the Kilo agent and modes; also the plugin if installed
    awino --version         # must match "version" in this repository's pyproject.toml
-   awino update --auto on  # from now on, each new session checks for updates once a day
+   awino update --auto on  # from now on, new sessions install updates by themselves (daily)
    ```
    Tell the human the version now active. In Kilo, open a **new** chat so it loads
    the updated agent.

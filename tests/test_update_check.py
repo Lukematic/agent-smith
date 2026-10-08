@@ -9,9 +9,21 @@ import json
 import subprocess
 from pathlib import Path
 
+import pytest
+import yaml
 from typer.testing import CliRunner
 
-from awino import cli
+from awino import cli, updater
+
+
+@pytest.fixture(autouse=True)
+def _private_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """`awino update` writes ~/.awino/update.yaml; keep it in the test."""
+    home = tmp_path / "user-home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    return home
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -170,3 +182,59 @@ class TestUpdateCheckStandaloneClone:
         assert "DETECTED  standalone clone" in result.output
         assert ["claude", "plugin", "update", "awino@awino"] in calls
         assert (origin / "README.md").read_text(encoding="utf-8") == "v2\n"
+
+    def _behind(self, tmp_path: Path) -> Path:
+        remote, origin = self._make_remote_and_clone(tmp_path)
+        other = tmp_path / "other-clone"
+        _git(tmp_path, "clone", str(remote), str(other))
+        _git(other, "config", "user.email", "test@example.com")
+        _git(other, "config", "user.name", "test")
+        (other / "README.md").write_text("v2\n", encoding="utf-8")
+        _git(other, "commit", "-am", "v2")
+        _git(other, "push", "origin", "main")
+        return origin
+
+    def test_after_the_pull_the_new_code_finishes_the_update(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        origin = self._behind(tmp_path)
+        calls: list[tuple] = []
+
+        def new_code(home, project, *args, timeout=900):
+            calls.append(args)
+            return subprocess.CompletedProcess(
+                args, 0, "MODE  ADDED  awino-brain\nVERSION  9.9.9", ""
+            )
+
+        monkeypatch.setattr(updater, "relaunch", new_code)
+        monkeypatch.setattr(Path, "home", lambda: tmp_path / "no-claude-here")
+        monkeypatch.chdir(origin)
+        result = CliRunner().invoke(cli.app, ["update"])
+        assert result.exit_code == 0, result.output
+        assert calls == [("update", "--sync-only")]
+        assert "VERSION  9.9.9" in result.output  # reported by the new code
+
+    def test_nothing_new_finishes_in_process(self, tmp_path: Path, monkeypatch) -> None:
+        _remote, origin = self._make_remote_and_clone(tmp_path)
+        monkeypatch.setattr(updater, "relaunch", lambda *a, **k: pytest.fail("relaunched"))
+        monkeypatch.setattr(Path, "home", lambda: tmp_path / "no-claude-here")
+        monkeypatch.chdir(origin)
+        result = CliRunner().invoke(cli.app, ["update"])
+        assert result.exit_code == 0, result.output
+
+    def test_first_update_turns_on_auto_update_and_respects_off(
+        self, tmp_path: Path, monkeypatch, _private_home: Path
+    ) -> None:
+        _remote, origin = self._make_remote_and_clone(tmp_path)
+        monkeypatch.setattr(Path, "home", lambda: tmp_path / "no-claude-here")
+        monkeypatch.chdir(origin)
+        result = CliRunner().invoke(cli.app, ["update"])
+        assert "AUTO_UPDATE  on" in result.output
+        saved = yaml.safe_load((_private_home / ".awino" / "update.yaml").read_text())
+        assert saved["auto_check"] is True and saved["auto_apply"] is True
+
+        CliRunner().invoke(cli.app, ["update", "--auto", "off"])
+        result = CliRunner().invoke(cli.app, ["update"])
+        assert "AUTO_UPDATE  on" not in result.output
+        saved = yaml.safe_load((_private_home / ".awino" / "update.yaml").read_text())
+        assert saved["auto_check"] is False

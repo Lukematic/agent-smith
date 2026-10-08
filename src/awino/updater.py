@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from datetime import UTC, datetime
@@ -259,9 +260,11 @@ def _save_auto(data: dict) -> Path:
     return path
 
 
-def set_auto(on: bool) -> Path:
+def set_auto(on: bool, apply: bool = True) -> Path:
+    """on + apply: check daily and install. on, not apply: check and announce."""
     data = auto_settings()
     data["auto_check"] = bool(on)
+    data["auto_apply"] = bool(on and apply)
     return _save_auto(data)
 
 
@@ -294,6 +297,69 @@ def auto_check(source: Path, now: datetime | None = None) -> str | None:
 
 def _update_line(behind: int) -> str:
     return f"UPDATE AVAILABLE  {behind} new commit(s) upstream; run: awino update"
+
+
+def relaunch(
+    home: Path, project: Path, *args: str, timeout: float = 900
+) -> subprocess.CompletedProcess[str] | None:
+    """Run ``awino <args>`` from the code now on disk in ``home``.
+
+    An update pulls new code while the old code is still running; the steps
+    after the pull (skills, modes, the Kilo agent) must run in the new code.
+    ``uv run --frozen`` also syncs the environment to the new lockfile. None
+    when that is not possible here (no uv, or ``home`` is not the engine).
+    """
+    if not (home / "pyproject.toml").is_file() or shutil.which("uv") is None:
+        return None
+    env = {**os.environ, "AWINO_PROJECT": str(project)}
+    env.setdefault("UV_LINK_MODE", "copy")
+    env.pop("VIRTUAL_ENV", None)
+    env.pop("CONDA_PREFIX", None)
+    command = ["uv", "run", "--frozen", "--no-dev", "--project", str(home), "awino", *args]
+    try:
+        return subprocess.run(
+            command, cwd=project, env=env, capture_output=True, text=True, timeout=timeout
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+_KEEP = ("VERSION", "REFUSED", "SET_ASIDE", "RESTORED", "KEPT_ASIDE", "MODE", "FAILED", "KILO")
+
+
+def auto_step(
+    source: Path,
+    project: Path,
+    *,
+    active_run: bool,
+    now: datetime | None = None,
+    runner=None,
+) -> list[str]:
+    """What a new session does about updates; returns the lines to show.
+
+    With ``awino update --auto on`` (the default once ``awino update`` has
+    run), a waiting update is installed right here: once a day at most, only
+    from a git clone, never under an open run, local changes set aside and
+    put back. With ``--auto notify`` it is only announced.
+    """
+    line = auto_check(source, now=now)
+    if not line:
+        return []
+    if not auto_settings().get("auto_apply", True) or not is_clone(source):
+        return [line]
+    if active_run:
+        return [line + " (a run is open in this project: finish it first)"]
+    result = (runner or relaunch)(source, project, "update", "--keep-local")
+    if result is None:
+        return [line]
+    kept = [ln for ln in result.stdout.splitlines() if ln.startswith(_KEEP)]
+    if result.returncode == 0:
+        version = next((ln.split()[1] for ln in kept if ln.startswith("VERSION")), "")
+        return [
+            f"AUTO_UPDATED  A.W.I.N.O. {version} installed; open a new chat to use it",
+            *[ln for ln in kept if not ln.startswith("VERSION")],
+        ]
+    return ["AUTO_UPDATE_FAILED  nothing was lost; run: awino update", *kept]
 
 
 def clear_pending() -> None:

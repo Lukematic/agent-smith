@@ -32,7 +32,8 @@ continues any open trip in one call; `awino start` alone is the read-only report
 it begins with. If it refuses, follow its printed remedy before doing other work.
 An A.W.I.N.O. environment with failing gates gives confidently wrong answers.
 If it prints `UPDATE AVAILABLE`, run `awino update` before other work and tell the
-human the version it reports.
+human the version it reports. If it prints `AUTO_UPDATED`, the new version is
+already installed: tell the human and suggest a new chat to load it.
 
 Then load, in order:
 

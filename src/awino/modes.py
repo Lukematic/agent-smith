@@ -511,29 +511,46 @@ def build_modes(awino_home: Path) -> list[Mode]:
     ]
 
 
-def add_missing(awino_home: Path, project: Path) -> list[tuple[ModeTarget, str]]:
-    """Install A.W.I.N.O. modes a target lacks, so an update brings new modes along.
+def sync_awino_modes(awino_home: Path, project: Path) -> list[tuple[ModeTarget, str, str]]:
+    """Bring A.W.I.N.O.'s modes up to this version wherever they are installed.
 
-    Only touches mode files that already hold at least one A.W.I.N.O. mode: the
-    user opted in there. Existing modes, including edited A.W.I.N.O. ones, are
-    never overwritten. Returns (target, slug) for each mode added.
+    Only touches mode files that already hold an A.W.I.N.O. mode (the user
+    opted in there): missing A.W.I.N.O. modes are added, out-of-date ones are
+    rewritten to the current definition, and the user's own modes are never
+    touched. The file is backed up before any change. Returns
+    (target, slug, "ADDED" | "UPDATED") for each change.
     """
-    added: list[tuple[ModeTarget, str]] = []
+    changes: list[tuple[ModeTarget, str, str]] = []
     wanted = build_modes(awino_home)
     for target in detected(project):
         try:
-            existing = {m.get("slug") for m in _load(target.path)}
+            existing = _load(target.path)
         except ValueError:
             continue  # a corrupt file is the user's to fix, never ours to rewrite
-        if not any(str(slug).startswith("awino") for slug in existing):
+        slugs = [m.get("slug") for m in existing]
+        if not any(str(slug).startswith("awino") for slug in slugs):
             continue
+        by_slug = {m.get("slug"): i for i, m in enumerate(existing)}
+        updated = list(existing)
+        here: list[tuple[ModeTarget, str, str]] = []
         for mode in wanted:
-            if mode.slug in existing:
-                continue
-            outcome, _detail = install(mode, target)
-            if outcome not in {"SKIPPED", "FAILED"}:
-                added.append((target, mode.slug))
-    return added
+            payload = mode.to_dict()
+            if mode.slug not in by_slug:
+                updated.append(payload)
+                here.append((target, mode.slug, "ADDED"))
+            elif existing[by_slug[mode.slug]] != payload:
+                updated[by_slug[mode.slug]] = payload
+                here.append((target, mode.slug, "UPDATED"))
+        if not here:
+            continue
+        try:
+            ownership.backup(target.path)
+            _dump(target.path, updated)
+            ownership.record(target.path.parent, target.path, "modes")
+        except OSError:
+            continue
+        changes += here
+    return changes
 
 
 def as_json(awino_home: Path) -> str:
