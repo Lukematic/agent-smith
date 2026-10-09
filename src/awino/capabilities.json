@@ -43,6 +43,20 @@
     "cmd:debug evidence",
     "cmd:debug hypothesize",
     "cmd:debug verify",
+    "cmd:deepplan answer",
+    "cmd:deepplan ask",
+    "cmd:deepplan compile",
+    "cmd:deepplan confirm",
+    "cmd:deepplan defer",
+    "cmd:deepplan done",
+    "cmd:deepplan go",
+    "cmd:deepplan grill-done",
+    "cmd:deepplan learn",
+    "cmd:deepplan list",
+    "cmd:deepplan record",
+    "cmd:deepplan stage",
+    "cmd:deepplan start",
+    "cmd:deepplan use",
     "cmd:delegate",
     "cmd:dispatch",
     "cmd:doctor",
@@ -155,6 +169,7 @@
     "skill:awino-config-review",
     "skill:awino-consult",
     "skill:awino-debug",
+    "skill:awino-deepplan",
     "skill:awino-delegate",
     "skill:awino-discover",
     "skill:awino-evidence",
@@ -174,5 +189,5 @@
     "pyyaml>=6.0",
     "typer>=0.12"
   ],
-  "version": "0.9.3"
+  "version": "0.9.4"
 }

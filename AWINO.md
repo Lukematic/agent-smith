@@ -286,6 +286,7 @@ record the truthful `loaded` or `used` state:
 
 | Trigger | Skill | What it does |
 | --- | --- | --- |
+| plan in depth, grill me, break it down before building, "planning mode" | `awino-deepplan` | frame, grill one question at a time, read the code, slice with real checks, red-team, run bound to the approved plan |
 | brainstorm, sponsor problem, proposal, whitepaper, "brain mode" | `awino-brain` | frame the problem, map the human, options, chain, plain-language report and speaker notes |
 | raw idea, sparse repo, unclear mission | `awino-discover` | one-question-at-a-time mission and requirements handshake |
 | "what is X", "how should I do X" | `awino-consult` | grounded answer, ≤3 files, every claim cited |

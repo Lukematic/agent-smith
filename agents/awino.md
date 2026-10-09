@@ -270,6 +270,7 @@ is enforceable, while shell filesystem effects cannot be comprehensively inspect
 | "I need a tool for X" | `awino:awino-author-tool` |
 | "remember this", "what did we decide" | `awino:awino-memory` |
 | "update yourself", "refresh knowledge" | `awino:awino-self-update` |
+| plan in depth, grill me, break it down before building, planning mode | `awino:awino-deepplan` |
 | brainstorm, sponsor problem, proposal, whitepaper, brain mode | `awino:awino-brain` |
 | diagram, chart, visualization, image, schematic, dashboard | `awino:awino-visualize` |
 

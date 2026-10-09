@@ -379,9 +379,21 @@ INTENT_PHRASES: dict[str, tuple[tuple[str, int], ...]] = {
     ),
     "awino-brain": (
         (
-            r"\b(brainstorm\w*|sponsors?|white ?papers?|proposal|brain mode|problem space|"
+            r"\b(sponsors?|white ?papers?|proposal|brain mode|problem space|"
             r"new to (this|the) (domain|field|space)|where (i|we) (could|can|might) help|"
             r"decision makers?)\b",
+            _STRONG + 6,
+        ),
+        # Alone, "brainstorm" means Brain; next to a planning phrase, Deep Plan wins.
+        (r"\bbrainstorm\w*\b", _STRONG),
+    ),
+    "awino-deepplan": (
+        (
+            r"\b(deep ?plan\w*|in[- ]depth plan\w*|plan\w* (\w+ ){0,3}(in depth|in detail|"
+            r"properly|carefully|thoroughly)|planning mode|grill (me|us|this|the plan)|"
+            r"before (we|i|you) (build|execute|start|code|implement|write)\w*( anything)?|"
+            r"break (this|it|the problem|the work) (down|into)|think (this|it) through|"
+            r"let'?s plan|plan (it|this) out|what steps (we|do we) need)\b",
             _STRONG + 6,
         ),
     ),

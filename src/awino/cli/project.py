@@ -1469,6 +1469,10 @@ def start_command(
     _echo(f"Tracker: {tracker_line}")
     _echo(f"Active run: {active_run}")
     _echo(f"Pending human decision: {pending_decision}")
+    from awino import deepplan
+
+    for line in deepplan.where(workspace.state_root, workspace.project.root):
+        _echo(line)
     _echo(f"Next recommended action: {next_action}")
     _echo(f"Route skill: {route_skill}")
     _echo(f"A.W.I.N.O. freshness: {updater.cached_freshness(workspace.home.root)}")

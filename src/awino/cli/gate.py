@@ -205,6 +205,12 @@ def gate_open(
         if not plan_path.is_file():
             _echo(f"PLAN_NOT_FOUND  {plan_path}")
             raise typer.Exit(2)
+        from awino import deepplan
+
+        why = deepplan.refuse_hand_open(plan_path)
+        if why:
+            _echo(f"DEEP_PLAN_RUN  {why}")
+            raise typer.Exit(2)
     intent = onboarding.load(_workspace().project.root)
     if intent and intent.source == "confirmed" and intent.workflow.issue_required:
         if not issue:
@@ -749,6 +755,16 @@ def gate_close(
     if Gate.REVIEWED in run.required and run.provenance is None:
         _echo("")
         _echo("REFUSED  REVIEW_REQUIRED: run 'gate review' first")
+        raise typer.Exit(1)
+    from awino import deepplan
+
+    unverified = deepplan.unverified_phases(run.plan_path, resolved)
+    if unverified:
+        _echo(
+            "REFUSED  DEEP_PLAN_PHASES_UNVERIFIED  phase(s) "
+            f"{', '.join(map(str, unverified))} of the approved plan have no passing check"
+        )
+        _echo(f"  verify each in order: awino deepplan done {unverified[0]}")
         raise typer.Exit(1)
     verdict = adjudicate(run, ledger.evidence(resolved))
 

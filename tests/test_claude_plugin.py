@@ -16,6 +16,7 @@ CANONICAL_SKILLS = {
     "awino-brain",
     "awino-config-review",
     "awino-consult",
+    "awino-deepplan",
     "awino-delegate",
     "awino-debug",
     "awino-discover",

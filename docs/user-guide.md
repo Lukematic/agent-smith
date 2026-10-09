@@ -34,6 +34,7 @@ the editor itself to enforce a narrower boundary:
 | A.W.I.N.O. Discover | Read and MCP only |
 | A.W.I.N.O. Research | Read and MCP only |
 | A.W.I.N.O. Brain | Read, MCP, `awino brain` commands, and Markdown-only edits |
+| A.W.I.N.O. Deep Plan | Read, MCP, `awino deepplan` commands, and Markdown-only edits |
 
 A.W.I.N.O. cannot silently change the mode selected in your editor. The primary
 controller can recommend a specialist mode, but it can continue by routing to the
@@ -70,6 +71,43 @@ The first time, Brain interviews you for a short profile (background,
 strengths, interests, what you want to get better at). It lives only at
 `~/.awino/brain/me.md` on your machine. Sessions live in `.awino/brain/`, which
 ignores itself in git.
+
+### Deep Plan mode
+
+Deep Plan is for thinking a change through before anything is built: brainstorm,
+get grilled, break it down, and then execute a plan the harness holds the work
+to. Brain is for a problem space and a report for other people; Deep Plan is for
+work you are about to do in this codebase.
+
+| Stage | What happens |
+| --- | --- |
+| frame | The goal in one sentence, why, `Done when` criteria `C1:`, `C2:`... that can be checked, constraints, out of scope |
+| grill | One question at a time, each with the agent's recommended answer and why it matters. It reads the code instead of asking when it can (`learn` needs a real `file:line`). At least three of your answers, or a stated reason why fewer is enough |
+| directions | At least five variations through named lenses, two or three real directions, a recommendation. **Pauses for your pick.** |
+| recon | At least three real `file:line` references, what to reuse, the test command that runs today, the risks |
+| slices | Two to twelve thin slices in order, each with its files (five at most), what it depends on, a `Verify:` command that runs here, and the criteria it covers. Every criterion must be covered |
+| redteam | Three ways it fails (warning sign and mitigation each), the strongest objections with answers, and the rollback |
+| plan | `plan.md` in the format the harness checks. **Pauses for your approval.** |
+
+```bash
+awino deepplan start "per-user notes" --brief notes.md
+awino deepplan                 # where it stands, the next stage, or the open question
+awino deepplan ask "Should notes be private by default?" \
+  --recommend "Yes, private; sharing is a later slice" --why "decides the data model"
+awino deepplan answer "private, and admins can't read them either"
+awino deepplan grill-done
+awino deepplan record directions
+awino deepplan confirm directions --note "go with B, skip the export"
+awino deepplan compile
+awino deepplan go --by "Luke" --note "approved, start with slice 1"
+awino deepplan done 1          # after building phase 1: runs its check, ticks it if green
+```
+
+`go` opens a gated run bound to the exact bytes of `plan.md` and to the files the
+slices name. `done <n>` runs a phase's own success command as gate evidence and
+ticks it off in `progress.md` only when it passes, in order. Anything outside the
+scope goes to a follow-up list in `progress.md`, never into the run.
+Sessions live in `thoughts/plans/` so the reasoning can be committed with the work.
 
 ## Install and verify
 
