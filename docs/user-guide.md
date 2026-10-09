@@ -74,20 +74,23 @@ ignores itself in git.
 
 ### Deep Plan mode
 
-Deep Plan is for thinking a change through before anything is built: brainstorm,
-get grilled, break it down, and then execute a plan the harness holds the work
-to. Brain is for a problem space and a report for other people; Deep Plan is for
-work you are about to do in this codebase.
+Deep Plan is for thinking a change through before anything is built, and it is a
+challenge for both of you: what is the problem, how will we know it is done, what
+are its parts, how do we get there, and what is needed. Then it executes a plan
+the harness holds the work to, with the steps tracked in Seeds. Brain is for a
+problem space and a report for other people; Deep Plan is for work you are about
+to do in this codebase.
 
 | Stage | What happens |
 | --- | --- |
-| frame | The goal in one sentence, why, `Done when` criteria `C1:`, `C2:`... that can be checked, constraints, out of scope |
-| grill | One question at a time, each with the agent's recommended answer and why it matters. It reads the code instead of asking when it can (`learn` needs a real `file:line`). At least three of your answers, or a stated reason why fewer is enough |
+| frame | **Define the problem**: what is wrong today, with `Evidence:` (a problem, not a fix in disguise); the goal; `Done when` criteria `C1:`, `C2:`...; the problem broken into parts; what's needed (people, access, decisions, data); constraints; out of scope |
+| grill | One question at a time, each with the agent's recommended answer and why it matters, and at least one **challenge** (a vague answer, a solution posing as the problem, scope creep, the riskiest assumption). It reads the code instead of asking when it can (`learn` needs a real `file:line`). At least three of your answers, or a stated reason why fewer is enough |
 | directions | At least five variations through named lenses, two or three real directions, a recommendation. **Pauses for your pick.** |
 | recon | At least three real `file:line` references, what to reuse, the test command that runs today, the risks |
-| slices | Two to twelve thin slices in order, each with its files (five at most), what it depends on, a `Verify:` command that runs here, and the criteria it covers. Every criterion must be covered |
+| slices | **Steps by priority**: two to twelve thin steps, P0 (done needs it), P1 (next), P2 (later), listed P0 first, each with its files (five at most), the earlier steps it depends on, a `Verify:` command that runs here, and the criteria it covers. Every criterion needs a P0 step |
 | redteam | Three ways it fails (warning sign and mitigation each), the strongest objections with answers, and the rollback |
-| plan | `plan.md` in the format the harness checks. **Pauses for your approval.** |
+| plan | `plan.md` in the format the harness checks, problem and priorities first. **Pauses for your approval.** |
+| seeds | `awino deepplan seeds`: an epic, one seed per step with its priority and dependencies, linked as a Seeds plan, so `sd ready` shows what can start; each verified step closes its seed, and the epic closes when every step is verified (`--init` creates a tracker if you want one) |
 
 ```bash
 awino deepplan start "per-user notes" --brief notes.md
@@ -95,18 +98,31 @@ awino deepplan                 # where it stands, the next stage, or the open qu
 awino deepplan ask "Should notes be private by default?" \
   --recommend "Yes, private; sharing is a later slice" --why "decides the data model"
 awino deepplan answer "private, and admins can't read them either"
+awino deepplan ask "You said 'fast'. Under what number, for whom?" --challenge \
+  --recommend "under 200 ms for the list page" --why "decides whether we need a cache"
+awino deepplan answer "200 ms is fine"
 awino deepplan grill-done
 awino deepplan record directions
 awino deepplan confirm directions --note "go with B, skip the export"
 awino deepplan compile
+awino deepplan seeds           # the steps in Seeds, with priorities and dependencies
 awino deepplan go --by "Luke" --note "approved, start with slice 1"
-awino deepplan done 1          # after building phase 1: runs its check, ticks it if green
+awino deepplan done 1          # after building phase 1: runs its check, ticks it and closes its seed
 ```
 
 `go` opens a gated run bound to the exact bytes of `plan.md` and to the files the
-slices name. `done <n>` runs a phase's own success command as gate evidence and
-ticks it off in `progress.md` only when it passes, in order. Anything outside the
-scope goes to a follow-up list in `progress.md`, never into the run.
+slices name. `done <n>` runs a phase's own success command as gate evidence,
+ticks it off in `progress.md` and closes its seed only when it passes; a phase
+waits for what it depends on, and P0 phases come before P1 and P2. Done is every
+P0 phase verified: `awino gate close` refuses before that and lists open P1/P2
+phases as follow-ups. Anything outside the scope goes to a follow-up list in
+`progress.md`, never into the run.
+
+When reality breaks the plan mid-run, the agent stops and asks instead of
+loosening a check. Re-recording a stage withdraws the approval; after you approve
+the changed plan, `go` pauses the old run, and steps that were already verified
+and did not change are checked again on the new run before they count.
+
 Sessions live in `thoughts/plans/` so the reasoning can be committed with the work.
 
 ## Install and verify

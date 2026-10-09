@@ -181,7 +181,15 @@ def use(state_root: Path, project: Path, session_id: str) -> Session:
 # ── the grill: a question log, one open question at a time ──────────────────
 
 
-def ask(session: Session, text: str, recommend: str, why: str, *, blocking: bool = True) -> dict:
+def ask(
+    session: Session,
+    text: str,
+    recommend: str,
+    why: str,
+    *,
+    blocking: bool = True,
+    challenge: bool = False,
+) -> dict:
     if not session.recorded("frame"):
         raise PlanError("record the frame first: the grill sharpens a stated goal")
     pending = session.open_question()
@@ -198,6 +206,7 @@ def ask(session: Session, text: str, recommend: str, why: str, *, blocking: bool
         "recommend": recommend.strip(),
         "why": why.strip(),
         "blocking": blocking,
+        "challenge": challenge,
         "status": "open",
         "asked_at": _now(),
     }
@@ -286,6 +295,11 @@ def finish_grill(session: Session, enough: str = "") -> list[str]:
             f"{len(by_human)} question(s) answered by the human; ask at least {MIN_ANSWERED}, "
             'or finish with --enough "<why fewer is right here>"'
         )
+    if not any(q.get("challenge") for q in session.questions) and not enough.strip():
+        problems.append(
+            "no challenge yet: push back at least once with ask --challenge (a vague answer, "
+            "a solution posing as the problem, scope creep, or the riskiest assumption)"
+        )
     if problems:
         return problems
     state = session.data.setdefault("stages", {}).setdefault("grill", {})
@@ -302,8 +316,9 @@ def grill_record(session: Session) -> str:
         answer_text = q.get("answer", "(open)")
         if q.get("evidence"):
             answer_text += f" ({q['evidence']})"
+        text = f"(challenge) {q['text']}" if q.get("challenge") else q["text"]
         rows.append(
-            f"| {q['id']} | {q['text']} | {answer_text} | {q.get('by', '-')} |".replace("\n", " ")
+            f"| {q['id']} | {text} | {answer_text} | {q.get('by', '-')} |".replace("\n", " ")
         )
     return "\n".join(rows)
 
@@ -320,13 +335,39 @@ def _executable_in(text: str) -> list[str]:
     return [c for c in _BACKTICK_RE.findall(text) if command_is_executable(c)]
 
 
+_SOLUTION_RE = re.compile(
+    r"^(we (need|want|should) to|add|build|implement|create|make|migrate|refactor|introduce|"
+    r"switch|use|write|rewrite|integrate)\b",
+    re.I,
+)
+
+
 def _check_frame(text: str) -> list[str]:
     p: list[str] = []
+    problem = _need(text, p, "Problem", "problem")
     goal = _need(text, p, "Goal", "goal")
-    _need(text, p, "Why", "why")
     done = _need(text, p, "Done when", "done when", "done criteria")
+    parts = _need(text, p, "Break it down", "break it down", "breakdown", "parts of the problem")
+    needed = _need(text, p, "What's needed", "what's needed", "what is needed", "needed")
     _need(text, p, "Constraints", "constraint")
     outs = _need(text, p, "Out of scope", "out of scope")
+    if problem.strip():
+        first = re.sub(r"^\s*(?:[-*+]|\d+[.)])?\s*", "", problem.strip())
+        if _SOLUTION_RE.match(first):
+            p.append(
+                f"the problem reads like a solution ('{first.split()[0]} ...'): say what is "
+                "wrong today and for whom; the fix belongs in the goal"
+            )
+        low = problem.lower()
+        if "evidence" not in low and "[inferred]" not in low:
+            p.append(
+                "'Problem' needs Evidence: (a number, a file:line, an error, the user's words), "
+                "or mark it [inferred] and check it in the grill"
+            )
+    if parts.strip() and len(_blocks(parts)) < 2:
+        p.append("'Break it down' needs at least two parts of the problem")
+    if needed.strip() and not _blocks(needed):
+        p.append("'What's needed' needs at least one bullet (people, access, decisions, data)")
     if goal.strip():
         sentences = [s for s in re.split(r"(?<=[.!?])\s+", goal.strip()) if s.strip()]
         if len(sentences) > 2:
@@ -401,6 +442,65 @@ def slice_files(text: str) -> list[tuple[str, bool]]:
     return list(seen.items())
 
 
+_PRIORITY_RE = re.compile(r"\bP([0-2])\b", re.I)
+
+
+def _priority(block: str) -> int | None:
+    m = _PRIORITY_RE.search(_labeled(block, "priority"))
+    return int(m.group(1)) if m else None
+
+
+def _depends(block: str) -> list[int] | None:
+    """Earlier step numbers this step needs; [] for none; None when unreadable."""
+    raw = _labeled(block, "depends on")
+    if not raw or re.search(r"\bnone\b", raw, re.I):
+        return []
+    numbers = [int(n) for n in re.findall(r"\d+", raw)]
+    return numbers or None
+
+
+def _check_priorities(blocks: list[str]) -> tuple[list[str], set[str]]:
+    """Problems with priorities and dependencies, and the criteria P0 steps cover."""
+    p: list[str] = []
+    priorities = [_priority(b) for b in blocks]
+    for block, prio in zip(blocks, priorities, strict=True):
+        if prio is None:
+            p.append(f"slice '{_head(block)}' has no 'Priority: P0|P1|P2'")
+    known = [x for x in priorities if x is not None]
+    if known and 0 not in known:
+        p.append("no P0 step: done needs at least one must-have")
+    last = 0
+    for block, prio in zip(blocks, priorities, strict=True):
+        if prio is None:
+            continue
+        if prio < last:
+            p.append(
+                f"slice '{_head(block)}' is P{prio} after a P{last} step: list every P0 "
+                "first, then P1, then P2"
+            )
+        last = max(last, prio)
+    for i, block in enumerate(blocks, 1):
+        deps = _depends(block)
+        if deps is None:
+            p.append(
+                f"slice '{_head(block)}': 'Depends on:' takes earlier step numbers (1, 2) or none"
+            )
+            continue
+        for d in deps:
+            if not 1 <= d < i:
+                p.append(
+                    f"slice '{_head(block)}' depends on step {d}, which is not an earlier step; "
+                    "order the steps so what they need comes first"
+                )
+    p0_covered: set[str] = set()
+    for block, prio in zip(blocks, priorities, strict=True):
+        if prio == 0:
+            for ln in block.splitlines():
+                if "covers:" in ln.lower():
+                    p0_covered |= {f"C{n}" for n in _CRITERION_RE.findall(ln)}
+    return p, p0_covered
+
+
 def _check_slices(text: str, project: Path, criteria: list[str]) -> list[str]:
     p: list[str] = []
     body = _need(text, p, "Slices", "slices")
@@ -413,6 +513,8 @@ def _check_slices(text: str, project: Path, criteria: list[str]) -> list[str]:
     if not 2 <= len(blocks) <= 12:
         p.append(f"{len(blocks)} slice(s); use two to twelve")
     _each_has(blocks, ("files:", "verify:", "done when:", "covers:"), "slice", p)
+    prio_problems, p0_covered = _check_priorities(blocks)
+    p += prio_problems
     covered: set[str] = set()
     for block in blocks:
         head = _head(block)
@@ -432,6 +534,12 @@ def _check_slices(text: str, project: Path, criteria: list[str]) -> list[str]:
     missing = [c for c in criteria if c not in covered]
     if missing:
         p.append(f"no slice covers {', '.join(missing)}: every done criterion needs one")
+    only_later = [c for c in criteria if c in covered and c not in p0_covered]
+    if only_later:
+        p.append(
+            f"{', '.join(only_later)} only covered by P1/P2 steps: done needs a P0 step for "
+            "each criterion"
+        )
     return p
 
 
@@ -492,6 +600,10 @@ def record(session: Session, stage_name: str, text: str) -> list[str]:
     target = session.file_for(stage)
     if not target.is_file() or target.read_text(encoding="utf-8") != text:
         target.write_text(text, encoding="utf-8")
+    if session.data.pop("approved", None):
+        # Re-planning after approval: the human approves the changed plan again
+        # (`go`), and until then no phase can be verified against it.
+        session.data["replanning"] = True
     state = session.data.setdefault("stages", {}).setdefault(stage.name, {})
     state.update(recorded_at=_now(), file=target.name)
     state.pop("confirmed_at", None)
@@ -531,6 +643,46 @@ def _phase_title(block: str) -> str:
     return _SLICE_NUMBER_RE.sub("", head).strip() or head
 
 
+PRIORITY_MEANING = {0: "done needs it", 1: "should, right after", 2: "could, later"}
+
+
+@dataclass(frozen=True)
+class Phase:
+    """One step of the plan, as the run executes it."""
+
+    number: int
+    title: str
+    command: str
+    priority: int
+    depends: tuple[int, ...]
+
+    @property
+    def label(self) -> str:
+        return f"P{self.priority}"
+
+
+def _phases_from(slices_text: str) -> list[Phase]:
+    out: list[Phase] = []
+    for i, block in enumerate(_blocks(_section(slices_text, "slices")), 1):
+        verify = _executable_in(_labeled(block, "verify")) or [_labeled(block, "verify")]
+        prio = _priority(block)
+        out.append(
+            Phase(
+                number=i,
+                title=_phase_title(block),
+                command=verify[0],
+                priority=0 if prio is None else prio,
+                depends=tuple(_depends(block) or ()),
+            )
+        )
+    return out
+
+
+def phases(session: Session) -> list[Phase]:
+    """Every phase in plan order (priority order: P0 first)."""
+    return _phases_from(session.read("slices"))
+
+
 def render_plan(session: Session) -> str:
     """plan.md in the RPI plan format, from everything the session recorded."""
     missing = [s.name for s in STAGES if not session.recorded(s.name)]
@@ -543,31 +695,45 @@ def render_plan(session: Session) -> str:
     directions = session.data["stages"].get("directions", {}).get("note", "")
     goal = " ".join(_section(frame, "goal").split())
     out: list[str] = [f"# Plan: {session.title}", ""]
+    out += ["## Problem", "", _section(frame, "problem").strip(), ""]
     out += ["## Goal", "", goal, ""]
+    out += ["## What's needed", "", _section(frame, "what's needed", "what is needed").strip(), ""]
     out += ["## Source research", "", f"{session.path.relative_to(session.project)}/", ""]
     out += ["- `frame.md`, `directions.md`, `recon.md`, `slices.md`, `redteam.md`", ""]
     out += ["## Decisions made", "", grill_record(session), ""]
     if directions:
         out += [f"Direction chosen by the human: {directions}", ""]
-    tests: list[str] = []
-    for i, block in enumerate(_blocks(_section(slices, "slices")), 1):
-        verify = _executable_in(_labeled(block, "verify")) or [_labeled(block, "verify")]
-        tests.append(verify[0])
-        out += [f"## Phase {i} — {_phase_title(block)}", ""]
+    plan = phases(session)
+    out += ["## Priorities", ""]
+    for prio, meaning in PRIORITY_MEANING.items():
+        numbers = [str(ph.number) for ph in plan if ph.priority == prio]
+        if numbers:
+            out.append(f"- P{prio} ({meaning}): phase {', '.join(numbers)}")
+    out += [
+        "",
+        "Done is every P0 phase verified; P1 and P2 phases may follow in this run or stay "
+        "tracked as seeds.",
+        "",
+    ]
+    blocks = _blocks(_section(slices, "slices"))
+    for ph, block in zip(plan, blocks, strict=True):
+        out += [f"## Phase {ph.number} — {ph.title} ({ph.label})", ""]
         for name in [f.strip() for f in _labeled(block, "files").split(",") if f.strip()]:
             out.append(f"- [ ] {name}")
+        deps = ", ".join(f"phase {d}" for d in ph.depends) or "none"
         out += [
             "",
-            f"Depends on: {_labeled(block, 'depends on') or 'none'}",
+            f"Priority: {ph.label} ({PRIORITY_MEANING[ph.priority]})",
+            f"Depends on: {deps}",
             f"Covers: {_labeled(block, 'covers')}",
-            f"**Automated success criteria:** `{verify[0]}`",
+            f"**Automated success criteria:** `{ph.command}`",
             f"**Manual verification:** {_labeled(block, 'done when')}",
             "",
         ]
     out += ["## Scope", "", "Will change:", _section(slices, "will change").strip(), ""]
     out += ["Will not change:", _section(slices, "will not change").strip(), ""]
-    out += ["## Tests", ""] + [f"- `{t}`" for t in dict.fromkeys(tests)] + [""]
-    out += ["## Rollback", "", _section(red, "rollback").strip(), ""]
+    out += ["## Tests", ""] + [f"- `{t}`" for t in dict.fromkeys(ph.command for ph in plan)]
+    out += ["", "## Rollback", "", _section(red, "rollback").strip(), ""]
     out += ["## Risks", "", _section(red, "premortem").strip(), ""]
     out += ["## Acceptance criteria", "", _section(frame, "done when").strip(), ""]
     out += ["## Out of scope", "", _section(frame, "out of scope").strip(), ""]
@@ -600,16 +766,7 @@ def approvable_plan(session: Session) -> Path:
     return plan
 
 
-def phases(session: Session) -> list[tuple[str, str]]:
-    """(title, success command) for every phase, in plan order."""
-    out: list[tuple[str, str]] = []
-    for block in _blocks(_section(session.read("slices"), "slices")):
-        verify = _executable_in(_labeled(block, "verify")) or [_labeled(block, "verify")]
-        out.append((_phase_title(block), verify[0]))
-    return out
-
-
-_PROGRESS_RE = re.compile(r"^- \[([ xX])\] Phase (\d+):", re.M)
+_PROGRESS_RE = re.compile(r"^- \[([ xX])\] Phase (\d+)\b", re.M)
 
 
 def write_progress(session: Session) -> Path:
@@ -618,7 +775,7 @@ def write_progress(session: Session) -> Path:
     path = session.path / PROGRESS_FILE
     if not path.is_file():
         lines = [f"# Progress: {session.title}", ""]
-        lines += [f"- [ ] Phase {i}: {name}" for i, (name, _cmd) in enumerate(phases(session), 1)]
+        lines += [f"- [ ] Phase {ph.number} ({ph.label}): {ph.title}" for ph in phases(session)]
         lines += ["", "## Follow-ups (found outside the plan's scope)", ""]
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
@@ -631,7 +788,8 @@ def done_phases(session: Session) -> set[int]:
 
 
 def next_phase_command(session: Session, number: int) -> str:
-    """The success command for phase ``number``, if it may be verified now."""
+    """The success command for phase ``number``, if it may be verified now:
+    what it depends on comes first, and so does every higher-priority phase."""
     if not session.data.get("approved"):
         raise PlanError('the plan is not approved yet: awino deepplan go --by "<name>" --note ...')
     plan = phases(session)
@@ -640,28 +798,173 @@ def next_phase_command(session: Session, number: int) -> str:
     done = done_phases(session)
     if number in done:
         raise PlanError(f"phase {number} is already verified")
-    earlier = [n for n in range(1, number) if n not in done]
-    if earlier:
-        raise PlanError(f"phases go in order: verify phase {earlier[0]} first")
-    return plan[number - 1][1]
+    phase = plan[number - 1]
+    for d in phase.depends:
+        if d not in done:
+            raise PlanError(f"phase {number} depends on phase {d}: verify phase {d} first")
+    before = [ph for ph in plan if ph.priority < phase.priority and ph.number not in done]
+    if before:
+        raise PlanError(
+            f"phase {number} is {phase.label}; {before[0].label} phases come first: "
+            f"verify phase {before[0].number} first"
+        )
+    return phase.command
+
+
+def approved_snapshot(session: Session) -> list[dict]:
+    return [
+        {"number": ph.number, "title": ph.title, "command": ph.command} for ph in phases(session)
+    ]
+
+
+def carry_over(session: Session, previous: list[dict]) -> list[int]:
+    """After a re-approved plan, rewrite progress.md for the new phases.
+
+    Returns the new numbers of phases that were verified before and are
+    unchanged (same title, same check); they still have to pass again on the
+    new run before they count. Everything else starts unticked.
+    """
+    path = session.path / PROGRESS_FILE
+    if not path.is_file():
+        return []
+    done = done_phases(session)
+    was_done = {(p["title"], p["command"]) for p in previous if p["number"] in done}
+    text = path.read_text(encoding="utf-8")
+    tail = text[text.index("## Follow-ups") :] if "## Follow-ups" in text else ""
+    path.unlink()
+    write_progress(session)
+    if tail:
+        fresh = path.read_text(encoding="utf-8")
+        path.write_text(fresh[: fresh.index("## Follow-ups")] + tail, encoding="utf-8")
+    return [ph.number for ph in phases(session) if (ph.title, ph.command) in was_done]
+
+
+def remaining(session: Session) -> list[Phase]:
+    done = done_phases(session)
+    return [ph for ph in phases(session) if ph.number not in done]
 
 
 def tick(session: Session, number: int) -> None:
     path = write_progress(session)
     text = path.read_text(encoding="utf-8")
-    text = re.sub(rf"^- \[ \] Phase {number}:", f"- [x] Phase {number}:", text, count=1, flags=re.M)
+    text = re.sub(rf"^- \[ \] Phase {number}\b", f"- [x] Phase {number}", text, count=1, flags=re.M)
     path.write_text(text, encoding="utf-8")
 
 
 def scope(session: Session) -> list[str]:
-    """What the gated run may write: every file a slice names, plus this session's
-    folder (for progress.md; plan.md itself is held to its approved hash)."""
+    """What the gated run may write: every file a slice names, this session's
+    folder (for progress.md; plan.md itself is held to its approved hash), and
+    the Seeds tracker when the project has one, since `done` closes seeds."""
     files = [name for name, _new in slice_files(session.read("slices"))]
-    return [*files, f"{session.path.relative_to(session.project).as_posix()}/"]
+    extra = [f"{session.path.relative_to(session.project).as_posix()}/"]
+    if (session.project / ".seeds").is_dir():
+        extra.append(".seeds/")
+    return [*files, *extra]
 
 
 def goal(session: Session) -> str:
     return " ".join(_section(session.read("frame"), "goal").split()) or session.title
+
+
+# ── the tracker: one seed per step, so the plan lives where the work is tracked ─
+
+
+def _epic_description(session: Session) -> str:
+    frame = session.read("frame")
+    parts = [
+        f"Deep Plan {session.path.relative_to(session.project).as_posix()}/plan.md",
+        "",
+        "Problem: " + " ".join(_section(frame, "problem").split()),
+        "",
+        "Done when:",
+        _section(frame, "done when").strip(),
+    ]
+    return "\n".join(parts)
+
+
+def _step_description(session: Session, phase: Phase, block: str) -> str:
+    rel = session.path.relative_to(session.project).as_posix()
+    return "\n".join(
+        [
+            f"Deep Plan {rel}/plan.md, phase {phase.number} ({phase.label}: "
+            f"{PRIORITY_MEANING[phase.priority]})",
+            f"Files: {_labeled(block, 'files')}",
+            f"Verify: `{phase.command}`",
+            f"Done when: {_labeled(block, 'done when')}",
+            f"Covers: {_labeled(block, 'covers')}",
+            f"Verify and close with: awino deepplan done {phase.number}",
+        ]
+    )
+
+
+def create_seeds(session: Session, tracker) -> dict:
+    """An epic for the plan, one seed per step with its priority, the step
+    dependencies, and a seeds plan linking them in order.
+
+    Seeds are keyed by step title, so re-running is safe: a tracker hiccup
+    halfway resumes where it stopped, and a re-approved plan only adds seeds
+    for the steps that are new.
+    """
+    if not session.data.get("plan_path"):
+        raise PlanError("compile the plan first: awino deepplan compile")
+    render_plan(session)  # refuses an unfinished session with the reason
+    record = session.data.setdefault("seeds", {})
+    record.setdefault("steps", {})
+    record.setdefault("deps", [])
+    record.setdefault("adopted", [])
+    if not record.get("epic"):
+        made = tracker.create(
+            f"Plan: {session.title}",
+            issue_type="epic",
+            priority=1,
+            description=_epic_description(session),
+            labels=["deepplan"],
+        )
+        if not made.ok:
+            raise PlanError(f"could not create the epic: {made.detail}")
+        record["epic"] = made.detail
+        session.save()
+    steps = record["steps"]
+    blocks = _blocks(_section(session.read("slices"), "slices"))
+    plan = phases(session)
+    for phase, block in zip(plan, blocks, strict=True):
+        if steps.get(phase.title):
+            continue
+        made = tracker.create(
+            f"{phase.label} {phase.title}",
+            priority=phase.priority,
+            description=_step_description(session, phase, block),
+            labels=["deepplan", phase.label.lower()],
+        )
+        if not made.ok:
+            raise PlanError(f"could not create the seed for phase {phase.number}: {made.detail}")
+        steps[phase.title] = made.detail
+        session.save()
+    for phase in plan:
+        for d in phase.depends:
+            pair = [steps[phase.title], steps[plan[d - 1].title]]
+            if pair not in record["deps"]:
+                tracker.depend(*pair)
+                record["deps"].append(pair)
+    if not record.get("plan"):
+        planned = tracker.plan_create(record["epic"], f"Plan: {session.title}")
+        if planned.ok:
+            record["plan"] = planned.detail
+    if record.get("plan"):
+        new = [steps[ph.title] for ph in plan if steps[ph.title] not in record["adopted"]]
+        if new and tracker.plan_adopt(record["plan"], new).ok:
+            record["adopted"] += new
+    session.save()
+    return record
+
+
+def seed_for(session: Session, number: int) -> str | None:
+    plan = phases(session)
+    if not 1 <= number <= len(plan):
+        return None
+    steps = (session.data.get("seeds") or {}).get("steps", {})
+    # Keyed by title; an early record keyed by step number still resolves.
+    return steps.get(plan[number - 1].title) or steps.get(str(number))
 
 
 # ── the gate's side: runs on a Deep Plan go through `go` and verify every phase ─
@@ -695,7 +998,7 @@ def refuse_hand_open(plan_path: Path) -> str | None:
 
 
 def unverified_phases(plan_path: str | None, run_id: str) -> list[int]:
-    """Phases not yet verified for the run `go` opened on this plan; else []."""
+    """P0 phases (the ones done needs) not yet verified on the run `go` opened."""
     if not plan_path:
         return []
     folder = Path(plan_path).parent
@@ -707,8 +1010,21 @@ def unverified_phases(plan_path: str | None, run_id: str) -> list[int]:
     if data.get("run_id") != run_id:
         return []
     session = Session(folder, folder, data)
-    done = done_phases(session)
-    return [i for i in range(1, len(phases(session)) + 1) if i not in done]
+    return [ph.number for ph in remaining(session) if ph.priority == 0]
+
+
+def open_optional_phases(plan_path: str | None, run_id: str) -> list[Phase]:
+    """P1/P2 phases still open on the run `go` opened; they become follow-ups."""
+    if not plan_path:
+        return []
+    folder = Path(plan_path).parent
+    try:
+        data = json.loads((folder / SESSION_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if data.get("run_id") != run_id:
+        return []
+    return [ph for ph in remaining(Session(folder, folder, data)) if ph.priority > 0]
 
 
 # ── what a fresh context must be told ───────────────────────────────────────
@@ -759,14 +1075,22 @@ def where(state_root: Path, project: Path) -> list[str]:
 
             if Ledger(state_root).load(run_id).terminal_state is not None:
                 return []  # the run is closed, paused or blocked; the ledger says so
-        plan, done = phases(session), done_phases(session)
-        remaining = [i for i in range(1, len(plan) + 1) if i not in done]
-        if not remaining:
+        left = remaining(session)
+        if not left:
             return []
-        n = remaining[0]
+        p0_total = sum(1 for ph in phases(session) if ph.priority == 0)
+        p0_left = [ph for ph in left if ph.priority == 0]
+        nxt_phase = left[0]
+        if p0_left:
+            return [
+                f"{head}: executing, {p0_total - len(p0_left)}/{p0_total} P0 phases verified",
+                f"  next: build phase {nxt_phase.number} ({nxt_phase.title}), then: "
+                f"awino deepplan done {nxt_phase.number}",
+            ]
         return [
-            f"{head}: executing, {len(done)}/{len(plan)} phases verified",
-            f"  next: build phase {n} ({plan[n - 1][0]}), then: awino deepplan done {n}",
+            f"{head}: every P0 phase verified (done); {len(left)} P1/P2 phase(s) open",
+            f"  next: phase {nxt_phase.number} ({nxt_phase.label}, {nxt_phase.title}) then "
+            f"awino deepplan done {nxt_phase.number}, or close: awino gate close",
         ]
     except Exception:  # a status line must never break startup or a hook
         return []

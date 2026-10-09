@@ -333,6 +333,25 @@ class Seeds:
                 self._raw(["label", "add", issue_id, label])
         return SeedsResult(True, result.command, issue_id or "created", result.payload)
 
+    def depend(self, issue_id: str, depends_on: str) -> SeedsResult:
+        """``issue_id`` cannot start until ``depends_on`` is closed."""
+        return self._json(["dep", "add", issue_id, depends_on])
+
+    def plan_create(self, seed_id: str, name: str) -> SeedsResult:
+        """A seeds plan on an epic; ``detail`` is the plan id when it worked."""
+        result = self._json(["plan", "create", seed_id, "--name", name])
+        if not result.ok:
+            return result
+        plan_id = result.payload.get("plan_id") if isinstance(result.payload, dict) else None
+        return SeedsResult(bool(plan_id), result.command, plan_id or "no plan id", result.payload)
+
+    def plan_adopt(self, plan_id: str, seed_ids: list[str]) -> SeedsResult:
+        """Link existing seeds to a plan, in this order."""
+        return self._json(["plan", "adopt", plan_id, *seed_ids])
+
+    def reopen(self, issue_id: str) -> SeedsResult:
+        return self._json(["update", issue_id, "--status", "open"])
+
     def start(self, issue_id: str) -> SeedsResult:
         return self._json(["update", issue_id, "--status", "in_progress"])
 

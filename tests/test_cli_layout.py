@@ -31,8 +31,8 @@ CLI_PACKAGE = SRC / "cli"
 # applicability check, Phase 2), release verify / publish / push / tag
 # (release gate, Phase 5), brain start / stage / record / confirm / me /
 # list / use / export (Brain mode), deepplan start / stage / record / ask /
-# answer / defer / learn / grill-done / confirm / compile / go / done / list / use
-# (Deep Plan). 138 names.
+# answer / defer / learn / grill-done / confirm / compile / go / done / seeds / list / use
+# (Deep Plan). 139 names.
 PRE_SPLIT_COMMANDS = frozenset(
     {
         "ask",
@@ -103,6 +103,7 @@ PRE_SPLIT_COMMANDS = frozenset(
         "deepplan confirm",
         "deepplan defer",
         "deepplan done",
+        "deepplan seeds",
         "deepplan go",
         "deepplan grill-done",
         "deepplan learn",
@@ -262,8 +263,8 @@ class TestCommandSurfaceIsUnchanged:
         )
 
     def test_command_count_is_exactly_the_registered_set(self) -> None:
-        assert len(PRE_SPLIT_COMMANDS) == 138
-        assert len(_registered(cli.app)) == 138
+        assert len(PRE_SPLIT_COMMANDS) == 139
+        assert len(_registered(cli.app)) == 139
 
     def test_public_entry_points_survive(self) -> None:
         assert isinstance(cli.app, typer.Typer)

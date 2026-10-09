@@ -393,7 +393,11 @@ INTENT_PHRASES: dict[str, tuple[tuple[str, int], ...]] = {
             r"properly|carefully|thoroughly)|planning mode|grill (me|us|this|the plan)|"
             r"before (we|i|you) (build|execute|start|code|implement|write)\w*( anything)?|"
             r"break (this|it|the problem|the work) (down|into)|think (this|it) through|"
-            r"let'?s plan|plan (it|this) out|what steps (we|do we) need)\b",
+            r"let'?s plan|plan (it|this) out|what steps (we|do we) need|"
+            r"define the problem|how (will|do|would) we know (it'?s|its|we'?re|it is) done|"
+            r"what needs to (get )?(be )?done|(break|split) (\w+ ){0,2}by priority|"
+            r"prioriti[sz]e (the |these |our )?(steps|work|tasks)|planning session|"
+            r"thinking (and|&) plann\w*|(steps|plan) (into|in) seeds)\b",
             _STRONG + 6,
         ),
     ),
