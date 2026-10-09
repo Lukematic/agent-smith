@@ -54,6 +54,7 @@
     "cmd:deepplan learn",
     "cmd:deepplan list",
     "cmd:deepplan record",
+    "cmd:deepplan seeds",
     "cmd:deepplan stage",
     "cmd:deepplan start",
     "cmd:deepplan use",
@@ -189,5 +190,5 @@
     "pyyaml>=6.0",
     "typer>=0.12"
   ],
-  "version": "0.9.4"
+  "version": "0.9.5"
 }

@@ -766,6 +766,11 @@ def gate_close(
         )
         _echo(f"  verify each in order: awino deepplan done {unverified[0]}")
         raise typer.Exit(1)
+    for phase in deepplan.open_optional_phases(run.plan_path, resolved):
+        _echo(
+            f"FOLLOW_UP  phase {phase.number} ({phase.label}) {phase.title}: not in this run's "
+            "done; it stays in progress.md and its seed, if any, stays open"
+        )
     verdict = adjudicate(run, ledger.evidence(resolved))
 
     _echo(f"RUN {verdict.run_id}  class={verdict.task_class}")

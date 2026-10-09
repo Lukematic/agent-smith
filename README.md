@@ -205,14 +205,18 @@ The generated editor modes are: 🧭 A.W.I.N.O., 🧭 A.W.I.N.O. Consult,
 🧭 A.W.I.N.O. Plan, 🧭 A.W.I.N.O. Discover, 🧭 A.W.I.N.O. Research,
 🧠 A.W.I.N.O. Brain, and 🗺️ A.W.I.N.O. Deep Plan.
 
-**Deep Plan** is for thinking before building. It frames the goal with
-checkable done criteria, grills you one question at a time (each with its
-recommended answer; it reads the code instead of asking when it can), goes wide
-on options before narrowing, cites the code that matters, slices the work into
-small steps that each name a test command that really runs, and red-teams the
-plan. The plan you approve opens a gated run bound to its exact text and files,
-so the work is held to what you agreed. Call it with the Kilo mode, the
-`/awino-deepplan` skill in Claude Code, or `awino deepplan`.
+**Deep Plan** is for thinking before building, and it is a challenge for you and
+the agent alike. It defines the problem (with evidence, not a solution in
+disguise), how you will know it is done, its parts, and what is needed. It grills
+you one question at a time, each with its recommended answer, and pushes back at
+least once; it reads the code instead of asking when it can. It goes wide on
+options before narrowing, cites the code that matters, and breaks the work into
+small steps by priority (P0: done needs it, P1: next, P2: later), each with a
+test command that really runs. It red-teams the plan, puts the steps in Seeds
+with their priorities and dependencies, and the plan you approve opens a gated
+run bound to its exact text and files. Done is every P0 step verified. Call it
+with the Kilo mode, the `/awino-deepplan` skill in Claude Code, or
+`awino deepplan`.
 
 **Brain mode** is a thinking partner for a messy problem, such as a sponsor's ask
 in a domain you don't know yet. It walks seven stages: get the problem right,
