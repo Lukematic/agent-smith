@@ -262,6 +262,7 @@ from awino.cli import (  # noqa: E402
     brain,
     brief,
     buddy,
+    deepplan,
     dispatch,
     gate,
     install,
@@ -275,6 +276,7 @@ from awino.cli import (  # noqa: E402
 )
 
 app.add_typer(brain.brain_app, name="brain")
+app.add_typer(deepplan.deepplan_app, name="deepplan")
 app.add_typer(buddy.buddy_app, name="buddy")
 app.add_typer(loopctl.loop_app, name="loop")
 app.add_typer(proof.proof_app, name="proof")
@@ -283,6 +285,7 @@ app.add_typer(release.release_app, name="release")
 del (
     brain,
     brief,
+    deepplan,
     buddy,
     dispatch,
     gate,

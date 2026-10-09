@@ -136,7 +136,7 @@ claude plugin marketplace add Lukematic/agent-smith
 claude plugin install awino@awino
 ```
 
-The native install provides the `awino` agent and all 17 canonical `awino-*` skills
+The native install provides the `awino` agent and all 18 canonical `awino-*` skills
 automatically. It does not initialize `.seeds` or `.awino`, install Python, or run a
 global shell installer. The deterministic gate ledger is an optional CLI layer and
 requires `uv`. Its launcher automatically creates or refreshes a locked `.venv`
@@ -202,8 +202,17 @@ working: the first command that touches state transparently migrates it to
 ## Optional modes
 
 The generated editor modes are: 🧭 A.W.I.N.O., 🧭 A.W.I.N.O. Consult,
-🧭 A.W.I.N.O. Plan, 🧭 A.W.I.N.O. Discover, 🧭 A.W.I.N.O. Research, and
-🧠 A.W.I.N.O. Brain.
+🧭 A.W.I.N.O. Plan, 🧭 A.W.I.N.O. Discover, 🧭 A.W.I.N.O. Research,
+🧠 A.W.I.N.O. Brain, and 🗺️ A.W.I.N.O. Deep Plan.
+
+**Deep Plan** is for thinking before building. It frames the goal with
+checkable done criteria, grills you one question at a time (each with its
+recommended answer; it reads the code instead of asking when it can), goes wide
+on options before narrowing, cites the code that matters, slices the work into
+small steps that each name a test command that really runs, and red-teams the
+plan. The plan you approve opens a gated run bound to its exact text and files,
+so the work is held to what you agreed. Call it with the Kilo mode, the
+`/awino-deepplan` skill in Claude Code, or `awino deepplan`.
 
 **Brain mode** is a thinking partner for a messy problem, such as a sponsor's ask
 in a domain you don't know yet. It walks seven stages: get the problem right,

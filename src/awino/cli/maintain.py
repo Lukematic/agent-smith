@@ -738,6 +738,12 @@ def _run_hook(event: str) -> None:
                 lines.append(f"[awino] ROUTING {decision.confidence}: {decision.question}")
             if detected is not None and detected.name != current:
                 lines.append(f"[awino] STANCE -> {detected.name} ({detected.trigger_description})")
+            from awino import deepplan
+
+            lines.extend(
+                f"[awino] {line}"
+                for line in deepplan.where(workspace.state_root, workspace.project.root)
+            )
             if lines:
                 _echo(project_guard.emit(project_guard.prompt_context("\n".join(lines))))
             if session_id == "unknown":
@@ -1309,4 +1315,7 @@ def _resume_block(workspace, session_id: str) -> str:
     carried = playbook.load_intent(state)
     if carried:
         lines.append(f"CARRYING  floor={carried['floor']}  request={carried['request'][:120]}")
+    from awino import deepplan
+
+    lines.extend(deepplan.where(state, workspace.project.root))
     return "\n".join(lines)

@@ -21,7 +21,7 @@ SMITH_ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.fixture
 def catalog() -> SkillCatalog:
-    """The real, installed 17-skill catalog. Routing must work against the actual
+    """The real, installed 18-skill catalog. Routing must work against the actual
     skill set, not a synthetic fixture, or the test proves nothing about production
     behavior."""
     return SkillCatalog(

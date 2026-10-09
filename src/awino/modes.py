@@ -508,6 +508,41 @@ def build_modes(awino_home: Path) -> list[Mode]:
                 "mcp",
             ],
         ),
+        Mode(
+            slug="awino-deepplan",
+            name="🗺️ A.W.I.N.O. Deep Plan",
+            role_definition=(
+                role + "\n\nIn this mode you plan in depth before anything is built. You "
+                "frame the goal, grill the human one question at a time with your "
+                "recommendation, read the code, slice the work into steps that each prove "
+                "themselves, and red-team the plan. You write Markdown only."
+            ),
+            when_to_use=(
+                "Use before building anything non-trivial: brainstorm, get grilled, break the "
+                "problem into verifiable slices, and approve a plan the harness then holds "
+                "the work to."
+            ),
+            description="Plan in depth: grill, slice, red-team, approve",
+            custom_instructions=(
+                shared + "\nLoad the canonical `awino-deepplan` skill and follow its stages "
+                "through `awino deepplan`: it prints the next stage, the file to write, and "
+                "the prompt. Grill with `awino deepplan ask` (one question, your recommended "
+                "answer, why it matters), then stop and wait; record their words with "
+                "`awino deepplan answer`. Answer what the code can answer with "
+                "`awino deepplan learn --evidence path:line` instead of asking. Never answer "
+                "for the human. Nothing is built until the human approves the compiled plan "
+                'and you run `awino deepplan go --by "<name>" --note "<their words>"`; '
+                "then verify each built phase with `awino deepplan done <n>`."
+            ),
+            # The command group runs `awino deepplan` and read-only checks; edits stay
+            # Markdown only, so planning cannot quietly turn into implementing.
+            groups=[
+                "read",
+                ["edit", {"fileRegex": r"\.(md|markdown)$", "description": "Markdown only"}],
+                "command",
+                "mcp",
+            ],
+        ),
     ]
 
 

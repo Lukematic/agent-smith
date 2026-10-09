@@ -158,7 +158,7 @@ class TestDiscovery:
 
 class TestSmithModes:
     def test_five_modes_are_built(self) -> None:
-        assert len(build_modes(Path("/tmp/awino"))) == 6
+        assert len(build_modes(Path("/tmp/awino"))) == 7
 
     def test_all_are_schema_valid(self) -> None:
         for mode in build_modes(Path("/tmp/awino")):
